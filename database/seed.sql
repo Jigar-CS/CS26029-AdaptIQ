@@ -30,4 +30,21 @@ INSERT INTO users (name, email, password_hash, role) VALUES
   ('Demo Student', 'student@adaptiq.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TiGniYOreWUP6iL.Zm3nW2vVJoAm', 'student')
 ON DUPLICATE KEY UPDATE name=VALUES(name);
 
+-- ============================================================
+-- Company Mock Test (single standard company-level test)
+-- This portal offers one standard mock test, not per-company suites.
+-- Difficulty counts must sum to question_count.
+-- ============================================================
+INSERT INTO company_tests
+  (id, company_name, time_limit_minutes, question_count, easy_count, medium_count, hard_count)
+VALUES
+  (1, 'Standard Company Mock Test', 60, 30, 10, 12, 8)
+ON DUPLICATE KEY UPDATE
+  company_name       = VALUES(company_name),
+  time_limit_minutes = VALUES(time_limit_minutes),
+  question_count     = VALUES(question_count),
+  easy_count         = VALUES(easy_count),
+  medium_count       = VALUES(medium_count),
+  hard_count         = VALUES(hard_count);
+
 SET FOREIGN_KEY_CHECKS = 1;

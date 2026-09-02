@@ -12,6 +12,7 @@ const userController = require('../controllers/userController');
 const topicController = require('../controllers/topicController');
 const adaptiveController = require('../controllers/adaptiveController');
 const placementScoreController = require('../controllers/placementScoreController');
+const companyTestController = require('../controllers/companyTestController');
 const performanceController = require('../controllers/performanceController');
 const { UPLOAD_DIR, MAX_PHOTO_SIZE, MAX_RESUME_SIZE } = require('../config/env');
 
@@ -120,8 +121,11 @@ router.post('/adaptive/:testId/complete',    authenticate, adaptiveController.co
 router.get('/placement-score',               authenticate, placementScoreController.getLatest);
 router.get('/placement-score/history',       authenticate, placementScoreController.getHistory);
 
-router.get('/company-tests',                 authenticate, stub('Company tests not yet implemented'));
-router.post('/company-tests/:id/start',      authenticate, stub('Company tests not yet implemented'));
+// Company Mock Test (fixed question set, timed, server-enforced auto-submit)
+router.get('/company-tests',                 authenticate, companyTestController.getStandardTest);
+router.post('/company-tests/:id/start',      authenticate, profileGate, companyTestController.start);
+router.post('/company-tests/:id/answer',     authenticate, companyTestController.submitAnswer);
+router.post('/company-tests/:id/complete',   authenticate, companyTestController.complete);
 
 // Performance & Analytics
 router.get('/performance/summary',           authenticate, performanceController.getSummary);

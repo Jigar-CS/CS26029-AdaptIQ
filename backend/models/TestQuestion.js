@@ -45,6 +45,43 @@ const TestQuestion = {
   },
 
   /**
+   * Get the full served question set for a test, including topic names.
+   * Company test scoring needs the served set (not just answered rows) so
+   * skipped/timed-out questions still count toward the denominator.
+   */
+  getServedQuestionsWithTopic: async (test_id) => {
+    const [rows] = await pool.execute(
+      `SELECT tq.question_id, tq.sequence_number, tq.difficulty_at_time,
+              q.topic_id, q.difficulty, q.correct_option,
+              top.name AS topic_name
+       FROM test_questions tq
+       JOIN questions q ON tq.question_id = q.id
+       LEFT JOIN topics top ON q.topic_id = top.id
+       WHERE tq.test_id = ?
+       ORDER BY tq.sequence_number ASC`,
+      [test_id]
+    );
+    return rows;
+  },
+
+  /**
+   * Get the served questions for a test in client-safe form
+   * (no correct_option / explanation leaked to the student).
+   */
+  getServedQuestionsForClient: async (test_id) => {
+    const [rows] = await pool.execute(
+      `SELECT q.id, q.topic_id, q.question_text,
+              q.option_a, q.option_b, q.option_c, q.option_d, q.difficulty
+       FROM test_questions tq
+       JOIN questions q ON tq.question_id = q.id
+       WHERE tq.test_id = ?
+       ORDER BY tq.sequence_number ASC`,
+      [test_id]
+    );
+    return rows;
+  },
+
+  /**
    * Get total count of questions served in this test
    */
   getServedCount: async (test_id) => {

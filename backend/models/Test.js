@@ -14,7 +14,7 @@ const Test = {
   },
 
   /**
-   * Find a test session by ID with topic metadata
+   * Find a test session by ID with topic + company test metadata
    */
   findById: async (id) => {
     const [rows] = await pool.execute(
@@ -25,16 +25,70 @@ const Test = {
         t.topic_id,
         top.name AS topic_name,
         t.company_test_id,
+        ct.company_name,
+        ct.time_limit_minutes,
         t.status,
         t.started_at,
+        t.expires_at,
         t.completed_at
        FROM tests t
        LEFT JOIN topics top ON t.topic_id = top.id
+       LEFT JOIN company_tests ct ON t.company_test_id = ct.id
        WHERE t.id = ?
        LIMIT 1`,
       [id]
     );
     return rows[0] || null;
+  },
+
+  /**
+   * Find a user's in-progress session for a given company test.
+   * Used to make `start` idempotent so reloading the test page resumes
+   * the same session instead of spawning duplicates.
+   */
+  findActiveCompanySession: async (user_id, company_test_id) => {
+    const [rows] = await pool.execute(
+      `SELECT id, user_id, test_type, company_test_id, status, started_at, expires_at, completed_at
+       FROM tests
+       WHERE user_id = ?
+         AND company_test_id = ?
+         AND test_type = 'company'
+         AND status = 'in_progress'
+       ORDER BY id DESC
+       LIMIT 1`,
+      [user_id, company_test_id]
+    );
+    return rows[0] || null;
+  },
+
+  /**
+   * Find a user's most recent session for a company test, any status.
+   * Lets `complete` stay idempotent after the session is already closed.
+   */
+  findLatestCompanySession: async (user_id, company_test_id) => {
+    const [rows] = await pool.execute(
+      `SELECT id, user_id, test_type, company_test_id, status, started_at, expires_at, completed_at
+       FROM tests
+       WHERE user_id = ?
+         AND company_test_id = ?
+         AND test_type = 'company'
+       ORDER BY id DESC
+       LIMIT 1`,
+      [user_id, company_test_id]
+    );
+    return rows[0] || null;
+  },
+
+  /**
+   * Set the server-side auto-submit deadline for a timed session
+   */
+  setExpiry: async (id, minutesFromNow) => {
+    await pool.execute(
+      `UPDATE tests
+       SET expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
+       WHERE id = ?`,
+      [minutesFromNow, id]
+    );
   },
 
   /**

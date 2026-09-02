@@ -13,6 +13,7 @@ const topicController = require('../controllers/topicController');
 const questionController = require('../controllers/questionController');
 const userController = require('../controllers/userController');
 const analyticsController = require('../controllers/analyticsController');
+const companyTestController = require('../controllers/companyTestController');
 const { UPLOAD_DIR } = require('../config/env');
 
 const uploadDir = path.join(__dirname, '..', UPLOAD_DIR);
@@ -78,6 +79,36 @@ const questionUpdateRules = [
   body('explanation').optional().trim(),
 ];
 
+// Company test validation rules
+const companyTestRules = [
+  body('company_name').trim().notEmpty().withMessage('Company/test name is required'),
+  body('time_limit_minutes')
+    .isInt({ min: 1, max: 600 })
+    .withMessage('Time limit must be between 1 and 600 minutes'),
+  body('question_count')
+    .isInt({ min: 1, max: 200 })
+    .withMessage('Question count must be between 1 and 200'),
+  body('easy_count').optional().isInt({ min: 0 }).withMessage('Easy count cannot be negative'),
+  body('medium_count').optional().isInt({ min: 0 }).withMessage('Medium count cannot be negative'),
+  body('hard_count').optional().isInt({ min: 0 }).withMessage('Hard count cannot be negative'),
+];
+
+const companyTestUpdateRules = [
+  body('company_name').optional().trim().notEmpty().withMessage('Company/test name cannot be empty'),
+  body('time_limit_minutes')
+    .optional()
+    .isInt({ min: 1, max: 600 })
+    .withMessage('Time limit must be between 1 and 600 minutes'),
+  body('question_count')
+    .optional()
+    .isInt({ min: 1, max: 200 })
+    .withMessage('Question count must be between 1 and 200'),
+  body('easy_count').optional().isInt({ min: 0 }).withMessage('Easy count cannot be negative'),
+  body('medium_count').optional().isInt({ min: 0 }).withMessage('Medium count cannot be negative'),
+  body('hard_count').optional().isInt({ min: 0 }).withMessage('Hard count cannot be negative'),
+  body('is_active').optional().isBoolean().withMessage('is_active must be a boolean'),
+];
+
 // --- Topics (Admin) ---
 router.post('/topics', authenticate, authorize('admin'), topicController.createTopic);
 router.put('/topics/:id', authenticate, authorize('admin'), topicController.updateTopic);
@@ -113,6 +144,17 @@ router.get('/users',     authenticate, authorize('admin'), userController.getAdm
 router.get('/users/:id', authenticate, authorize('admin'), userController.getAdminUser);
 router.put('/users/:id', authenticate, authorize('admin'), userController.updateAdminUser);
 router.delete('/users/:id', authenticate, authorize('admin'), userController.deleteAdminUser);
+
+// --- Company Mock Test Configuration (Admin) ---
+router.get('/company-tests',        authenticate, authorize('admin'), companyTestController.listAll);
+router.get('/company-tests/:id',    authenticate, authorize('admin'), companyTestController.getById);
+router.post('/company-tests',       authenticate, authorize('admin'), companyTestRules, validate, companyTestController.create);
+router.put('/company-tests/:id',    authenticate, authorize('admin'), companyTestUpdateRules, validate, companyTestController.update);
+router.delete('/company-tests/:id', authenticate, authorize('admin'), companyTestController.remove);
+
+// Question pool attachment for a company test
+router.post('/company-tests/:id/questions',                authenticate, authorize('admin'), companyTestController.attachQuestion);
+router.delete('/company-tests/:id/questions/:questionId',  authenticate, authorize('admin'), companyTestController.detachQuestion);
 
 // --- Analytics (Admin) ---
 router.get('/analytics/overview',         authenticate, authorize('admin'), analyticsController.getOverview);

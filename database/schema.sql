@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS tests (
   company_test_id INT NULL COMMENT 'Set only when test_type = company',
   status          ENUM('in_progress','completed','abandoned') NOT NULL DEFAULT 'in_progress',
   started_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at      TIMESTAMP NULL COMMENT 'Server-side auto-submit deadline for timed company sessions; NULL for adaptive tests',
   completed_at    TIMESTAMP NULL,
 
   FOREIGN KEY (user_id)         REFERENCES users(id)         ON DELETE CASCADE,
