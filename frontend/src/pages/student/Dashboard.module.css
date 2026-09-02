@@ -185,6 +185,22 @@
 .testTitle { font-size: 16px; font-weight: 700; }
 .testDesc { font-size: 13px; color: var(--color-text-muted); line-height: 1.5; flex: 1; }
 
+/* Company test unlock-status block (progress bar / score breakdown) */
+.unlockBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unlockBreakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+
 @media (max-width: 1100px) {
   .topGrid { grid-template-columns: 1fr; }
   .testGrid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }

@@ -150,7 +150,10 @@ const Dashboard = () => {
         </div>
 
         <div className={`${styles.testCard} ${unlocked ? '' : styles.locked}`}>
-          <span className="badge badge-neutral" style={{ position: 'absolute', top: 20, right: 20 }}>
+          <span
+            className={`badge ${unlocked ? 'badge-primary' : 'badge-neutral'}`}
+            style={{ position: 'absolute', top: 20, right: 20 }}
+          >
             {unlocked ? 'Unlocked' : `${miscCompleted}/5 Tests`}
           </span>
           <div className={styles.testIconWrap}>{unlocked ? <IconAssignments /> : <IconLock />}</div>
@@ -162,6 +165,40 @@ const Dashboard = () => {
                 ? 'Complete at least 5 Miscellaneous tests to unlock.'
                 : `Your score is ${Math.round(readinessScore)}/100. Reach 80 to unlock.`}
           </p>
+
+          {/* Unlock status: progress bar while under 5 misc tests, score breakdown once eligible */}
+          {!unlocked && miscCompleted < 5 && (
+            <div className={styles.unlockBlock}>
+              <div className={styles.metricLabelRow}>
+                <span>Miscellaneous tests</span>
+                <span>{miscCompleted}/5</span>
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${(miscCompleted / 5) * 100}%` }} />
+              </div>
+            </div>
+          )}
+
+          {!unlocked && miscCompleted >= 5 && (
+            <div className={styles.unlockBlock}>
+              <div className={styles.metricLabelRow}>
+                <span>Readiness score</span>
+                <span>{Math.round(readinessScore)}/80 needed</span>
+              </div>
+              <div className="progress-track">
+                <div
+                  className="progress-fill warning"
+                  style={{ width: `${Math.min((readinessScore / 80) * 100, 100)}%` }}
+                />
+              </div>
+              <div className={styles.unlockBreakdown}>
+                <span>Accuracy {Math.round(score?.accuracy_component ?? 0)}%</span>
+                <span>Speed {Math.round(score?.speed_component ?? 0)}%</span>
+                <span>Mastery {Math.round(score?.difficulty_mastery_component ?? 0)}%</span>
+              </div>
+            </div>
+          )}
+
           <button className="btn btn-outline" disabled={!unlocked} onClick={() => navigate('/company-tests')}>
             {unlocked ? 'Start Mock Test' : 'Locked'} {unlocked && <IconArrowRight width={15} height={15} />}
           </button>
