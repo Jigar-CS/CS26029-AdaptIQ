@@ -153,6 +153,31 @@ const companyTestService = {
   },
 
   /**
+   * Build the post-submission review payload.
+   * Correct answers and explanations are only revealed here, after the
+   * session has been closed out.
+   */
+  buildReview: async (test_id) => {
+    const rows = await TestQuestion.getReviewForTest(test_id);
+    return rows.map((r) => ({
+      sequence_number: r.sequence_number,
+      question_id: r.question_id,
+      question_text: r.question_text,
+      option_a: r.option_a,
+      option_b: r.option_b,
+      option_c: r.option_c,
+      option_d: r.option_d,
+      correct_option: r.correct_option,
+      selected_option: r.selected_option || null,
+      is_correct: r.is_correct === 1,
+      was_answered: r.selected_option !== null && r.selected_option !== undefined,
+      explanation: r.explanation || null,
+      difficulty: r.difficulty,
+      topic_name: r.topic_name || 'General',
+    }));
+  },
+
+  /**
    * Score a company session.
    *
    * The denominator is the SERVED question count, so questions left blank

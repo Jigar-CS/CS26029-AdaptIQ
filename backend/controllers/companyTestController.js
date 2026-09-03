@@ -120,6 +120,11 @@ const companyTestController = {
           expires_at: session.expires_at,
           resumed: true,
           answered_question_ids: answered.map((a) => a.question_id),
+          // Lets the client restore the student's selections after a reload
+          saved_answers: answered.map((a) => ({
+            question_id: a.question_id,
+            selected_option: a.selected_option,
+          })),
         }, 'Resumed your in-progress session');
       }
 
@@ -273,6 +278,7 @@ const companyTestController = {
       }
 
       const result = await companyTestService.scoreSession(session.id);
+      const review = await companyTestService.buildReview(session.id);
 
       if (!wasAlreadyComplete) {
         // Company tests deliberately do NOT feed the placement score —
@@ -299,7 +305,9 @@ const companyTestController = {
         test_id: session.id,
         company_test_id: companyTest.id,
         company_name: companyTest.company_name,
+        time_limit_minutes: companyTest.time_limit_minutes,
         ...result,
+        review,
         auto_submitted: expired,
         already_submitted: wasAlreadyComplete,
       });

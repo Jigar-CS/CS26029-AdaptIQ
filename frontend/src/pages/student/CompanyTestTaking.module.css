@@ -1,0 +1,135 @@
+/* Company-test-specific additions layered on top of AdaptiveTest.module.css */
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 22px;
+  align-items: start;
+}
+
+/* Question navigator */
+.navigator {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  position: sticky;
+  top: 0;
+}
+
+.navigatorTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.navGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+.navCell {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.navCell:hover {
+  border-color: var(--color-text-faint);
+  color: var(--color-text);
+}
+
+.navCell.answered {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.navCell.current {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  color: var(--color-text);
+}
+
+.navLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendSwatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.legendSwatch.answered {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+
+.legendSwatch.current {
+  border: 2px solid var(--color-primary);
+}
+
+/* Submit confirmation summary */
+.confirmSummary {
+  background: var(--color-surface-2);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin: 14px 0 4px;
+}
+
+.confirmRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 4px 0;
+  color: var(--color-text-muted);
+}
+
+.confirmRow span:last-child {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.confirmWarn {
+  color: var(--color-warning);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.navActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .navigator { position: static; }
+  .navGrid { grid-template-columns: repeat(10, 1fr); }
+}

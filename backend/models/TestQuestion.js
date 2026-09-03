@@ -65,6 +65,35 @@ const TestQuestion = {
   },
 
   /**
+   * Full post-submission review for a test: every served question with the
+   * student's selection alongside the correct answer and explanation.
+   * Only safe to expose once the session is completed.
+   */
+  getReviewForTest: async (test_id) => {
+    const [rows] = await pool.execute(
+      `SELECT tq.sequence_number,
+              q.id AS question_id,
+              q.question_text,
+              q.option_a, q.option_b, q.option_c, q.option_d,
+              q.correct_option,
+              q.explanation,
+              q.difficulty,
+              top.name AS topic_name,
+              ua.selected_option,
+              ua.is_correct
+       FROM test_questions tq
+       JOIN questions q ON tq.question_id = q.id
+       LEFT JOIN topics top ON q.topic_id = top.id
+       LEFT JOIN user_answers ua
+              ON ua.test_id = tq.test_id AND ua.question_id = tq.question_id
+       WHERE tq.test_id = ?
+       ORDER BY tq.sequence_number ASC`,
+      [test_id]
+    );
+    return rows;
+  },
+
+  /**
    * Get the served questions for a test in client-safe form
    * (no correct_option / explanation leaked to the student).
    */
