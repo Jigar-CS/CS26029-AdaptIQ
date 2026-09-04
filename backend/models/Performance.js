@@ -69,6 +69,60 @@ const Performance = {
     );
     return rows;
   },
+
+  /**
+   * Recalculate denormalized topic performance directly from user_answers
+   */
+  recalculate: async (user_id, topic_id) => {
+    const [stats] = await pool.execute(
+      `SELECT
+         COUNT(ua.id)                                                AS total_attempted,
+         COALESCE(SUM(ua.is_correct), 0)                             AS total_correct,
+         ROUND(AVG(ua.response_time_seconds), 2)                     AS avg_response_time,
+         ROUND(SUM(ua.is_correct) / NULLIF(COUNT(ua.id), 0) * 100, 2) AS accuracy_percent
+       FROM user_answers ua
+       JOIN questions q ON ua.question_id = q.id
+       WHERE ua.user_id = ? AND q.topic_id = ?`,
+      [user_id, topic_id]
+    );
+
+    const row = stats[0];
+    if (!row || row.total_attempted === 0) return null;
+
+    await pool.execute(
+      `INSERT INTO performance (user_id, topic_id, total_attempted, total_correct, avg_response_time, accuracy_percent)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         total_attempted   = VALUES(total_attempted),
+         total_correct     = VALUES(total_correct),
+         avg_response_time = VALUES(avg_response_time),
+         accuracy_percent  = VALUES(accuracy_percent)`,
+      [
+        user_id,
+        topic_id,
+        row.total_attempted,
+        row.total_correct,
+        row.avg_response_time || 0,
+        row.accuracy_percent || 0,
+      ]
+    );
+
+    return {
+      user_id,
+      topic_id,
+      total_attempted: row.total_attempted,
+      total_correct: row.total_correct,
+      avg_response_time: row.avg_response_time || 0,
+      accuracy_percent: row.accuracy_percent || 0,
+    };
+  },
+
+  /**
+   * Alias for getByTopic as specified in plan_best.md
+   */
+  findByUser: async (user_id) => {
+    return Performance.getByTopic(user_id);
+  },
 };
 
 module.exports = Performance;

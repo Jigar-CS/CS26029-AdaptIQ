@@ -1,17 +1,40 @@
 const pool = require('../config/db');
 const Performance = require('../models/Performance');
-const Recommendation = require('../models/Recommendation');
+const recommendationService = require('./recommendationService');
 
 /**
  * performanceService
- * Called after an adaptive test completes to update aggregates and generate recommendations.
+ * Manages topic-level performance metrics aggregation and recommendation generation
+ * after test completions.
  */
 const performanceService = {
   /**
-   * Process all answers from a completed test and write to performance + recommendations.
+   * Recalculate denormalized topic performance for a specific user and topic
+   */
+  recalculate: async (user_id, topic_id) => {
+    return Performance.recalculate(user_id, topic_id);
+  },
+
+  /**
+   * Overall summary across all topics for a user
+   */
+  getSummary: async (user_id) => {
+    return Performance.getSummary(user_id);
+  },
+
+  /**
+   * Topic-wise breakdown for a user
+   */
+  getByTopic: async (user_id) => {
+    return Performance.getByTopic(user_id);
+  },
+
+  /**
+   * Process all answers from a completed test, update performance aggregates,
+   * and trigger rule-based recommendations generation.
    */
   processTestCompletion: async (test_id, user_id, test_type, topic_id = null) => {
-    // Pull all answers for this test with question difficulty + topic
+    // Pull all answers for this test
     const [answers] = await pool.execute(
       `SELECT ua.is_correct, ua.response_time_seconds, q.difficulty, q.topic_id
        FROM user_answers ua
@@ -22,65 +45,31 @@ const performanceService = {
 
     if (answers.length === 0) return;
 
-    // For topic_adaptive: single topic — update that one topic.
-    // For full_adaptive: multiple topics — group and update each.
-    const topicMap = {};
+    // Identify all topics involved in this test session
+    const distinctTopics = new Set();
+    if (topic_id) {
+      distinctTopics.add(parseInt(topic_id, 10));
+    }
     for (const a of answers) {
-      const tId = a.topic_id;
-      if (!topicMap[tId]) {
-        topicMap[tId] = { total: 0, correct: 0, time_sum: 0 };
+      if (a.topic_id) {
+        distinctTopics.add(parseInt(a.topic_id, 10));
       }
-      topicMap[tId].total += 1;
-      topicMap[tId].correct += a.is_correct ? 1 : 0;
-      topicMap[tId].time_sum += parseFloat(a.response_time_seconds) || 0;
     }
 
-    for (const [tId, stats] of Object.entries(topicMap)) {
-      await Performance.upsert({
-        user_id,
-        topic_id: parseInt(tId, 10),
-        added_attempted: stats.total,
-        added_correct: stats.correct,
-        added_response_time_sum: stats.time_sum,
-      });
+    // Recalculate full denormalized metrics from user_answers for exact precision
+    for (const tId of distinctTopics) {
+      await Performance.recalculate(user_id, tId);
     }
 
-    // Generate recommendations based on updated topic performance
-    await performanceService.generateRecommendations(user_id);
+    // Generate recommendations using the rule-based recommendationService
+    await recommendationService.generateForUser(user_id);
   },
 
   /**
-   * Rule-based recommendation engine — runs after each test completion.
+   * Compatibility wrapper for direct recommendations generation
    */
   generateRecommendations: async (user_id) => {
-    const topics = await Performance.getByTopic(user_id);
-
-    for (const t of topics) {
-      const pct = parseFloat(t.accuracy_percent) || 0;
-
-      if (pct < 40) {
-        await Recommendation.upsert({
-          user_id,
-          topic_id: t.topic_id,
-          message: `Your accuracy in ${t.topic_name} is ${Math.round(pct)}%. Consider revising the basics before your next attempt.`,
-          recommendation_type: 'weak_topic',
-        });
-      } else if (pct >= 80) {
-        await Recommendation.upsert({
-          user_id,
-          topic_id: t.topic_id,
-          message: `You're excelling in ${t.topic_name} with ${Math.round(pct)}% accuracy. Try harder difficulty questions to challenge yourself.`,
-          recommendation_type: 'strong_topic',
-        });
-      } else if (pct >= 40 && pct < 70) {
-        await Recommendation.upsert({
-          user_id,
-          topic_id: t.topic_id,
-          message: `${t.topic_name} needs more practice (${Math.round(pct)}% accuracy). Focus on medium-difficulty questions.`,
-          recommendation_type: 'revision',
-        });
-      }
-    }
+    return recommendationService.generateForUser(user_id);
   },
 };
 
