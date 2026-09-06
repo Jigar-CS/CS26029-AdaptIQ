@@ -14,6 +14,7 @@ const adaptiveController = require('../controllers/adaptiveController');
 const placementScoreController = require('../controllers/placementScoreController');
 const companyTestController = require('../controllers/companyTestController');
 const performanceController = require('../controllers/performanceController');
+const recommendationController = require('../controllers/recommendationController');
 const { UPLOAD_DIR, MAX_PHOTO_SIZE, MAX_RESUME_SIZE } = require('../config/env');
 
 const uploadDir = path.join(__dirname, '..', UPLOAD_DIR);
@@ -133,7 +134,7 @@ router.get('/performance/by-topic',          authenticate, performanceController
 router.get('/performance/history',           authenticate, performanceController.getHistory);
 
 // Recommendations
-router.get('/recommendations',               authenticate, performanceController.getRecommendations);
-router.put('/recommendations/:id/dismiss',   authenticate, performanceController.dismissRecommendation);
+router.get('/recommendations',               authenticate, recommendationController.getRecommendations);
+router.put('/recommendations/:id/dismiss',   authenticate, recommendationController.dismissRecommendation);
 
 module.exports = router;

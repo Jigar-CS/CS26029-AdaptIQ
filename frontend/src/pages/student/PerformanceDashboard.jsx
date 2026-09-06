@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { useEffect, useState, useCallback } from 'react';
+import {
+  LineChart, Line,
+  BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine
+} from 'recharts';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import Topbar from '../../components/layout/Topbar';
 import { STUDENT_NAV } from '../../components/layout/navConfig';
@@ -18,21 +23,56 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+const CustomBarTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload;
+  return (
+    <div style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px' }}>
+      <div className="text-xs text-muted">{data.fullName || data.name}</div>
+      <div style={{ color: 'var(--color-primary)', fontWeight: 700, fontSize: 14 }}>{data.accuracy}% Accuracy</div>
+      <div className="text-xs text-muted" style={{ marginTop: 4 }}>{data.attempted} questions attempted</div>
+    </div>
+  );
+};
+
+const PIE_COLORS = ['#4ade80', '#f87171'];
+
 const PerformanceDashboard = () => {
-  const [summary, setSummary] = useState({ total_attempted: 0, accuracy_percent: 0, avg_response_time: 0 });
+  const [summary, setSummary] = useState({ total_attempted: 0, accuracy_percent: 0, avg_response_time: 0, tests_completed: 0 });
   const [history, setHistory] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 8, total: 0, totalPages: 1 });
+  const [filterType, setFilterType] = useState('all');
   const [topics, setTopics] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [scoreHistory, setScoreHistory] = useState([]);
   const [latestScore, setLatestScore] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
+
+  const fetchHistoryPage = useCallback(async (page, type) => {
+    setTableLoading(true);
+    try {
+      const val = await performanceService.getHistory({ page, limit: 8, test_type: type });
+      if (val) {
+        const arr = Array.isArray(val.history) ? val.history : Array.isArray(val) ? val : [];
+        setHistory(arr);
+        if (val.pagination) {
+          setPagination(val.pagination);
+        }
+      }
+    } catch {
+      // fallback
+    } finally {
+      setTableLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       const results = await Promise.allSettled([
         performanceService.getSummary(),
-        performanceService.getHistory(),
+        performanceService.getHistory({ page: 1, limit: 8, test_type: 'all' }),
         performanceService.getByTopic(),
         performanceService.getRecommendations(),
         placementScoreService.getHistory(),
@@ -46,6 +86,9 @@ const PerformanceDashboard = () => {
         const val = results[1].value;
         const arr = Array.isArray(val?.history) ? val.history : Array.isArray(val) ? val : [];
         setHistory(arr);
+        if (val?.pagination) {
+          setPagination(val.pagination);
+        }
       }
       if (results[2].status === 'fulfilled') {
         const val = results[2].value;
@@ -70,9 +113,20 @@ const PerformanceDashboard = () => {
     load();
   }, []);
 
-  // chart: oldest → newest for left-to-right trend
-  const chartData = history
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.totalPages) return;
+    fetchHistoryPage(newPage, filterType);
+  };
+
+  const handleFilterChange = (type) => {
+    setFilterType(type);
+    fetchHistoryPage(1, type);
+  };
+
+  // Accuracy Trend chart data (chronological)
+  const chartData = [...history]
     .filter((h) => h.date)
+    .reverse()
     .map((h) => ({ date: h.date, score: Math.round(h.accuracy_percent ?? 0) }));
 
   // Placement score trend data
@@ -83,6 +137,29 @@ const PerformanceDashboard = () => {
     speed: Math.round(entry.speed_component ?? 0),
     mastery: Math.round(entry.difficulty_mastery_component ?? 0),
   }));
+
+  // Topic bar chart data
+  const topicBarData = topics.map((t) => {
+    const rawName = t.topic_name || t.name || '';
+    const shortName = rawName.length > 18 ? rawName.slice(0, 16) + '…' : rawName;
+    return {
+      name: shortName,
+      fullName: rawName,
+      accuracy: Math.round(t.accuracy_percent ?? 0),
+      attempted: t.total_attempted ?? 0,
+    };
+  });
+
+  // Accuracy donut pie data
+  const totalCorrect = Number(summary.total_correct ?? 0);
+  const totalAttempted = Number(summary.total_attempted ?? 0);
+  const totalIncorrect = Math.max(0, totalAttempted - totalCorrect);
+  const pieData = totalAttempted > 0
+    ? [
+        { name: 'Correct', value: totalCorrect },
+        { name: 'Incorrect / Skipped', value: totalIncorrect },
+      ]
+    : [{ name: 'No Attempts', value: 1 }];
 
   const dismissRec = async (id) => {
     try {
@@ -95,7 +172,7 @@ const PerformanceDashboard = () => {
     <DashboardLayout navItems={STUDENT_NAV} subtitle="EdTech SaaS">
       <Topbar
         title="Performance Analytics"
-        subtitle="Track your learning velocity and mastery readiness."
+        subtitle="Track your learning velocity, topic mastery, and placement readiness."
         showSearch={false}
       />
 
@@ -110,7 +187,7 @@ const PerformanceDashboard = () => {
             <div className={styles.statCard}>
               <div className={styles.statTop}><span>Total Questions</span> <IconAssignments width={15} height={15} /></div>
               <div className={styles.statValueRow}>
-                <span className={styles.statValue}>{Number(summary.total_attempted ?? 0).toLocaleString()}</span>
+                <span className={styles.statValue}>{totalAttempted.toLocaleString()}</span>
               </div>
             </div>
             <div className={styles.statCard}>
@@ -128,11 +205,12 @@ const PerformanceDashboard = () => {
             <div className={styles.statCard}>
               <div className={styles.statTop}><span>Tests Completed</span> <IconAssignments width={15} height={15} /></div>
               <div className={styles.statValueRow}>
-                <span className={styles.statValue}>{history.length}</span>
+                <span className={styles.statValue}>{summary.tests_completed ?? pagination.total ?? history.length}</span>
               </div>
             </div>
           </div>
 
+          {/* Placement Score Trend & Score Breakdown */}
           <div className={styles.mainGrid}>
             {/* Placement Score Trend Chart */}
             <div className={styles.chartCard}>
@@ -168,7 +246,7 @@ const PerformanceDashboard = () => {
               )}
             </div>
 
-            {/* Score Breakdown */}
+            {/* Score Breakdown Component */}
             <div className={styles.insightsCard}>
               <div className={styles.insightsTitle}><IconTrophy width={15} height={15} /> Score Breakdown</div>
               {!latestScore ? (
@@ -207,42 +285,59 @@ const PerformanceDashboard = () => {
             </div>
           </div>
 
+          {/* Accuracy Breakdown (Donut Chart) + Rule-Based AdaptIQ Insights */}
           <div className={styles.mainGrid}>
-            {/* Accuracy Trend Chart */}
+            {/* Accuracy Donut Chart */}
             <div className={styles.chartCard}>
               <div className={styles.chartHeader}>
-                <span className={styles.chartTitle}>Accuracy Trend (per test)</span>
+                <span className={styles.chartTitle}>Accuracy Distribution</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  {totalCorrect} correct of {totalAttempted} attempted
+                </span>
               </div>
-              {chartData.length === 0 ? (
+              {totalAttempted === 0 ? (
                 <div className="text-muted text-sm" style={{ padding: '60px 0', textAlign: 'center' }}>
-                  Complete your first test to start tracking your accuracy trend.
+                  No question attempts recorded yet.
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: 'var(--color-text-faint)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--color-text-faint)', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="var(--color-primary)"
-                      strokeWidth={3}
-                      dot={{ r: 3, fill: 'var(--color-primary)' }}
-                      activeDot={{ r: 5 }}
-                      style={{ filter: 'drop-shadow(0 0 6px rgba(198,255,61,0.6))' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', height: 240 }}>
+                  <div style={{ width: '55%', height: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          innerRadius={60}
+                          outerRadius={85}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: '#4ade80' }} />
+                      <span>Correct: <strong>{totalCorrect}</strong> ({Math.round((totalCorrect / totalAttempted) * 100)}%)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: '#f87171' }} />
+                      <span>Incorrect / Skipped: <strong>{totalIncorrect}</strong> ({Math.round((totalIncorrect / totalAttempted) * 100)}%)</span>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* AdaptIQ Insights */}
+            {/* Rule-Based AdaptIQ Insights Panel */}
             <div className={styles.insightsCard}>
               <div className={styles.insightsTitle}><IconSpark width={15} height={15} /> AdaptIQ Insights</div>
               {recommendations.length === 0 ? (
-                <div className="text-sm text-muted">Complete more tests to unlock personalized insights.</div>
+                <div className="text-sm text-muted">Complete more tests to trigger rule-based recommendations.</div>
               ) : (
                 recommendations.slice(0, 5).map((rec) => (
                   <div key={rec.id} className={styles.insightItem} style={{ justifyContent: 'space-between', gap: 8 }}>
@@ -254,6 +349,7 @@ const PerformanceDashboard = () => {
                       className="btn btn-outline btn-sm"
                       style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
                       onClick={() => dismissRec(rec.id)}
+                      title="Dismiss insight"
                     >
                       ✕
                     </button>
@@ -263,69 +359,121 @@ const PerformanceDashboard = () => {
             </div>
           </div>
 
-          {/* Topic Mastery */}
-          <div className={styles.masteryCard}>
-            <div className={styles.masteryTitle}>Topic Mastery</div>
-            {topics.length === 0 ? (
-              <div className="text-sm text-muted">Attempt topic practice tests to see mastery breakdown here.</div>
+          {/* Topic Proficiency Bar Chart */}
+          <div className={styles.masteryCard} style={{ marginBottom: 20 }}>
+            <div className={styles.masteryTitle}>Topic Accuracy Comparison</div>
+            {topicBarData.length === 0 ? (
+              <div className="text-sm text-muted">Attempt topic practice tests to see comparative analytics.</div>
             ) : (
-              topics.map((t) => {
-                const pct = Math.round(t.accuracy_percent ?? 0);
-                const cls = pct >= 70 ? '' : pct >= 40 ? 'warning' : 'danger';
-                return (
-                  <div key={t.topic_id || t.name} className={styles.masteryRow}>
-                    <div className={styles.masteryLabelRow}>
-                      <span className="text-muted">{t.topic_name || t.name}</span>
-                      <span>{pct}% <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>({t.total_attempted ?? 0} q)</span></span>
-                    </div>
-                    <div className="progress-track">
-                      <div className={`progress-fill ${cls}`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={topicBarData} margin={{ top: 15, right: 15, left: -20, bottom: 25 }}>
+                  <CartesianGrid stroke="var(--color-border)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'var(--color-text-faint)', fontSize: 11 }}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fill: 'var(--color-text-faint)', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<CustomBarTooltip />} />
+                  <ReferenceLine y={70} stroke="#4ade80" strokeDasharray="3 3" label={{ value: '70% Target', fill: '#4ade80', fontSize: 10, position: 'insideTopRight' }} />
+                  <Bar dataKey="accuracy" fill="var(--color-primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
 
-          {/* Test History table */}
-          <div className={styles.masteryCard} style={{ marginTop: 20 }}>
-            <div className={styles.masteryTitle}>Test History</div>
-            {history.length === 0 ? (
-              <div className="text-sm text-muted">No completed tests yet. Start a practice or miscellaneous test.</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Type</th>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Topic</th>
-                      <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Q Correct</th>
-                      <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Accuracy</th>
-                      <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Avg Time</th>
-                      <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...history].reverse().map((h) => {
-                      const pct = Math.round(h.accuracy_percent ?? 0);
-                      const color = pct >= 70 ? 'var(--color-success)' : pct >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
-                      const typeLabel = h.test_type === 'topic_adaptive' ? 'Topic' : h.test_type === 'full_adaptive' ? 'Misc' : 'Company';
-                      return (
-                        <tr key={h.test_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span className="badge badge-neutral" style={{ fontSize: 11 }}>{typeLabel}</span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: 'var(--color-text-muted)' }}>{h.topic_name || '—'}</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>{h.total_correct}/{h.total_answered}</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color }}>{pct}%</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--color-text-muted)' }}>{Math.round(h.avg_response_time ?? 0)}s</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-faint)', fontSize: 12 }}>{h.date || '—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          {/* Paginated Test History Table */}
+          <div className={styles.masteryCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+              <div className={styles.masteryTitle} style={{ margin: 0 }}>Attempt History</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Filter:</span>
+                <select
+                  className="input text-sm"
+                  style={{ padding: '4px 10px', height: 'auto', width: 'auto' }}
+                  value={filterType}
+                  onChange={(e) => handleFilterChange(e.target.value)}
+                >
+                  <option value="all">All Tests</option>
+                  <option value="topic_adaptive">Topic Adaptive</option>
+                  <option value="full_adaptive">Miscellaneous</option>
+                  <option value="company">Company Mock</option>
+                </select>
               </div>
+            </div>
+
+            {tableLoading ? (
+              <div className="text-muted text-sm" style={{ padding: '30px 0', textAlign: 'center' }}>Updating records…</div>
+            ) : history.length === 0 ? (
+              <div className="text-sm text-muted">No test records found for this filter.</div>
+            ) : (
+              <>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Type</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600 }}>Topic / Assessment</th>
+                        <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Correct</th>
+                        <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Accuracy</th>
+                        <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600 }}>Avg Pace</th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600 }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((h) => {
+                        const pct = Math.round(h.accuracy_percent ?? 0);
+                        const color = pct >= 70 ? 'var(--color-success)' : pct >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
+                        const typeLabel = h.test_type === 'topic_adaptive' ? 'Topic' : h.test_type === 'full_adaptive' ? 'Misc' : 'Company';
+                        return (
+                          <tr key={h.test_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span className="badge badge-neutral" style={{ fontSize: 11 }}>{typeLabel}</span>
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--color-text-muted)' }}>{h.topic_name || '—'}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>{h.total_correct}/{h.total_answered}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color }}>{pct}%</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--color-text-muted)' }}>{Math.round(h.avg_response_time ?? 0)}s</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-faint)', fontSize: 12 }}>{h.date || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--color-border)', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    Showing Page {pagination.page} of {pagination.totalPages} ({pagination.total} total tests)
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={pagination.page <= 1}
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={pagination.page >= pagination.totalPages}
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </>

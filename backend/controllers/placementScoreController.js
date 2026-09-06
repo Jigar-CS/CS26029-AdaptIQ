@@ -1,3 +1,4 @@
+const pool = require('../config/db');
 const PlacementScore = require('../models/PlacementScore');
 const Test = require('../models/Test');
 
@@ -14,6 +15,39 @@ const placementScoreController = {
       const miscTestsCompleted = await Test.countCompletedByType(user_id, 'full_adaptive');
       const globalRank = await PlacementScore.getGlobalRank(user_id);
 
+      // Compute current streak (days)
+      const [streakRows] = await pool.execute(
+        `SELECT DISTINCT DATE(completed_at) AS test_date 
+         FROM tests 
+         WHERE user_id = ? AND status = 'completed' 
+         ORDER BY test_date DESC 
+         LIMIT 30`,
+        [user_id]
+      );
+      let currentStreak = 0;
+      if (streakRows && streakRows.length > 0) {
+        const dates = streakRows.map((r) => new Date(r.test_date).toISOString().slice(0, 10));
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+        if (dates[0] === today || dates[0] === yesterday) {
+          currentStreak = 1;
+          let cur = new Date(dates[0]);
+          for (let i = 1; i < dates.length; i++) {
+            const prev = new Date(dates[i]);
+            const diff = Math.round((cur - prev) / (1000 * 60 * 60 * 24));
+            if (diff === 1) {
+              currentStreak++;
+              cur = prev;
+            } else if (diff === 0) {
+              continue;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+
       if (!latest) {
         return res.json({
           success: true,
@@ -23,8 +57,8 @@ const placementScoreController = {
             speed_component: 0,
             difficulty_mastery_component: 0,
             misc_tests_completed: miscTestsCompleted,
-            global_rank: null,
-            current_streak_days: null,
+            global_rank: globalRank,
+            current_streak_days: currentStreak,
             calculated_at: null,
           },
         });
@@ -39,7 +73,7 @@ const placementScoreController = {
           difficulty_mastery_component: parseFloat(latest.difficulty_mastery_component),
           misc_tests_completed: miscTestsCompleted,
           global_rank: globalRank,
-          current_streak_days: null, // TODO: implement streak tracking in a future phase
+          current_streak_days: currentStreak,
           calculated_at: latest.calculated_at,
         },
       });
