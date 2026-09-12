@@ -246,6 +246,16 @@ const adaptiveController = {
 
       await Test.complete(testId);
 
+      ActivityLog.log({
+        user_id: req.user.id,
+        action_type: 'TEST_COMPLETED',
+        details: {
+          test_id: testId,
+          test_type: test.test_type,
+          topic_id: test.topic_id,
+        },
+      });
+
       let profilePromptTriggered = false;
 
       // Update performance aggregates and generate recommendations (non-blocking)

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const ActivityLog = require('../models/ActivityLog');
 const { hashPassword, comparePassword } = require('../utils/hashUtils');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwtUtils');
 
@@ -13,6 +14,12 @@ const register = async ({ name, email, password }) => {
 
   const password_hash = await hashPassword(password);
   const userId = await User.create({ name, email, password_hash });
+
+  ActivityLog.log({
+    user_id: userId,
+    action_type: 'REGISTER',
+    details: { email, name, role: 'student' },
+  });
 
   const payload = { id: userId, email, role: 'student' };
   return {
@@ -38,6 +45,12 @@ const login = async ({ email, password }) => {
     err.code = 'INVALID_CREDENTIALS';
     throw err;
   }
+
+  ActivityLog.log({
+    user_id: user.id,
+    action_type: 'LOGIN',
+    details: { email: user.email, role: user.role },
+  });
 
   const payload = { id: user.id, email: user.email, role: user.role };
   return {

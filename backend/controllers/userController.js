@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const pool = require('../config/db');
 const User = require('../models/User');
+const ActivityLog = require('../models/ActivityLog');
 const { success, error } = require('../utils/responseFormatter');
 const { hashPassword, comparePassword } = require('../utils/hashUtils');
 const { UPLOAD_DIR } = require('../config/env');
@@ -28,6 +29,9 @@ const updateProfile = async (req, res, next) => {
       linkedin_url,
     } = req.body;
 
+    const priorUser = await User.findById(req.user.id);
+    const wasComplete = !!priorUser?.is_profile_complete;
+
     await User.updateProfile(req.user.id, {
       name,
       email,
@@ -40,6 +44,19 @@ const updateProfile = async (req, res, next) => {
     });
 
     const user = await User.findById(req.user.id);
+    if (!wasComplete && user?.is_profile_complete) {
+      ActivityLog.log({
+        user_id: req.user.id,
+        action_type: 'PROFILE_COMPLETE',
+        details: {
+          name: user.name,
+          college: user.college,
+          branch: user.branch,
+          cgpa: user.cgpa,
+        },
+      });
+    }
+
     return success(res, { user }, 'Profile updated successfully');
   } catch (err) {
     next(err);
@@ -74,6 +91,8 @@ const uploadProfilePhoto = async (req, res, next) => {
     }
 
     const currentUser = await User.findById(req.user.id);
+    const wasComplete = !!currentUser?.is_profile_complete;
+
     if (currentUser?.profile_photo_path) {
       const oldPath = path.join(__dirname, '..', UPLOAD_DIR, currentUser.profile_photo_path);
       if (fs.existsSync(oldPath)) {
@@ -83,6 +102,20 @@ const uploadProfilePhoto = async (req, res, next) => {
 
     await User.updatePhotoPath(req.user.id, req.file.filename);
     const user = await User.findById(req.user.id);
+
+    if (!wasComplete && user?.is_profile_complete) {
+      ActivityLog.log({
+        user_id: req.user.id,
+        action_type: 'PROFILE_COMPLETE',
+        details: {
+          name: user.name,
+          college: user.college,
+          branch: user.branch,
+          cgpa: user.cgpa,
+        },
+      });
+    }
+
     return success(res, { user, photoPath: req.file.filename }, 'Profile photo uploaded successfully');
   } catch (err) {
     next(err);
@@ -96,6 +129,8 @@ const uploadResume = async (req, res, next) => {
     }
 
     const currentUser = await User.findById(req.user.id);
+    const wasComplete = !!currentUser?.is_profile_complete;
+
     if (currentUser?.resume_path) {
       const oldPath = path.join(__dirname, '..', UPLOAD_DIR, currentUser.resume_path);
       if (fs.existsSync(oldPath)) {
@@ -105,6 +140,20 @@ const uploadResume = async (req, res, next) => {
 
     await User.updateResumePath(req.user.id, req.file.filename);
     const user = await User.findById(req.user.id);
+
+    if (!wasComplete && user?.is_profile_complete) {
+      ActivityLog.log({
+        user_id: req.user.id,
+        action_type: 'PROFILE_COMPLETE',
+        details: {
+          name: user.name,
+          college: user.college,
+          branch: user.branch,
+          cgpa: user.cgpa,
+        },
+      });
+    }
+
     return success(res, { user, resumePath: req.file.filename }, 'Resume uploaded successfully');
   } catch (err) {
     next(err);

@@ -1,4 +1,5 @@
 const Question = require('../models/Question');
+const ActivityLog = require('../models/ActivityLog');
 const csvImportService = require('../services/csvImportService');
 const { success, created, notFound, error } = require('../utils/responseFormatter');
 
@@ -130,6 +131,18 @@ const importCsv = async (req, res, next) => {
     const report = await csvImportService.importCsv({
       filePath: req.file.path,
       defaultTopicId: req.body.topic_id,
+    });
+
+    ActivityLog.log({
+      user_id: req.user?.id || null,
+      action_type: 'CSV_IMPORT',
+      details: {
+        filename: req.file.originalname,
+        total_rows: report.total_rows,
+        inserted: report.inserted,
+        skipped_duplicates: report.skipped_duplicates,
+        errors_count: report.errors ? report.errors.length : 0,
+      },
     });
 
     return success(res, { report }, 'CSV import processed successfully');

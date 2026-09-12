@@ -68,6 +68,23 @@ const adaptiveEngine = {
       },
     });
 
+    if (newDifficulty !== current_difficulty) {
+      await ActivityLog.log({
+        user_id,
+        action_type: 'DIFFICULTY_CHANGE',
+        details: {
+          test_id,
+          test_type,
+          topic_id,
+          batch_number,
+          old_difficulty: current_difficulty,
+          new_difficulty: newDifficulty,
+          batch_accuracy: batchAccuracy,
+          avg_response_time: avgResponseTime,
+        },
+      });
+    }
+
     return {
       oldDifficulty: current_difficulty,
       newDifficulty,

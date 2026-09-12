@@ -1,8 +1,10 @@
+const pool = require('../config/db');
 const Test = require('../models/Test');
 const TestQuestion = require('../models/TestQuestion');
 const UserAnswer = require('../models/UserAnswer');
 const CompanyTest = require('../models/CompanyTest');
 const PlacementScore = require('../models/PlacementScore');
+const ActivityLog = require('../models/ActivityLog');
 const questionSelector = require('./questionSelector');
 
 /**
@@ -46,6 +48,25 @@ const companyTestService = {
         `Reach ${REQUIRED_PLACEMENT_SCORE} to unlock.`;
     } else {
       unlock_message = 'Unlocked — you meet all prerequisites.';
+      // Log event once when unlocked
+      try {
+        const [existing] = await pool.execute(
+          `SELECT id FROM activity_logs WHERE user_id = ? AND action_type = 'COMPANY_TEST_UNLOCKED' LIMIT 1`,
+          [user_id]
+        );
+        if (existing.length === 0) {
+          await ActivityLog.log({
+            user_id,
+            action_type: 'COMPANY_TEST_UNLOCKED',
+            details: {
+              placement_score: placementScore,
+              misc_tests_completed: miscTestsCompleted,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to log COMPANY_TEST_UNLOCKED:', err.message);
+      }
     }
 
     return {

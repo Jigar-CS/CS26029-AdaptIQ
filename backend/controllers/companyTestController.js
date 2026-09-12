@@ -299,6 +299,20 @@ const companyTestController = {
             auto_submitted: expired,
           },
         });
+
+        ActivityLog.log({
+          user_id: req.user.id,
+          action_type: 'TEST_COMPLETED',
+          details: {
+            test_id: session.id,
+            test_type: 'company',
+            company_test_id: companyTest.id,
+            score: result.score,
+            correct_count: result.correct_count,
+            total_questions: result.total_questions,
+            auto_submitted: expired,
+          },
+        });
       }
 
       return success(res, {

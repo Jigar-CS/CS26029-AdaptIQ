@@ -14,6 +14,7 @@ const questionController = require('../controllers/questionController');
 const userController = require('../controllers/userController');
 const analyticsController = require('../controllers/analyticsController');
 const companyTestController = require('../controllers/companyTestController');
+const activityLogController = require('../controllers/activityLogController');
 const { UPLOAD_DIR } = require('../config/env');
 
 const uploadDir = path.join(__dirname, '..', UPLOAD_DIR);
@@ -160,7 +161,7 @@ router.delete('/company-tests/:id/questions/:questionId',  authenticate, authori
 router.get('/analytics/overview',         authenticate, authorize('admin'), analyticsController.getOverview);
 router.get('/analytics/topic-difficulty', authenticate, authorize('admin'), analyticsController.getTopicDifficultyBreakdown);
 
-// --- Activity Logs stub (Phase 11) ---
-router.get('/activity-logs', authenticate, authorize('admin'), (req, res) => res.json({ success: true, data: { logs: [], total: 0 }, message: 'Phase 11 — not yet implemented' }));
+// --- Activity Logs (Admin Audit Trail) ---
+router.get('/activity-logs', authenticate, authorize('admin'), activityLogController.getActivityLogs);
 
 module.exports = router;
