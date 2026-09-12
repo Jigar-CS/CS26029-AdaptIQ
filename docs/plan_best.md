@@ -377,7 +377,7 @@ Build strictly in phase order below — later phases depend on earlier ones (the
 - [ ] Phase 8 — Placement score calculating and persisting history
 - [ ] Phase 9 — Company tests + dual-condition unlock working
 - [ ] Phase 10 — Analytics dashboard + recommendations live
-- [ ] Phase 11 — Admin activity logs + polish
+- [x] Phase 11 — Admin activity logs + polish
 - [ ] Phase 12 — Security audit passed
 - [ ] Phase 13 — Test suite passing, manual checklist clean
 - [ ] Phase 14 — UI responsive and polished

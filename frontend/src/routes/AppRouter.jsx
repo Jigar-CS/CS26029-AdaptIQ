@@ -22,6 +22,7 @@ import QuestionManagement from '../pages/admin/QuestionManagement';
 import CsvImport from '../pages/admin/CsvImport';
 import UserManagement from '../pages/admin/UserManagement';
 import Analytics from '../pages/admin/Analytics';
+import ActivityLogs from '../pages/admin/ActivityLogs';
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -49,6 +50,7 @@ const AppRouter = () => (
         <Route path="/admin/csv-import" element={<RoleRoute requiredRole="admin"><CsvImport /></RoleRoute>} />
         <Route path="/admin/users" element={<RoleRoute requiredRole="admin"><UserManagement /></RoleRoute>} />
         <Route path="/admin/analytics" element={<RoleRoute requiredRole="admin"><Analytics /></RoleRoute>} />
+        <Route path="/admin/activity-logs" element={<RoleRoute requiredRole="admin"><ActivityLogs /></RoleRoute>} />
 
         {/* Default */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

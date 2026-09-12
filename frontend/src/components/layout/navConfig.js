@@ -5,6 +5,7 @@ import {
   IconAnalytics,
   IconCommunity,
   IconSettings,
+  IconClock,
 } from '../icons/Icon';
 
 export const STUDENT_NAV = [
@@ -21,6 +22,7 @@ export const ADMIN_NAV = [
   { to: '/admin/topics', label: 'Topics', icon: IconCourses },
   { to: '/admin/questions', label: 'Questions', icon: IconAssignments },
   { to: '/admin/analytics', label: 'Analytics', icon: IconAnalytics },
+  { to: '/admin/activity-logs', label: 'Activity Logs', icon: IconClock },
   { to: '/admin/users', label: 'Users', icon: IconCommunity },
   { to: '/admin/csv-import', label: 'CSV Import', icon: IconSettings },
 ];
