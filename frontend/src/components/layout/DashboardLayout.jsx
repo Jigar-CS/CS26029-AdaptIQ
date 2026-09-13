@@ -2,8 +2,7 @@ import Sidebar from './Sidebar';
 import styles from './DashboardLayout.module.css';
 
 /**
- * Shell used by every authenticated page (student + admin).
- * Renders sidebar + content area; footer is optional (shown on data-heavy pages).
+ * Shell used by student and admin views with Warm Ivory footer
  */
 const DashboardLayout = ({ navItems, subtitle, children, footer = true }) => (
   <div className={styles.layout}>
@@ -12,14 +11,17 @@ const DashboardLayout = ({ navItems, subtitle, children, footer = true }) => (
       <div className={styles.content}>{children}</div>
       {footer && (
         <footer className={styles.footer}>
-          <span className={styles.footerBrand}>AdaptIQ</span>
+          <div className={styles.footerBrandGroup}>
+            <span className={styles.footerBrand}>AdaptIQ</span>
+            <span className={styles.versionBadge}>v2.4 PRO</span>
+          </div>
           <nav className={styles.footerLinks}>
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
-            <a href="#">Help Center</a>
-            <a href="#">Contact Support</a>
+            <a href="#privacy">Privacy Policy</a>
+            <a href="#terms">Terms of Service</a>
+            <a href="#irt-docs">IRT Model Docs</a>
+            <a href="#support">Help & Support</a>
           </nav>
-          <span className={styles.footerCopy}>© {new Date().getFullYear()} AdaptIQ EdTech. All rights reserved.</span>
+          <span className={styles.footerCopy}>© 2026 AdaptIQ AI Education Platform.</span>
         </footer>
       )}
     </div>

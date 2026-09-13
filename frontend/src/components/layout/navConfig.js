@@ -11,10 +11,10 @@ import {
 export const STUDENT_NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: IconDashboard },
   { to: '/practice', label: 'Topic Practice', icon: IconCourses },
-  { to: '/company-tests', label: 'Company Test', icon: IconAssignments },
+  { to: '/misc-test', label: 'Adaptive Assessment', icon: IconAssignments },
+  { to: '/company-tests', label: 'Company Tests', icon: IconCommunity },
   { to: '/performance', label: 'Analytics', icon: IconAnalytics },
-  { to: '/misc-test', label: 'Miscellaneous Test', icon: IconCommunity },
-  { to: '/profile', label: 'Profile', icon: IconSettings },
+  { to: '/profile', label: 'My Profile', icon: IconSettings },
 ];
 
 export const ADMIN_NAV = [

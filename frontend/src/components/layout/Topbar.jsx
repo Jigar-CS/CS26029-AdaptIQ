@@ -1,18 +1,21 @@
 import { useAuth } from '../../context/AuthContext';
-import { IconSearch, IconBell, IconChat } from '../icons/Icon';
+import { IconSearch, IconBell } from '../icons/Icon';
 import styles from './Topbar.module.css';
 
 /**
- * Page header used inside DashboardLayout.
- * @param {string} title
- * @param {string} subtitle
- * @param {React.ReactNode} rightSlot - optional custom action (e.g. "Export" button)
- * @param {boolean} showSearch
- * @param {string} searchPlaceholder
+ * Topbar matching Warm Ivory reference layout
  */
-const Topbar = ({ title, subtitle, rightSlot, showSearch = true, searchPlaceholder = 'Search...' }) => {
+const Topbar = ({
+  title,
+  subtitle,
+  rightSlot,
+  showSearch = true,
+  showTargetBadge = true,
+  searchPlaceholder = 'Search...',
+}) => {
   const { user } = useAuth();
-  const initials = (user?.name || user?.email || '?').trim().charAt(0).toUpperCase();
+  const displayName = user?.name || 'Demo';
+  const initial = displayName.trim().charAt(0).toUpperCase() || 'D';
 
   return (
     <header className={styles.topbar}>
@@ -22,21 +25,30 @@ const Topbar = ({ title, subtitle, rightSlot, showSearch = true, searchPlacehold
       </div>
 
       <div className={styles.actions}>
-        {showSearch && (
-          <div className={styles.searchBox}>
-            <IconSearch width={15} height={15} />
-            <input type="text" placeholder={searchPlaceholder} />
+        {showTargetBadge && (
+          <div className={styles.targetBadge}>
+            <span className={styles.targetDot}></span>
+            <span>Target: Tier-1 Tech Placement Assessment</span>
           </div>
         )}
+
+        {showSearch && (
+          <div className={styles.searchBox}>
+            <IconSearch width={14} height={14} />
+            <input type="text" placeholder={searchPlaceholder} />
+            <span className={styles.kbdShortcut}>⌘K</span>
+          </div>
+        )}
+
         {rightSlot}
+
         <button className={styles.iconBtn} title="Notifications">
-          <IconBell width={17} height={17} />
-          <span className={styles.dot} />
+          <IconBell width={16} height={16} />
         </button>
-        <button className={styles.iconBtn} title="Messages">
-          <IconChat width={17} height={17} />
-        </button>
-        <div className={styles.avatarBtn}>{initials}</div>
+
+        <div className={styles.avatarBtn} title={displayName}>
+          {initial}
+        </div>
       </div>
     </header>
   );

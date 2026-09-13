@@ -1,11 +1,13 @@
 /**
- * Circular progress ring used for the Placement Readiness score gauge.
- * @param {number} value - 0-100
- * @param {number} size - px
- * @param {number} strokeWidth - px
- * @param {string} label - text under the number (e.g. "SCORE")
+ * Circular progress ring used for the Placement Readiness Hub gauge.
  */
-const ProgressRing = ({ value = 0, size = 160, strokeWidth = 12, label = 'SCORE', color = 'var(--color-primary)' }) => {
+const ProgressRing = ({
+  value = 0,
+  size = 160,
+  strokeWidth = 12,
+  label = 'PLACEMENT INDEX',
+  color = '#4A3728',
+}) => {
   const clamped = Math.max(0, Math.min(100, value));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -19,7 +21,7 @@ const ProgressRing = ({ value = 0, size = 160, strokeWidth = 12, label = 'SCORE'
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--color-surface-3)"
+          stroke="#EDE6DC"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -27,12 +29,12 @@ const ProgressRing = ({ value = 0, size = 160, strokeWidth = 12, label = 'SCORE'
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={color}
+          stroke={clamped > 0 ? color : '#DDD4C7'}
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.6s ease', filter: `drop-shadow(0 0 8px ${color})` }}
+          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
         />
       </svg>
       <div
@@ -45,10 +47,10 @@ const ProgressRing = ({ value = 0, size = 160, strokeWidth = 12, label = 'SCORE'
           justifyContent: 'center',
         }}
       >
-        <span style={{ fontSize: size * 0.28, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1 }}>
+        <span style={{ fontSize: size * 0.28, fontWeight: 800, color: '#241C16', lineHeight: 1, letterSpacing: '-0.02em' }}>
           {Math.round(clamped)}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--color-text-faint)', letterSpacing: '0.08em', marginTop: 4 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#8C8074', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 6 }}>
           {label}
         </span>
       </div>

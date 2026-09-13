@@ -1,42 +1,220 @@
+.container {
+  padding: 0 32px;
+}
+
+/* Filter Row */
+.filterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #FFFFFF;
+  border: 1px solid #ECE7DF;
+  border-radius: 12px;
+  padding: 10px 16px;
+  width: 320px;
+  max-width: 100%;
+  box-shadow: 0 1px 4px rgba(50, 35, 20, 0.02);
+  transition: all 0.2s ease;
+}
+
+.searchBox:focus-within {
+  border-color: #4A3728;
+  box-shadow: 0 0 0 3px #F5ECE3;
+}
+
+.searchBox svg {
+  color: #9C8F82;
+  flex-shrink: 0;
+}
+
+.searchBox input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  color: #241C16;
+  width: 100%;
+}
+
+.searchBox input::placeholder {
+  color: #A39688;
+}
+
+.modulesFilterBtn {
+  background: #FAF7F2;
+  border: 1px solid #ECE7DF;
+  color: #4A3728;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modulesFilterBtn:hover {
+  background: #F3ECE4;
+}
+
+/* States */
+.stateNotice {
+  padding: 48px 0;
+  text-align: center;
+  color: #8C8074;
+  font-size: 14px;
+}
+
+.errorNotice {
+  padding: 24px;
+  background: #FFEBEE;
+  color: #C62828;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  font-size: 13.5px;
+}
+
+/* 3-Column Grid */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
-.topicCard {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 22px;
+.card {
+  background: #FFFFFF;
+  border: 1px solid #ECE7DF;
+  border-radius: 20px;
+  padding: 24px 24px 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 2px 10px rgba(50, 35, 20, 0.03);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.topicCard:hover {
-  border-color: var(--color-primary);
+.card:hover {
   transform: translateY(-2px);
+  border-color: #D8CEC2;
+  box-shadow: 0 6px 20px rgba(50, 35, 20, 0.06);
 }
 
-.topicIcon {
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.brainIconBox {
   width: 42px;
   height: 42px;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 16px;
+  border-radius: 12px;
+  background: #FAF3EA;
+  border: 1px solid #EBE0D2;
+  color: #4A3728;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.topicName { font-size: 15px; font-weight: 700; }
-.topicDesc { font-size: 13px; color: var(--color-text-muted); flex: 1; line-height: 1.5; }
+.difficultyPills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-.empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--color-text-muted);
+.pillEasy, .pillMed, .pillHard {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+}
+
+.pillEasy {
+  background: #E8F5E9;
+  color: #1E7E34;
+}
+
+.pillMed {
+  background: #FFF8E1;
+  color: #B78103;
+}
+
+.pillHard {
+  background: #FFEBEE;
+  color: #C62828;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 800;
+  color: #241C16;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.cardDesc {
+  font-size: 12.5px;
+  color: #7A6F64;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  flex: 1;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #F5EFE8;
+  gap: 12px;
+}
+
+.setInfo {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9C8F82;
+}
+
+.startBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: #4A3728;
+  border: 1px solid #4A3728;
+  color: #FFFFFF;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.startBtn:hover {
+  background: #3B2A1D;
+  border-color: #3B2A1D;
+  box-shadow: 0 3px 10px rgba(74, 55, 40, 0.16);
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
