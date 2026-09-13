@@ -367,18 +367,18 @@ Build strictly in phase order below — later phases depend on earlier ones (the
 
 ## 4. Milestone Checklist
 
-- [ ] Phase 1 — Schema migrated, seeded DB live in phpMyAdmin
-- [ ] Phase 2 — Backend skeleton confirmed (health check)
-- [ ] Phase 3 — Auth complete (register/login/refresh/logout, role guard on frontend)
-- [ ] Phase 4 — Profile page + uploads + gate working end-to-end
-- [ ] Phase 5 — Question CRUD + CSV import validated at scale
-- [ ] Phase 6 — Admin user management + analytics shell
-- [ ] Phase 7 — Adaptive engine verified for both `topic_adaptive` and `full_adaptive`
-- [ ] Phase 8 — Placement score calculating and persisting history
-- [ ] Phase 9 — Company tests + dual-condition unlock working
-- [ ] Phase 10 — Analytics dashboard + recommendations live
+- [x] Phase 1 — Schema migrated, seeded DB live in phpMyAdmin
+- [x] Phase 2 — Backend skeleton confirmed (health check)
+- [x] Phase 3 — Auth complete (register/login/refresh/logout, role guard on frontend)
+- [x] Phase 4 — Profile page + uploads + gate working end-to-end
+- [x] Phase 5 — Question CRUD + CSV import validated at scale
+- [x] Phase 6 — Admin user management + analytics shell
+- [x] Phase 7 — Adaptive engine verified for both `topic_adaptive` and `full_adaptive`
+- [x] Phase 8 — Placement score calculating and persisting history
+- [x] Phase 9 — Company tests + dual-condition unlock working
+- [x] Phase 10 — Analytics dashboard + recommendations live
 - [x] Phase 11 — Admin activity logs + polish
-- [ ] Phase 12 — Security audit passed
+- [x] Phase 12 — Security audit passed
 - [ ] Phase 13 — Test suite passing, manual checklist clean
 - [ ] Phase 14 — UI responsive and polished
 - [ ] Phase 15 — Deployed, documented
