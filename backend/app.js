@@ -19,8 +19,10 @@ const routes = require('./routes/index');
 
 const app = express();
 
-// Security headers
-app.use(helmet());
+// Security headers — configure CORP to allow cross-origin assets for uploads
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // CORS — allow frontend dev server
 app.use(cors({

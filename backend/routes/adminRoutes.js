@@ -3,12 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
+const { csvImportLimiter } = require('../middleware/rateLimiter');
 const topicController = require('../controllers/topicController');
 const questionController = require('../controllers/questionController');
 const userController = require('../controllers/userController');
@@ -43,6 +44,15 @@ const csvUpload = multer({
   },
 }).single('file');
 
+const idParamRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid ID is required'),
+];
+
+const testQuestionParamRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid company test ID is required'),
+  param('questionId').isInt({ min: 1 }).withMessage('Valid question ID is required'),
+];
+
 // Question validation rules
 const questionRules = [
   body('topic_id').isInt({ min: 1 }).withMessage('Valid topic is required'),
@@ -62,6 +72,7 @@ const questionRules = [
 ];
 
 const questionUpdateRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid ID is required'),
   body('topic_id').optional().isInt({ min: 1 }).withMessage('Valid topic ID required'),
   body('question_text').optional().trim().notEmpty().withMessage('Question text cannot be empty'),
   body('option_a').optional().trim().notEmpty().withMessage('Option A cannot be empty'),
@@ -95,6 +106,7 @@ const companyTestRules = [
 ];
 
 const companyTestUpdateRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid ID is required'),
   body('company_name').optional().trim().notEmpty().withMessage('Company/test name cannot be empty'),
   body('time_limit_minutes')
     .optional()
@@ -112,21 +124,22 @@ const companyTestUpdateRules = [
 
 // --- Topics (Admin) ---
 router.post('/topics', authenticate, authorize('admin'), topicController.createTopic);
-router.put('/topics/:id', authenticate, authorize('admin'), topicController.updateTopic);
-router.delete('/topics/:id', authenticate, authorize('admin'), topicController.deleteTopic);
+router.put('/topics/:id', authenticate, authorize('admin'), idParamRules, validate, topicController.updateTopic);
+router.delete('/topics/:id', authenticate, authorize('admin'), idParamRules, validate, topicController.deleteTopic);
 
 // --- Question Bank Management (Admin) ---
 router.get('/questions', authenticate, authorize('admin'), questionController.getAllQuestions);
-router.get('/questions/:id', authenticate, authorize('admin'), questionController.getQuestionById);
+router.get('/questions/:id', authenticate, authorize('admin'), idParamRules, validate, questionController.getQuestionById);
 router.post('/questions', authenticate, authorize('admin'), questionRules, validate, questionController.createQuestion);
 router.put('/questions/:id', authenticate, authorize('admin'), questionUpdateRules, validate, questionController.updateQuestion);
-router.delete('/questions/:id', authenticate, authorize('admin'), questionController.deleteQuestion);
+router.delete('/questions/:id', authenticate, authorize('admin'), idParamRules, validate, questionController.deleteQuestion);
 
 // --- CSV Batch Import ---
 router.post(
   '/questions/import',
   authenticate,
   authorize('admin'),
+  csvImportLimiter,
   (req, res, next) => {
     csvUpload(req, res, (err) => {
       if (err) {
@@ -142,20 +155,20 @@ router.post(
 
 // --- User Management (Admin) ---
 router.get('/users',     authenticate, authorize('admin'), userController.getAdminUsers);
-router.get('/users/:id', authenticate, authorize('admin'), userController.getAdminUser);
-router.put('/users/:id', authenticate, authorize('admin'), userController.updateAdminUser);
-router.delete('/users/:id', authenticate, authorize('admin'), userController.deleteAdminUser);
+router.get('/users/:id', authenticate, authorize('admin'), idParamRules, validate, userController.getAdminUser);
+router.put('/users/:id', authenticate, authorize('admin'), idParamRules, validate, userController.updateAdminUser);
+router.delete('/users/:id', authenticate, authorize('admin'), idParamRules, validate, userController.deleteAdminUser);
 
 // --- Company Mock Test Configuration (Admin) ---
 router.get('/company-tests',        authenticate, authorize('admin'), companyTestController.listAll);
-router.get('/company-tests/:id',    authenticate, authorize('admin'), companyTestController.getById);
+router.get('/company-tests/:id',    authenticate, authorize('admin'), idParamRules, validate, companyTestController.getById);
 router.post('/company-tests',       authenticate, authorize('admin'), companyTestRules, validate, companyTestController.create);
 router.put('/company-tests/:id',    authenticate, authorize('admin'), companyTestUpdateRules, validate, companyTestController.update);
-router.delete('/company-tests/:id', authenticate, authorize('admin'), companyTestController.remove);
+router.delete('/company-tests/:id', authenticate, authorize('admin'), idParamRules, validate, companyTestController.remove);
 
 // Question pool attachment for a company test
-router.post('/company-tests/:id/questions',                authenticate, authorize('admin'), companyTestController.attachQuestion);
-router.delete('/company-tests/:id/questions/:questionId',  authenticate, authorize('admin'), companyTestController.detachQuestion);
+router.post('/company-tests/:id/questions',                authenticate, authorize('admin'), idParamRules, validate, companyTestController.attachQuestion);
+router.delete('/company-tests/:id/questions/:questionId',  authenticate, authorize('admin'), testQuestionParamRules, validate, companyTestController.detachQuestion);
 
 // --- Analytics (Admin) ---
 router.get('/analytics/overview',         authenticate, authorize('admin'), analyticsController.getOverview);

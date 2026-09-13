@@ -17,12 +17,22 @@ router.get('/profile', userController.getProfile);
 const updateProfileRules = [
   body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email required'),
-  body('phone').optional().trim().notEmpty().withMessage('Phone is required'),
+  body('phone')
+    .optional()
+    .trim()
+    .matches(/^[0-9+() -]{7,20}$/)
+    .withMessage('Valid phone number format required (7-20 digits)'),
   body('college').optional().trim().notEmpty().withMessage('College is required'),
   body('branch').optional().trim().notEmpty().withMessage('Branch is required'),
-  body('graduation_year').optional().isInt().withMessage('Valid year required'),
-  body('cgpa').optional().isFloat({ min: 0, max: 10 }).withMessage('CGPA must be between 0-10'),
-  body('linkedin_url').optional({ checkFalsy: true }).isURL().withMessage('Valid URL required'),
+  body('graduation_year')
+    .optional()
+    .isInt({ min: 2020, max: 2035 })
+    .withMessage('Graduation year must be between 2020 and 2035'),
+  body('cgpa')
+    .optional()
+    .isFloat({ min: 0, max: 10 })
+    .withMessage('CGPA must be between 0 and 10'),
+  body('linkedin_url').optional({ nullable: true, checkFalsy: true }).isURL().withMessage('Valid URL required'),
 ];
 router.put('/profile', updateProfileRules, validate, userController.updateProfile);
 

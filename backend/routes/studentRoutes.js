@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
 const profileGate = require('../middleware/profileGate');
 const validate = require('../middleware/validate');
+const { testSubmissionLimiter, testStartLimiter } = require('../middleware/rateLimiter');
 const userController = require('../controllers/userController');
 const topicController = require('../controllers/topicController');
 const adaptiveController = require('../controllers/adaptiveController');
@@ -56,13 +57,17 @@ const resumeUpload = multer({
 const profileRules = [
   body('name').optional().trim().notEmpty().withMessage('Name is required'),
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional().trim().notEmpty().withMessage('Phone is required'),
+  body('phone')
+    .optional()
+    .trim()
+    .matches(/^[0-9+() -]{7,20}$/)
+    .withMessage('Valid phone number format required (7-20 digits)'),
   body('college').optional().trim().notEmpty().withMessage('College is required'),
   body('branch').optional().trim().notEmpty().withMessage('Branch is required'),
   body('graduation_year')
     .optional()
-    .isInt({ min: 1900, max: new Date().getFullYear() + 10 })
-    .withMessage('Graduation year is required'),
+    .isInt({ min: 2020, max: 2035 })
+    .withMessage('Graduation year must be between 2020 and 2035'),
   body('cgpa')
     .optional()
     .isFloat({ min: 0, max: 10 })
@@ -78,6 +83,49 @@ const passwordRules = [
   body('newPassword')
     .isLength({ min: 8 })
     .withMessage('New password must be at least 8 characters'),
+];
+
+const startAdaptiveRules = [
+  body('topic_id')
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage('topic_id must be a positive integer'),
+];
+
+const testIdParamRules = [
+  param('testId').isInt({ min: 1 }).withMessage('Valid test ID is required'),
+];
+
+const adaptiveAnswerRules = [
+  param('testId').isInt({ min: 1 }).withMessage('Valid test ID is required'),
+  body('question_id').isInt({ min: 1 }).withMessage('Valid question ID is required'),
+  body('selected_option')
+    .trim()
+    .toUpperCase()
+    .isIn(['A', 'B', 'C', 'D'])
+    .withMessage('selected_option must be A, B, C, or D'),
+  body('response_time_seconds')
+    .optional()
+    .isFloat({ min: 0, max: 3600 })
+    .withMessage('response_time_seconds must be between 0 and 3600'),
+];
+
+const companyTestIdParamRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid company test ID is required'),
+];
+
+const companyAnswerRules = [
+  param('id').isInt({ min: 1 }).withMessage('Valid company test ID is required'),
+  body('question_id').isInt({ min: 1 }).withMessage('Valid question ID is required'),
+  body('selected_option')
+    .trim()
+    .toUpperCase()
+    .isIn(['A', 'B', 'C', 'D'])
+    .withMessage('selected_option must be A, B, C, or D'),
+  body('time_spent_seconds')
+    .optional()
+    .isFloat({ min: 0, max: 7200 })
+    .withMessage('time_spent_seconds must be between 0 and 7200'),
 ];
 
 // Profile
@@ -112,11 +160,11 @@ router.post('/practice/:testId/answer',      authenticate, stub('Practice not ye
 router.post('/practice/:testId/complete',    authenticate, stub('Practice not yet implemented'));
 
 // Adaptive Test (Topic or Full)
-router.post('/adaptive/start',               authenticate, profileGate, adaptiveController.start);
-router.get('/adaptive/:testId/next-batch',   authenticate, adaptiveController.getNextBatch);
-router.post('/adaptive/:testId/answer',      authenticate, adaptiveController.submitAnswer);
-router.get('/adaptive/:testId/status',       authenticate, adaptiveController.getStatus);
-router.post('/adaptive/:testId/complete',    authenticate, adaptiveController.complete);
+router.post('/adaptive/start',               authenticate, profileGate, testStartLimiter, startAdaptiveRules, validate, adaptiveController.start);
+router.get('/adaptive/:testId/next-batch',   authenticate, testIdParamRules, validate, adaptiveController.getNextBatch);
+router.post('/adaptive/:testId/answer',      authenticate, testSubmissionLimiter, adaptiveAnswerRules, validate, adaptiveController.submitAnswer);
+router.get('/adaptive/:testId/status',       authenticate, testIdParamRules, validate, adaptiveController.getStatus);
+router.post('/adaptive/:testId/complete',    authenticate, testIdParamRules, validate, adaptiveController.complete);
 
 // Placement Score
 router.get('/placement-score',               authenticate, placementScoreController.getLatest);
@@ -124,9 +172,9 @@ router.get('/placement-score/history',       authenticate, placementScoreControl
 
 // Company Mock Test (fixed question set, timed, server-enforced auto-submit)
 router.get('/company-tests',                 authenticate, companyTestController.getStandardTest);
-router.post('/company-tests/:id/start',      authenticate, profileGate, companyTestController.start);
-router.post('/company-tests/:id/answer',     authenticate, companyTestController.submitAnswer);
-router.post('/company-tests/:id/complete',   authenticate, companyTestController.complete);
+router.post('/company-tests/:id/start',      authenticate, profileGate, testStartLimiter, companyTestIdParamRules, validate, companyTestController.start);
+router.post('/company-tests/:id/answer',     authenticate, testSubmissionLimiter, companyAnswerRules, validate, companyTestController.submitAnswer);
+router.post('/company-tests/:id/complete',   authenticate, companyTestIdParamRules, validate, companyTestController.complete);
 
 // Performance & Analytics
 router.get('/performance/summary',           authenticate, performanceController.getSummary);
@@ -135,6 +183,6 @@ router.get('/performance/history',           authenticate, performanceController
 
 // Recommendations
 router.get('/recommendations',               authenticate, recommendationController.getRecommendations);
-router.put('/recommendations/:id/dismiss',   authenticate, recommendationController.dismissRecommendation);
+router.put('/recommendations/:id/dismiss',   authenticate, param('id').isInt({ min: 1 }).withMessage('Valid recommendation ID required'), validate, recommendationController.dismissRecommendation);
 
 module.exports = router;
