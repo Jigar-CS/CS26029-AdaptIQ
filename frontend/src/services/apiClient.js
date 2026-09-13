@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAccessToken, setAccessToken, clearAccessToken } from './tokenManager';
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -6,16 +7,16 @@ const apiClient = axios.create({
   timeout: 10000,
 });
 
-// Attach access token to every request
+// Attach in-memory access token to every request
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adaptiq_access_token');
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Handle 401 — token expired
+// Handle 401 — token expired, attempt transparent refresh using refresh token
 apiClient.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -26,11 +27,14 @@ apiClient.interceptors.response.use(
       if (refreshToken) {
         try {
           const { data } = await axios.post('/api/auth/refresh', { refreshToken });
-          localStorage.setItem('adaptiq_access_token', data.data.accessToken);
-          original.headers.Authorization = `Bearer ${data.data.accessToken}`;
+          const newAccessToken = data.data.accessToken;
+          setAccessToken(newAccessToken);
+          original.headers.Authorization = `Bearer ${newAccessToken}`;
           return apiClient(original);
         } catch {
-          localStorage.clear();
+          clearAccessToken();
+          localStorage.removeItem('adaptiq_user');
+          localStorage.removeItem('adaptiq_refresh_token');
           window.location.href = '/login';
         }
       }
