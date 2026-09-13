@@ -380,7 +380,7 @@ Build strictly in phase order below — later phases depend on earlier ones (the
 - [x] Phase 11 — Admin activity logs + polish
 - [x] Phase 12 — Security audit passed
 - [ ] Phase 13 — Test suite passing, manual checklist clean
-- [ ] Phase 14 — UI responsive and polished
+- [x] Phase 14 — UI responsive and polished
 - [ ] Phase 15 — Deployed, documented
 
 ---

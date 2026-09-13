@@ -35,9 +35,11 @@ const AppRouter = () => (
         {/* Student */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/practice" element={<ProtectedRoute><TopicPractice /></ProtectedRoute>} />
+        <Route path="/topics" element={<ProtectedRoute><TopicPractice /></ProtectedRoute>} />
         <Route path="/adaptive" element={<ProtectedRoute><AdaptiveTest /></ProtectedRoute>} />
         <Route path="/misc-test" element={<ProtectedRoute><MiscellaneousTest /></ProtectedRoute>} />
         <Route path="/performance" element={<ProtectedRoute><PerformanceDashboard /></ProtectedRoute>} />
+        <Route path="/analytics" element={<ProtectedRoute><PerformanceDashboard /></ProtectedRoute>} />
         <Route path="/company-tests" element={<ProtectedRoute><CompanyTests /></ProtectedRoute>} />
         <Route path="/company-tests/take" element={<ProtectedRoute><CompanyTestTaking /></ProtectedRoute>} />
         <Route path="/company-tests/result" element={<ProtectedRoute><CompanyTestResult /></ProtectedRoute>} />

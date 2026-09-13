@@ -1,24 +1,21 @@
-/* Auth pages shared styles */
+/* Auth pages shared styles - Warm Ivory theme */
 .authPage {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(ellipse at top left, rgba(198, 255, 61, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.08) 0%, transparent 55%),
-    var(--color-bg);
+  background: var(--color-bg);
   padding: 24px;
 }
 
 .authCard {
   width: 100%;
   max-width: 440px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  background: #FFFFFF;
+  border: 1px solid #ECE7DF;
+  border-radius: 24px;
   padding: 40px;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 20px rgba(50, 35, 20, 0.04);
 }
 
 .logo {
@@ -30,28 +27,30 @@
 .logoText {
   font-size: 24px;
   font-weight: 800;
-  color: var(--color-primary);
-  letter-spacing: -0.01em;
+  color: #241C16;
+  letter-spacing: -0.02em;
 }
 
 .logoSub {
   font-size: 11px;
-  color: var(--color-text-faint);
+  color: #8C8074;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-top: 2px;
+  font-weight: 700;
 }
 
 .title {
   font-size: 24px;
-  font-weight: 700;
-  color: var(--color-text);
+  font-weight: 800;
+  color: #241C16;
   margin-bottom: 6px;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
-  font-size: 14px;
-  color: var(--color-text-muted);
+  font-size: 13.5px;
+  color: #7A6F64;
   margin-bottom: 28px;
 }
 
@@ -61,8 +60,13 @@
 }
 
 .switchLink {
-  margin-top: 20px;
+  margin-top: 22px;
   text-align: center;
   font-size: 13px;
-  color: var(--color-text-muted);
+  color: #7A6F64;
+}
+
+.switchLink a {
+  color: #4A3728;
+  font-weight: 700;
 }
