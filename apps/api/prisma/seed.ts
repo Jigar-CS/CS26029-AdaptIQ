@@ -7,6 +7,9 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.aIMessage.deleteMany();
+  await prisma.aIConversation.deleteMany();
+  await prisma.learningResource.deleteMany();
   await prisma.learningHistory.deleteMany();
   await prisma.skillMastery.deleteMany();
   await prisma.questionAttempt.deleteMany();
@@ -137,6 +140,46 @@ async function main() {
   });
 
   console.log('📚 Courses and topics created.');
+
+  // 4b. Seed Approved University Learning Resources (Phase 3)
+  for (const slug of Object.keys(topics)) {
+    const topic = topics[slug];
+    await prisma.learningResource.createMany({
+      data: [
+        {
+          topicId: topic.id,
+          title: `CHARUSAT CS301 Lecture Slides: ${topic.name} Invariants & Proofs`,
+          description: `Comprehensive slide deck from Department of Computer Science & Engineering covering formal asymptotic bounds, operations, and memory models for ${topic.name}.`,
+          resourceType: 'LECTURE_SLIDE' as any,
+          url: 'https://charusat.ac.in/curriculum/cs301-slides',
+          author: 'Prof. CSE Department (CHARUSAT)',
+          estimatedMinutes: 25,
+          keyConcepts: JSON.stringify(['time-complexity', 'invariants', 'memory-layout']),
+        },
+        {
+          topicId: topic.id,
+          title: `Faculty Problem Solving Walkthrough: Common Pitfalls in ${topic.name}`,
+          description: `Detailed video tutorial deconstructing tricky exam problems, common student misconceptions, and edge-case testing in ${topic.name}.`,
+          resourceType: 'VIDEO_WALKTHROUGH' as any,
+          url: 'https://charusat.ac.in/videos/cs301-pitfalls',
+          author: 'Dr. CSE Faculty',
+          estimatedMinutes: 18,
+          keyConcepts: JSON.stringify(['pitfalls', 'edge-cases', 'debugging']),
+        },
+        {
+          topicId: topic.id,
+          title: `${topic.name} Interactive Memory Visualizer`,
+          description: `Interactive sandbox stepping through runtime heap allocations and pointer mutations for ${topic.name}.`,
+          resourceType: 'CODE_SANDBOX' as any,
+          url: 'https://visualgo.net/en',
+          author: 'CLIAS Open Courseware',
+          estimatedMinutes: 10,
+          keyConcepts: JSON.stringify(['visualization', 'sandbox']),
+        },
+      ],
+    });
+  }
+  console.log('📖 Curated learning resources seeded.');
 
   // 5. Seed 35+ realistic questions with options
   const questionsData = [

@@ -50,6 +50,27 @@ enum LearningHistoryReason {
   MANUAL_RECALCULATION
 }
 
+enum ResourceType {
+  LECTURE_SLIDE
+  VIDEO_WALKTHROUGH
+  REFERENCE_TEXT
+  CODE_SANDBOX
+}
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum SocraticActionType {
+  EXPLAIN_SIMPLY
+  REAL_WORLD_EXAMPLE
+  ASK_FOLLOW_UP
+  PRACTICE_SIMILAR
+  SOCRATIC_PROMPT
+}
+
 model User {
   id            String          @id @default(uuid())
   email         String          @unique
@@ -131,6 +152,8 @@ model Topic {
   questions     Question[]
   skillMasteries SkillMastery[]
   learningHistories LearningHistory[]
+  learningResources LearningResource[]
+  aiConversations   AIConversation[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -174,6 +197,7 @@ model StudentProfile {
   skillMasteries      SkillMastery[]
   learningHistories   LearningHistory[]
   counsellorAssignments CounsellorAssignment[]
+  aiConversations     AIConversation[]
 }
 
 model FacultyProfile {
@@ -201,6 +225,7 @@ model Question {
   status       QuestionStatus     @default(APPROVED)
   options      QuestionOption[]
   attempts     QuestionAttempt[]
+  aiConversations AIConversation[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -294,3 +319,49 @@ model CounsellorAssignment {
 
   @@unique([counsellorId, studentId])
 }
+
+model LearningResource {
+  id               String       @id @default(uuid())
+  topicId          String
+  topic            Topic        @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title            String
+  description      String       @db.Text
+  resourceType     ResourceType @default(LECTURE_SLIDE)
+  url              String
+  author           String?
+  estimatedMinutes Int          @default(15)
+  keyConcepts      String       @db.Text
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([topicId, resourceType])
+}
+
+model AIConversation {
+  id         String         @id @default(uuid())
+  studentId  String
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  questionId String?
+  question   Question?      @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  topicId    String
+  topic      Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  messages   AIMessage[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([studentId, topicId])
+}
+
+model AIMessage {
+  id             String             @id @default(uuid())
+  conversationId String
+  conversation   AIConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           AIMessageRole      @default(ASSISTANT)
+  actionType     SocraticActionType @default(SOCRATIC_PROMPT)
+  content        String             @db.Text
+  metadata       String?            @db.Text
+  createdAt      DateTime           @default(now())
+
+  @@index([conversationId])
+}
+
