@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
+import { SocraticAssistantDrawer } from '@/components/SocraticAssistantDrawer';
 import {
   BrainCircuit,
   CheckCircle2,
@@ -369,6 +370,17 @@ export default function PracticePage() {
                           <p className="text-slate-700">{attemptResult.explanation}</p>
                         </div>
                       </div>
+
+                      {/* Phase 3: AI Socratic Remediation Assistant */}
+                      {selectedOptionId && (
+                        <SocraticAssistantDrawer
+                          questionId={currentQuestion.id}
+                          selectedOptionId={selectedOptionId}
+                          topicName={currentQuestion.topicName || 'Computer Science'}
+                          courseCode={selectedCourse?.code || 'CS301'}
+                          onPracticeSimilar={() => handleNextQuestion()}
+                        />
+                      )}
 
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-slate-500">
