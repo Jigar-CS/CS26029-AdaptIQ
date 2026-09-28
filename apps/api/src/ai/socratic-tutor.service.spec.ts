@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SocraticTutorService } from './socratic-tutor.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocraticActionType, QuestionDifficulty, ResourceType } from '@prisma/client';
+import { AiClientService } from './ai-client.service';
 
 describe('SocraticTutorService', () => {
   let service: SocraticTutorService;
@@ -74,6 +75,13 @@ describe('SocraticTutorService', () => {
         {
           provide: PrismaService,
           useValue: prismaMock,
+        },
+        {
+          provide: AiClientService,
+          useValue: {
+            requestSocraticRemediation: jest.fn().mockResolvedValue(null),
+            requestSocraticChat: jest.fn().mockResolvedValue(null),
+          },
         },
       ],
     }).compile();

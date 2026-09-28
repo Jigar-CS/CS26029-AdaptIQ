@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ResourceType,
@@ -6,6 +6,8 @@ import {
   SocraticActionType,
   QuestionDifficulty,
 } from '@prisma/client';
+
+import { AiClientService } from './ai-client.service';
 
 export interface SocraticRemediationResponse {
   conversationId: string;
@@ -39,7 +41,10 @@ export interface SocraticRemediationResponse {
 export class SocraticTutorService {
   private readonly logger = new Logger('SocraticTutorService');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private aiClient?: AiClientService,
+  ) {}
 
   /**
    * Generates grounded, Socratic assistance whenever a student answers incorrectly during practice
@@ -77,21 +82,38 @@ export class SocraticTutorService {
     const topicName = question.topic.name;
     const courseCode = question.topic.course.code;
 
+    // Try FastAPI Socratic remediation if microservice is active
+    let fastApiResponse: any = null;
+    if (this.aiClient) {
+      fastApiResponse = await this.aiClient.requestSocraticRemediation({
+        questionText: question.questionText,
+        topic: topicName,
+        courseCode,
+        studentSelectedOption: selectedOption.optionText,
+        correctOption: correctOption ? correctOption.optionText : '',
+        explanation: question.explanation,
+      });
+    }
+
     // 2. Synthesize pedagogical Socratic diagnosis
-    const distractorDiagnosis = this.generateDistractorAnalysis(
-      question.questionText,
-      selectedOption.optionText,
-      correctOption ? correctOption.optionText : '',
-      topicSlug,
-    );
+    const distractorDiagnosis =
+      fastApiResponse?.distractor_diagnosis ||
+      this.generateDistractorAnalysis(
+        question.questionText,
+        selectedOption.optionText,
+        correctOption ? correctOption.optionText : '',
+        topicSlug,
+      );
 
-    const analogy = this.getTopicAnalogy(topicSlug);
-    const codeExample = this.getTopicCodeExample(topicSlug);
+    const analogy = fastApiResponse?.analogy || this.getTopicAnalogy(topicSlug);
+    const codeExample = fastApiResponse?.code_example || this.getTopicCodeExample(topicSlug);
 
-    const socraticPrompt = `Think about this: ${this.getSocraticQuestion(
-      topicSlug,
-      selectedOption.optionText,
-    )}`;
+    const socraticPrompt =
+      fastApiResponse?.socratic_prompt ||
+      `Think about this: ${this.getSocraticQuestion(
+        topicSlug,
+        selectedOption.optionText,
+      )}`;
 
     // 3. Create or find active AIConversation
     const conversation = await this.prisma.aIConversation.create({
@@ -199,11 +221,24 @@ export class SocraticTutorService {
           },
         });
 
-        assistantReply = this.generateSocraticFollowUpResponse(
-          userMessage,
-          conversation.topic.name,
-          conversation.question?.questionText || '',
-        );
+        let fastApiChat: any = null;
+        if (this.aiClient) {
+          fastApiChat = await this.aiClient.requestSocraticChat({
+            topic: conversation.topic.name,
+            courseCode: conversation.topic?.course?.code || 'CS301',
+            questionText: conversation.question?.questionText || '',
+            userMessage,
+            actionType,
+          });
+        }
+
+        assistantReply =
+          fastApiChat?.reply ||
+          this.generateSocraticFollowUpResponse(
+            userMessage,
+            conversation.topic.name,
+            conversation.question?.questionText || '',
+          );
         break;
       }
 
