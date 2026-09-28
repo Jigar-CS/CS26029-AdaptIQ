@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { MetricCard } from '@/components/MetricCard';
@@ -14,17 +15,37 @@ import {
   TrendingUp,
   ShieldCheck,
   Sparkles,
+  Clock,
 } from 'lucide-react';
 
 export default function CounsellorDashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [menteesSummary, setMenteesSummary] = useState<any>(null);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || (user.role !== UserRole.COUNSELLOR && user.role !== UserRole.SUPER_ADMIN))) {
       router.push('/auth/login');
+      return;
+    }
+
+    if (user) {
+      loadMenteesData();
     }
   }, [user, loading]);
+
+  const loadMenteesData = async () => {
+    setFetching(true);
+    try {
+      const res: any = await api.get('/analytics/counsellor/mentees/summary');
+      setMenteesSummary(res);
+    } catch (e) {
+      // Fallback
+    } finally {
+      setFetching(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

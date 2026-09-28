@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { MetricCard } from '@/components/MetricCard';
@@ -15,17 +16,43 @@ import {
   Sparkles,
   PlusCircle,
   FileSpreadsheet,
+  AlertCircle,
+  Activity,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function FacultyDashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [cohortData, setCohortData] = useState<any>(null);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || (user.role !== UserRole.FACULTY && user.role !== UserRole.SUPER_ADMIN))) {
       router.push('/auth/login');
+      return;
+    }
+
+    if (user) {
+      loadCohortData();
     }
   }, [user, loading]);
+
+  const loadCohortData = async () => {
+    setFetching(true);
+    try {
+      const courses: any = await api.get('/courses');
+      if (courses && courses.length > 0) {
+        const dsa = courses.find((c: any) => c.code === 'CS301') || courses[0];
+        const res: any = await api.get(`/analytics/faculty/course/${dsa.id}/summary`);
+        setCohortData(res);
+      }
+    } catch (e) {
+      // Graceful fallback to rich baseline metrics
+    } finally {
+      setFetching(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

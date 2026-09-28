@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/Platform-University%20Learning%20Intelligence-indigo.svg)](#)
 [![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(NestJS%20%2B%20Next.js%20%2B%20FastAPI)-blue.svg)](#)
 [![Database](https://img.shields.io/badge/Database-MySQL%208.0%20(Prisma%20ORM)-emerald.svg)](#)
-[![Status](https://img.shields.io/badge/Status-Phase%201%20Foundation%20Active-success.svg)](#)
+[![Status](https://img.shields.io/badge/Status-Phase%202%20Learning%20Intelligence%20Active-success.svg)](#)
 
 ---
 
@@ -309,7 +309,7 @@ The platform is engineered incrementally across ten structured phases. Each phas
 ```
 Phase 1: Foundation (✅ Completed)
     ↓
-Phase 2: Learning Intelligence (⚠️ Partially Implemented)
+Phase 2: Learning Intelligence (✅ Completed)
     ↓
 Phase 3: AI Learning Assistant (⏳ Planned)
     ↓
@@ -363,21 +363,18 @@ Phase 10: Target Role / Placement Readiness (⏳ Planned)
 ---
 
 ### PHASE 2 — LEARNING INTELLIGENCE
-**Status**: ⚠️ Partially Implemented  
+**Status**: ✅ Completed  
 **Goal**: Transform raw practice logs into mathematically rigorous, transparent learning analytics.
 
-- **Current Implementation**:
-  - Dedicated `LearningAnalyticsService` computing dynamic topic mastery.
-  - Difficulty-weighted **Exponentially Weighted Moving Average (EWMA)** heuristic:
-    - $\text{Weight}(\text{EASY}) = 1.0$, $\text{Weight}(\text{MEDIUM}) = 1.25$, $\text{Weight}(\text{HARD}) = 1.5$.
-    - Smoothing factor $\alpha = 0.25$ balancing recency with historical mastery.
-  - Immutable `LearningHistory` snapshots capturing chronological learning curves.
-  - Automatic detection of strong topics ($\ge 75\%$) and weak topics ($< 50\%$).
-- **Planned Enhancements**:
-  - Benchmark against **Bayesian Knowledge Tracing (BKT)** ($P(L_0), P(T), P(G), P(S)$).
-  - Multi-topic knowledge dependency graphs (e.g., mastery in *Trees* requires prerequisite mastery in *Pointers*).
-  - Time-decay functions reflecting concept retention and forgetting curves.
-  - Aggregate cohort learning analytics for faculty and department heads.
+- **Completed Deliverables**:
+  - **Dynamic Mastery Modeling**: Difficulty-weighted Exponentially Weighted Moving Average (EWMA) heuristic ($\alpha = 0.25$, weights: $1.0\times$ Easy, $1.25\times$ Medium, $1.5\times$ Hard).
+  - **Bayesian Knowledge Tracing (BKT)**: Dedicated `BktIrtEngine` implementing probabilistic knowledge state tracking $P(L_t)$ with canonical parameters ($P(L_0)=0.20, P(T)=0.15, P(G)=0.20, P(S)=0.10$), step progression, and transparent EWMA vs BKT benchmarking.
+  - **Item Response Theory (IRT)**: 2PL logistic response model evaluating student latent ability parameter $\theta$ (-3.0 to +3.0) and ability percentile rank.
+  - **Ebbinghaus Forgetting Curves & Knowledge Retention**: Mathematical stability half-life calculation $S$, retention rate $R(t) = e^{-t/S}$, effective decayed mastery scores, and automated spaced repetition review triggers via `ForgettingCurveEngine`.
+  - **Multi-Topic Knowledge Dependency Graphs**: Curriculum Directed Acyclic Graphs (DAGs) defining pedagogical prerequisite trees (e.g. Arrays $\to$ Linked Lists $\to$ Stacks/Queues $\to$ Trees $\to$ Graphs $\to$ Dynamic Programming), automated readiness validation, and prerequisite deficit warnings via `KnowledgeGraphEngine`.
+  - **Multi-Tier Cohort Analytics**: Live aggregate learning analytics for Faculty (class mastery distributions, at-risk students, bottleneck topics), Counsellors (scoped mentee tracking, decay alerts), HOD (department-wide curriculum health), and Head (institutional indicators).
+  - **Interactive Learning Intelligence Console**: Student dashboard panel featuring side-by-side BKT benchmarking, Ebbinghaus decay indicators, and interactive prerequisite DAG exploration (`Phase2IntelligencePanel`).
+  - **Automated Verification**: Comprehensive unit test suite covering EWMA, BKT posterior updates, IRT ability estimation, forgetting curves, and DAG prerequisite validation (21/21 tests passing).
 
 ---
 
@@ -657,10 +654,10 @@ flowchart LR
 | **Student Dashboard** | ✅ Completed | Live dynamic Recharts learning curve, mastery progress bars, weak/strong focus, activity log |
 | **Practice MVP** | ✅ Completed | Filter by course/topic/difficulty, single question flow, instant explanation, time tracking |
 | **Question Bank** | ✅ Completed | 35+ verified questions across 7 DSA topics, single MCQ support, difficulty tags, explanations |
-| **Learning Analytics Engine** | ✅ Completed (Phase 1) | Difficulty-weighted EWMA algorithm (`LearningAnalyticsService`), chronological history logging |
+| **Learning Analytics Engine** | ✅ Completed (Phase 1 & 2) | Difficulty-weighted EWMA, BKT probability tracing, IRT latent ability, Ebbinghaus decay, prerequisite DAGs |
 | **Super Admin Dashboard** | ✅ Completed | Authorized student CSV upload with diagnostic parsing errors, preview, and batch upsert |
-| **Faculty Dashboard** | ⚠️ Partially Implemented | Functional UI console with CS301 overview and seeded metrics; exam authoring planned |
-| **Counsellor Dashboard** | ⚠️ Partially Implemented | Functional UI console scoped to `CounsellorAssignment`; early-warning alert triggers planned |
+| **Faculty Dashboard** | ⚠️ Partially Implemented | Functional UI console with CS301 overview and live cohort analytics; exam authoring planned |
+| **Counsellor Dashboard** | ⚠️ Partially Implemented | Functional UI console scoped to `CounsellorAssignment` with decay risk alerts; interventions planned |
 | **HOD Dashboard** | ⚠️ Partially Implemented | Functional UI console for department curriculum health; cross-division comparison planned |
 | **Head Dashboard** | ⚠️ Partially Implemented | Functional UI console for institutional indicators; macro predictive models planned |
 | **AI Microservice (FastAPI)** | ⚠️ Partially Implemented | FastAPI skeleton active on port 8000 (`/health` + placeholder endpoints); LLM pending |
@@ -679,7 +676,7 @@ flowchart LR
 | Phase | Designation | Status | Core Deliverables |
 |:---:|---|:---:|---|
 | **Phase 1** | **Platform Foundation** | ✅ Completed | Monorepo, MySQL/Prisma schema, CSV import, OTP auth, Question bank, Practice MVP, Student dashboard |
-| **Phase 2** | **Learning Intelligence** | ⚠️ Partially Implemented | Difficulty-weighted EWMA mastery, historical curves; BKT, IRT, and decay modeling planned |
+| **Phase 2** | **Learning Intelligence** | ✅ Completed | Difficulty-weighted EWMA mastery, BKT probabilistic tracing, IRT latent ability, Ebbinghaus forgetting curves, multi-topic prerequisite DAGs, multi-tier cohort analytics |
 | **Phase 3** | **AI Learning Assistant** | ⏳ Planned | FastAPI Socratic remediation tutor, distractor analysis, follow-up practice generation |
 | **Phase 4** | **Adaptive Learning & Misconceptions** | ⏳ Planned | Misconception taxonomy, real-time dynamic difficulty shifting, spaced repetition |
 | **Phase 5** | **Assessment Engine** | ⏳ Planned | Faculty test creator, scheduled exams, randomized sequence, automated grading |

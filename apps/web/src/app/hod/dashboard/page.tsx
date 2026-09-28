@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { MetricCard } from '@/components/MetricCard';
@@ -19,12 +20,32 @@ import {
 export default function HodDashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [deptData, setDeptData] = useState<any>(null);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || (user.role !== UserRole.HOD && user.role !== UserRole.SUPER_ADMIN))) {
       router.push('/auth/login');
+      return;
+    }
+
+    if (user) {
+      loadDeptData();
     }
   }, [user, loading]);
+
+  const loadDeptData = async () => {
+    setFetching(true);
+    try {
+      // Find department or use default
+      const res: any = await api.get('/analytics/institutional/summary');
+      setDeptData(res);
+    } catch (e) {
+      // Fallback
+    } finally {
+      setFetching(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

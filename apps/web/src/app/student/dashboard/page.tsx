@@ -9,6 +9,7 @@ import { Navbar } from '@/components/Navbar';
 import { MetricCard } from '@/components/MetricCard';
 import { LearningCurveChart } from '@/components/LearningCurveChart';
 import { TopicMasteryCard } from '@/components/TopicMasteryCard';
+import { Phase2IntelligencePanel } from '@/components/Phase2IntelligencePanel';
 import {
   BrainCircuit,
   TrendingUp,
@@ -241,6 +242,9 @@ export default function StudentDashboard() {
             </div>
           </div>
 
+          {/* Phase 2: Bayesian Knowledge Tracing, Forgetting Curves & Prerequisite DAG */}
+          <Phase2IntelligencePanel />
+
           {/* Topic Mastery Grid */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -269,6 +273,8 @@ export default function StudentDashboard() {
                     topicName={tm.topicName}
                     courseCode={tm.courseCode}
                     masteryScore={tm.masteryScore}
+                    decayedMastery={tm.decayedMastery}
+                    retentionStatus={tm.retentionStatus}
                     attemptCount={tm.attemptCount}
                     onPracticeClick={() => router.push(`/student/practice?topicId=${tm.topicId}`)}
                   />
