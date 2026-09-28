@@ -1,29 +1,38 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
-# Environment secrets — never commit real .env
+# Build artifacts
+dist/
+build/
+.next/
+out/
+
+# Environment files
 .env
-backend/.env
+.env.local
+.env.production
 
-# Build output
-frontend/dist/
-frontend/build/
+# Database
+dev.db
+dev.db-journal
+*.sqlite
+*.sqlite3
 
-# Uploaded CSV files
-backend/uploads/*
-!backend/uploads/.gitkeep
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.pytest_cache/
 
 # Logs
-*.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
 
-# OS files
+# OS Files
 .DS_Store
 Thumbs.db
-
-# IDE
-.vscode/settings.json
-.idea/
-
-# Test coverage
-coverage/

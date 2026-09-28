@@ -1,0 +1,296 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  STUDENT
+  FACULTY
+  COUNSELLOR
+  HOD
+  HEAD
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionType {
+  MCQ_SINGLE
+  MCQ_MULTIPLE
+  TRUE_FALSE
+  NUMERIC
+  SHORT_ANSWER
+  CODING
+}
+
+enum QuestionStatus {
+  DRAFT
+  APPROVED
+  ARCHIVED
+}
+
+enum LearningHistoryReason {
+  PRACTICE_ATTEMPT
+  TEST_RESULT
+  REASSESSMENT
+  MANUAL_RECALCULATION
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  role          UserRole        @default(STUDENT)
+  status        UserStatus      @default(ACTIVE)
+  emailVerified Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lastLoginAt   DateTime?
+
+  studentProfile   StudentProfile?
+  facultyProfile   FacultyProfile?
+  authorizedRecord AuthorizedStudent?
+
+  @@index([email])
+  @@index([role])
+}
+
+model Institute {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  departments Department[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Department {
+  id          String      @id @default(uuid())
+  instituteId String
+  institute   Institute   @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  name        String
+  code        String
+  programs    Program[]
+  courses     Course[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([instituteId, code])
+}
+
+model Program {
+  id           String             @id @default(uuid())
+  departmentId String
+  department   Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String
+  code         String
+  students     AuthorizedStudent[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([departmentId, code])
+}
+
+model Course {
+  id           String            @id @default(uuid())
+  code         String            @unique
+  name         String
+  departmentId String
+  department   Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  semester     Int
+  topics       Topic[]
+  questions    Question[]
+  practiceSessions PracticeSession[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model Topic {
+  id            String            @id @default(uuid())
+  courseId      String
+  course        Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String
+  parentTopicId String?
+  parentTopic   Topic?            @relation("SubTopics", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  subTopics     Topic[]           @relation("SubTopics")
+  questions     Question[]
+  skillMasteries SkillMastery[]
+  learningHistories LearningHistory[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([courseId, slug])
+}
+
+model AuthorizedStudent {
+  id               String          @id @default(uuid())
+  enrollmentNumber String          @unique
+  name             String
+  email            String          @unique
+  institute        String
+  department       String
+  programId        String?
+  program          Program?        @relation(fields: [programId], references: [id], onDelete: SetNull)
+  programName      String
+  semester         Int
+  division         String
+  graduationYear   Int
+  importedAt       DateTime        @default(now())
+  activated        Boolean         @default(false)
+  userId           String?         @unique
+  user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  studentProfile   StudentProfile?
+
+  @@index([email])
+  @@index([enrollmentNumber])
+}
+
+model StudentProfile {
+  id                  String             @id @default(uuid())
+  userId              String             @unique
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorizedStudentId String             @unique
+  authorizedStudent   AuthorizedStudent  @relation(fields: [authorizedStudentId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  practiceSessions    PracticeSession[]
+  attempts            QuestionAttempt[]
+  skillMasteries      SkillMastery[]
+  learningHistories   LearningHistory[]
+  counsellorAssignments CounsellorAssignment[]
+}
+
+model FacultyProfile {
+  id           String     @id @default(uuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode String?    @unique
+  departmentId String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Question {
+  id           String             @id @default(uuid())
+  courseId     String
+  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  createdBy    String?
+  type         QuestionType       @default(MCQ_SINGLE)
+  difficulty   QuestionDifficulty @default(MEDIUM)
+  questionText String             @db.Text
+  explanation  String             @db.Text
+  sourceType   String             @default("MANUAL")
+  status       QuestionStatus     @default(APPROVED)
+  options      QuestionOption[]
+  attempts     QuestionAttempt[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([courseId, topicId, difficulty])
+}
+
+model QuestionOption {
+  id         String            @id @default(uuid())
+  questionId String
+  question   Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionText String            @db.Text
+  isCorrect  Boolean           @default(false)
+  order      Int               @default(0)
+  attempts   QuestionAttempt[]
+}
+
+model PracticeSession {
+  id                 String             @id @default(uuid())
+  studentId          String
+  student            StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId           String
+  course             Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topicId            String?
+  difficulty         QuestionDifficulty?
+  startedAt          DateTime           @default(now())
+  completedAt        DateTime?
+  questionsAttempted Int                @default(0)
+  correctAnswers     Int                @default(0)
+  attempts           QuestionAttempt[]
+
+  @@index([studentId, courseId])
+}
+
+model QuestionAttempt {
+  id                 String             @id @default(uuid())
+  studentId          String
+  student            StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  questionId         String
+  question           Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  practiceSessionId  String?
+  practiceSession    PracticeSession?   @relation(fields: [practiceSessionId], references: [id], onDelete: SetNull)
+  selectedOptionId   String?
+  selectedOption     QuestionOption?    @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  isCorrect          Boolean
+  timeTakenSeconds   Int                @default(0)
+  attemptNumber      Int                @default(1)
+  hintUsed           Boolean            @default(false)
+  difficultyAtAttempt QuestionDifficulty @default(MEDIUM)
+  createdAt          DateTime           @default(now())
+
+  @@index([studentId, questionId])
+  @@index([studentId, createdAt])
+}
+
+model SkillMastery {
+  id             String         @id @default(uuid())
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  topicId        String
+  topic          Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  masteryScore   Float          @default(0.0)
+  attemptCount   Int            @default(0)
+  correctCount   Int            @default(0)
+  lastPracticedAt DateTime      @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([studentId, topicId])
+  @@index([studentId])
+}
+
+model LearningHistory {
+  id           String                @id @default(uuid())
+  studentId    String
+  student      StudentProfile        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic                 @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  masteryScore Float
+  recordedAt   DateTime              @default(now())
+  reason       LearningHistoryReason @default(PRACTICE_ATTEMPT)
+
+  @@index([studentId, recordedAt])
+  @@index([studentId, topicId])
+}
+
+model CounsellorAssignment {
+  id           String         @id @default(uuid())
+  counsellorId String
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime       @default(now())
+
+  @@unique([counsellorId, studentId])
+}

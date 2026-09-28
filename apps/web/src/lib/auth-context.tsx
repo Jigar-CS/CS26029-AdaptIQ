@@ -1,0 +1,90 @@
+'use client';
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { api } from './api';
+import { UserRole } from '@clias/shared-types';
+
+export interface UserSession {
+  id: string;
+  email: string;
+  role: UserRole;
+  name?: string;
+  studentId?: string;
+  facultyId?: string;
+  studentDetails?: any;
+}
+
+interface AuthContextType {
+  user: UserSession | null;
+  token: string | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<UserSession>;
+  logout: () => void;
+  hasRole: (roles: UserRole[]) => boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem('clias_token');
+    const storedUser = localStorage.getItem('clias_user');
+
+    if (storedToken && storedUser) {
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('clias_token');
+        localStorage.removeItem('clias_user');
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (email: string, password: string): Promise<UserSession> => {
+    const res = await api.post('/auth/login', { email, password });
+    const { accessToken, user: sessionUser } = res;
+
+    localStorage.setItem('clias_token', accessToken);
+    localStorage.setItem('clias_user', JSON.stringify(sessionUser));
+
+    setToken(accessToken);
+    setUser(sessionUser);
+
+    return sessionUser;
+  };
+
+  const logout = () => {
+    localStorage.removeItem('clias_token');
+    localStorage.removeItem('clias_user');
+    setToken(null);
+    setUser(null);
+    router.push('/auth/login');
+  };
+
+  const hasRole = (roles: UserRole[]) => {
+    if (!user) return false;
+    return roles.includes(user.role);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, loading, login, logout, hasRole }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

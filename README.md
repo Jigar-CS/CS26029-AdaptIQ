@@ -1,877 +1,872 @@
-# 🎓 AdaptIQ — Adaptive Placement Preparation Platform
+# CLIAS — CHARUSAT Learning Intelligence & Assessment System
 
-> An intelligent, rule-based adaptive learning platform that personalizes MCQ practice difficulty in real-time based on student performance — purpose-built for placement exam preparation.
+> **An AI-powered learning intelligence, adaptive practice, assessment, analytics, and exam integrity platform for university students.**
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#-overview)
-- [Key Features](#-key-features)
-- [User Stories](#-user-stories)
-- [Use Cases](#-use-cases)
-- [Tech Stack](#-tech-stack)
-- [Project Structure](#-project-structure)
-- [Database Schema](#-database-schema)
-- [API Reference](#-api-reference)
-- [Adaptive Engine](#-adaptive-engine)
-- [Placement Readiness Score](#-placement-readiness-score)
-- [Development Phases](#-development-phases)
-- [Getting Started](#-getting-started)
-- [Demo Credentials](#-demo-credentials)
-- [Security](#-security)
-- [Documentation](#-documentation)
+[![Platform](https://img.shields.io/badge/Platform-University%20Learning%20Intelligence-indigo.svg)](#)
+[![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(NestJS%20%2B%20Next.js%20%2B%20FastAPI)-blue.svg)](#)
+[![Database](https://img.shields.io/badge/Database-MySQL%208.0%20(Prisma%20ORM)-emerald.svg)](#)
+[![Status](https://img.shields.io/badge/Status-Phase%201%20Foundation%20Active-success.svg)](#)
 
 ---
 
-## 🧠 Overview
+## Table of Contents
 
-AdaptIQ is a full-stack web application that helps engineering students prepare for placement exams through adaptive MCQ practice. Unlike static question banks, AdaptIQ continuously evaluates student performance in real-time and adjusts question difficulty every 5 questions — making practice sessions smarter and more efficient.
-
-**Core Differentiator:** The adaptive engine is entirely rule-based (no ML/AI), making it transparent, debuggable, and fast — every difficulty decision is logged and explainable.
+1. [Project Overview](#1-project-overview)
+2. [Core Learning Intelligence Loop](#2-core-learning-intelligence-loop)
+3. [Key Differentiator: Continuous Student Knowledge Model](#3-key-differentiator-continuous-student-knowledge-model)
+4. [User Roles & Access Control](#4-user-roles--access-control)
+5. [University Data Model & Import Engine](#5-university-data-model--import-engine)
+6. [Registration & Authentication Architecture](#6-registration--authentication-architecture)
+7. [Technology Stack](#7-technology-stack)
+8. [System Architecture](#8-system-architecture)
+9. [Phased Development Roadmap](#9-phased-development-roadmap)
+   - [Phase 1: Platform Foundation](#phase-1--platform-foundation)
+   - [Phase 2: Learning Intelligence](#phase-2--learning-intelligence)
+   - [Phase 3: AI Learning Assistant](#phase-3--ai-learning-assistant)
+   - [Phase 4: Misconception Detection & Adaptive Learning](#phase-4--misconception-detection--adaptive-learning)
+   - [Phase 5: Assessment Engine](#phase-5--assessment-engine)
+   - [Phase 6: AI Assessment Generation](#phase-6--ai-assessment-generation)
+   - [Phase 7: Document-Based AI / RAG](#phase-7--document-based-ai--rag)
+   - [Phase 8: University Analytics](#phase-8--university-analytics)
+   - [Phase 9: Proctored Assessment (AI Integrity Monitoring)](#phase-9--proctored-assessment-ai-integrity-monitoring)
+   - [Phase 10: Target Role & Placement Readiness](#phase-10--target-role--placement-readiness)
+10. [Long-Term Learning Intelligence Model](#10-long-term-learning-intelligence-model)
+11. [System Data Flow](#11-system-data-flow)
+12. [Database Entities](#12-database-entities)
+13. [Security & Privacy Architecture](#13-security--privacy-architecture)
+14. [Privacy Principles](#14-privacy-principles)
+15. [Current Project Status](#15-current-project-status)
+16. [Roadmap Summary Table](#16-roadmap-summary-table)
+17. [Project Development Principles](#17-project-development-principles)
+18. [Future Improvements](#18-future-improvements)
+19. [Setup & Development Guide](#19-setup--development-guide)
+20. [Development Demo Credentials](#20-development-demo-credentials)
+21. [Recommended Demonstration Flow](#21-recommended-demonstration-flow)
 
 ---
 
-## ✨ Key Features
+## 1. Project Overview
 
-| Feature | Description |
-|---|---|
-| 🔄 **Adaptive Testing** | Difficulty auto-adjusts every 5 questions in **all** test modes — topic-wise and full adaptive — using the same rule-based engine |
-| 📊 **Placement Readiness Score** | Composite score (0–100) gating access to company mock tests |
-| 🏢 **Company Mock Tests** | Timed tests modeled on TCS, Infosys, Accenture, etc. (score-gated at 80% + min 5 misc tests) |
-| 📥 **Bulk CSV Import** | Admin uploads up to 600+ questions per topic with full validation & duplicate detection |
-| 📈 **Performance Analytics** | Accuracy charts, topic breakdowns, score trend graphs via Recharts |
-| 💡 **Smart Recommendations** | Rule-based suggestions highlighting weak topics and difficulty gaps |
-| 🔐 **Role-Based Access** | Separate Student and Admin roles with JWT-protected routes |
-| 🛡️ **Security First** | Parameterized queries, bcrypt, helmet.js, rate limiting on auth endpoints |
-| 👤 **Profile Completion Gate** | After 3 topic-wise tests, students must upload photo & resume and fill placement details before continuing |
+**CLIAS** (CHARUSAT Learning Intelligence & Assessment System) is designed to solve a fundamental deficiency in higher education software: **conventional Learning Management Systems (LMS) and quiz portals record static examination marks, but fail to measure actual learning progression over time.**
+
+A standard grade sheet records that a student scored 14 out of 20 on an assessment. It cannot answer whether the student guessed easy questions, mastered difficult algorithmic concepts, struggled with recursion, or experienced severe knowledge decay over the subsequent six weeks.
+
+CLIAS addresses this by continuously understanding a student's learning progress throughout their university tenure. The platform systematically tracks:
+
+- **What students practice**: Detailed interaction history, time spent per question, streaks, and session cadence.
+- **Which topics they understand**: Fine-grained topic mastery calculated dynamically based on correctness and question difficulty.
+- **Where they repeatedly struggle**: Specific subtopics and conceptual pitfalls where errors cluster.
+- **How their mastery changes over time**: Longitudinal learning curves capturing growth, plateaus, and skill decay.
+- **Which learning resources may help**: Curated readings, video walkthroughs, and targeted remedial explanations.
+- **What they should practice next**: Personalized difficulty-adjusted questions designed to bridge verified skill gaps.
+
+### Multi-Tier Academic Intelligence
+
+The platform synthesizes raw practice and assessment data into actionable intelligence across five distinct institutional tiers:
+
+```
+Student ──► Faculty ──► Counsellor ──► HOD ──► Head / Institutional Administration
+```
+
+- **Student**: Receives transparent self-directed mastery feedback, weak area alerts, and personalized practice.
+- **Faculty**: Monitors class-wide concept mastery, discovers collective misconceptions, and orchestrates curriculum coverage.
+- **Counsellor**: Identifies assigned mentees exhibiting disengagement, declining learning curves, or persistent distress before exams occur.
+- **Head of Department (HOD)**: Evaluates curriculum health across semesters, divisions, and courses to inform pedagogical interventions.
+- **Institutional Head / Provost**: Reviews cross-departmental readiness, cohort performance trends, and accreditation indicators.
+
+The long-term vision of CLIAS is to serve as an **institutional learning intelligence backbone** across university departments.
 
 ---
 
-## 🧾 User Stories
+## 2. Core Learning Intelligence Loop
 
-| ID | Actor | User Story |
+The foundational concept of CLIAS is the **continuous learning loop**, rather than the episodic execution of isolated exams:
+
+```mermaid
+flowchart TD
+    A[Student Practice Session] --> B[Granular Answer Analysis]
+    B --> C[Topic Mastery Calculation]
+    C --> D[Weakness & Misconception Detection]
+    D --> E[Personalized Remedial Explanation]
+    E --> F[Learning Resource Recommendation]
+    F --> G[Targeted Similar Practice]
+    G --> H[Follow-Up Reassessment]
+    H --> I[Learning Curve & Profile Update]
+    I -->|Next Cycle| A
+```
+
+Unlike transactional examination tools where an incorrect answer terminates with a score deduction, CLIAS uses every mistake as a diagnostic trigger to remediate the student's knowledge model and adapt subsequent practice.
+
+---
+
+## 3. Key Differentiator: Continuous Student Knowledge Model
+
+CLIAS is deliberately **not** intended to be:
+- Just another Learning Management System (LMS) for PDF distribution.
+- A superficial quiz website with static multiple-choice questions.
+- A rigid online examination lock-box that merely records pass/fail flags.
+- An ungrounded conversational AI chatbot detached from university coursework.
+
+### The Student Knowledge Model
+
+The central differentiator is a continuously evolving, multi-dimensional **Student Learning Profile / Knowledge Model**. Rather than reducing a student's semester to a single GPA figure, CLIAS maintains a live, granular competency vector across every course topic.
+
+#### Example: Data Structures & Algorithms (CS301)
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Rahul Patel (24CS001) — Knowledge Model Snapshot            │
+├─────────────────────────────────────────────────────────────┤
+│ Arrays & Dynamic Arrays          ███████████████████░  91%  │
+│ Linked Lists & Pointers          ███████████████░░░░░  76%  │
+│ Trees & Binary Search Trees      ██████████████░░░░░░  68%  │
+│ Graph Algorithms & Traversals    █████████░░░░░░░░░░░  47%  │
+│ Dynamic Programming              ██████░░░░░░░░░░░░░░  31%  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This model is dynamic:
+1. Solving a **Hard** graph problem correctly increases mastery more than solving a trivial definition question.
+2. Answering incorrectly penalizes mastery in proportion to the concept's difficulty.
+3. Recent practice carries higher weight than activity recorded months prior (via exponential moving average decay).
+4. All downstream recommendations, faculty analytics, and future adaptive pathways read directly from this knowledge model.
+
+CLIAS does not claim that knowledge modeling is globally unprecedented; rather, it provides a practical, university-integrated architecture tailored to institutional workflows.
+
+---
+
+## 4. User Roles & Access Control
+
+CLIAS enforces strict **Role-Based Access Control (RBAC)** on both client routes and API endpoints via server-side guards:
+
+| Role | Primary Purpose | Scope of Access |
 |---|---|---|
-| US-01 | Student | As a student, I want to register on AdaptIQ so that I can create my personal learning account. |
-| US-02 | Student | As a student, I want to securely log in so that I can access my personalized dashboard and assessments. |
-| US-03 | Student | As a student, I want to select a specific aptitude topic so that I can practice that topic individually. |
-| US-04 | Student | As a student, I want to attempt an adaptive test so that the difficulty of subsequent questions can respond to my performance. |
-| US-05 | Student | As a student, I want the first batch of questions to assess my initial ability so that the system can understand my current performance level. |
-| US-06 | Student | As a student, I want the next batch of questions to be selected according to my performance so that I can receive more relevant practice. |
-| US-07 | Student | As a student, I want the system to avoid repeating questions that I have already attempted in the current assessment so that my test remains meaningful. |
-| US-08 | Student | As a student, I want to see my topic-wise performance so that I can identify the areas in which I am strong or weak. |
-| US-09 | Student | As a student, I want to see my difficulty-wise performance so that I can understand how I perform on Easy, Medium, and Hard questions. |
-| US-10 | Student | As a student, I want to view my previous test attempts so that I can track my preparation progress over time. |
-| US-11 | Student | As a student, I want to receive AI-generated feedback so that I can understand my strengths, weaknesses, and areas requiring improvement. |
-| US-12 | Student | As a student, I want personalized recommendations so that I know which topics I should revise or practice next. |
-| US-13 | Student | As a student, I want to view my placement readiness so that I can understand my current level of preparation. |
-| US-14 | Student | As a student, I want to attempt miscellaneous aptitude tests so that I can evaluate my preparation across multiple topics. |
-| US-15 | Student | As a student, I want to attempt company-oriented mock tests so that I can practice for specific placement recruitment patterns. |
-| US-16 | Student | As a student, I want to view my learning trends so that I can understand whether my performance is improving over time. |
-| US-17 | Student | As a student, I want to manage my profile so that my personal information remains updated. |
-| US-18 | Administrator | As an administrator, I want to securely log in so that only authorized users can access administrative functions. |
-| US-19 | Administrator | As an administrator, I want to manage student accounts so that I can maintain the platform's user database. |
-| US-20 | Administrator | As an administrator, I want to add aptitude topics so that the platform can support different areas of preparation. |
-| US-21 | Administrator | As an administrator, I want to add, edit, and delete questions so that I can maintain the question bank. |
-| US-22 | Administrator | As an administrator, I want to assign a topic and difficulty level to each question so that the adaptive engine can select appropriate questions. |
-| US-23 | Administrator | As an administrator, I want to import questions using CSV files so that I can add a large number of questions efficiently. |
-| US-24 | Administrator | As an administrator, I want to manage company-oriented mock tests so that students can practice company-specific assessments. |
-| US-25 | Administrator | As an administrator, I want to view platform and student performance analytics so that I can monitor the effectiveness of the platform. |
-| US-26 | Administrator | As an administrator, I want to manage the question bank efficiently so that sufficient questions are available for adaptive assessment. |
+| **Student** | Practice, assessments, analytics, and self-remediation | Strictly restricted to self-profile, enrolled courses, and assigned tests |
+| **Faculty** | Create/manage question banks, configure assessments, monitor class performance | Scoped to assigned courses, class divisions, and enrolled cohorts |
+| **Counsellor** | Monitor assigned mentees, track engagement, trigger early academic intervention | Scoped exclusively to assigned students via `CounsellorAssignment` records |
+| **HOD** | Department-level curriculum health, division comparisons, learning trends | Scoped to all programs, courses, and faculty within their academic department |
+| **Head** | High-level institutional analytics, macro benchmarks, accreditation readiness | Aggregate cross-departmental and cross-institute analytics |
+| **Super Admin** | Manage authorized student rosters, institutional structures, and global configuration | Full administrative access across all system entities |
+
+### RBAC Enforcement Architecture
+- **JWT Claims**: Tokens encode cryptographic user IDs, verified university emails, and authorized roles.
+- **Server Guards**: NestJS `@Roles(...)` metadata combined with `RolesGuard` and `JwtAuthGuard` validate permissions before controller handlers execute.
+- **Data Isolation**: Database queries enforce tenant boundaries (e.g., students cannot access arbitrary student IDs; counsellors can only query assigned student IDs).
 
 ---
 
-## 🧩 Use Cases
-
-### Actors
-
-- Student
-- Administrator
-- Adaptive Decision Engine (ADE)
-- Question Selection Engine (QSE)
-- AI Learning Agent (AILA)
-
-### UC-01: Student Registration
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows a new student to create an AdaptIQ account.
-
-**Preconditions:**
-- Student does not already have an account.
-
-**Main Flow:**
-1. Student opens the registration page.
-2. Student enters the required information.
-3. System validates the information.
-4. System securely stores the credentials.
-5. System creates the account.
-6. Student can log in.
-
-**Postconditions:**
-- Student account is created.
-
-### UC-02: Student Login
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows a registered student to securely access AdaptIQ.
-
-**Main Flow:**
-1. Student enters credentials.
-2. System validates credentials.
-3. System authenticates the student.
-4. System generates an authentication token.
-5. Student is redirected to the dashboard.
-
-**Postconditions:**
-- Student is authenticated.
-
-### UC-03: Start Topic-wise Adaptive Test
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows a student to begin an adaptive assessment for a selected aptitude topic.
-
-**Main Flow:**
-1. Student selects a topic.
-2. System checks question availability.
-3. System initializes the assessment.
-4. System loads Batch 1 containing five diagnostic questions.
-5. Student attempts the questions.
-6. System records responses.
-
-**Postconditions:**
-- First batch is completed and performance data is available.
-
-### UC-04: Evaluate Student Batch Performance
-
-**Actor:**  
-Adaptive Decision Engine
-
-**Description:**  
-Analyzes student performance after a batch of five questions.
-
-**Main Flow:**
-1. Student submits the batch.
-2. System records responses.
-3. System identifies the difficulty of each question.
-4. System calculates difficulty-wise performance.
-5. System updates performance history.
-6. Performance data is passed to the ADE.
-
-**Postconditions:**
-- Updated performance is available for adaptive decision-making.
-
-### UC-05: Determine Next Question Difficulty
-
-**Actor:**  
-Adaptive Decision Engine
-
-**Description:**  
-Determines the difficulty distribution for the next batch.
-
-**Main Flow:**
-1. ADE receives performance data.
-2. ADE compares Easy, Medium, and Hard performance.
-3. ADE ranks difficulty levels according to observed performance.
-4. ADE identifies relatively weaker and stronger difficulty levels.
-5. ADE generates the next difficulty distribution.
-6. ADE sends the distribution to the QSE.
-
-**Postconditions:**
-- Difficulty distribution for the next batch is determined.
-
-### UC-06: Select Next Questions
-
-**Actor:**  
-Question Selection Engine
-
-**Description:**  
-Retrieves actual questions that satisfy the difficulty distribution.
-
-**Main Flow:**
-1. QSE receives topic and difficulty distribution.
-2. QSE checks the question bank.
-3. QSE excludes previously attempted question IDs.
-4. QSE retrieves eligible questions.
-5. QSE selects the required number of questions.
-6. QSE returns the questions.
-
-**Postconditions:**
-- Next batch of five questions is generated.
-
-### UC-07: Complete Adaptive Assessment
-
-**Actors:**  
-Student, ADE, QSE
-
-**Description:**  
-Manages the complete 20-question adaptive assessment.
-
-**Main Flow:**
-1. Student starts the test.
-2. System loads Batch 1.
-3. Student answers five questions.
-4. System evaluates performance.
-5. ADE determines the next difficulty distribution.
-6. QSE retrieves Batch 2.
-7. Student answers Batch 2.
-8. System updates performance.
-9. ADE determines the next difficulty distribution.
-10. QSE retrieves Batch 3.
-11. Student answers Batch 3.
-12. System updates performance.
-13. ADE determines the next difficulty distribution.
-14. QSE retrieves Batch 4.
-15. Student completes the final five questions.
-16. System generates final performance results.
-
-**Postconditions:**
-- A 20-question adaptive assessment is completed.
-
-### UC-08: Generate AI Learning Feedback
-
-**Actor:**  
-AI Learning Agent
-
-**Description:**  
-Provides personalized learning guidance based on student performance.
-
-**Main Flow:**
-1. Student completes the assessment.
-2. System collects performance information.
-3. Information is provided to AILA.
-4. AILA analyzes strengths and weaknesses.
-5. AILA generates feedback.
-6. AILA recommends revision areas.
-7. Recommendations are shown to the student.
-
-**Postconditions:**
-- Personalized feedback is available.
-
-### UC-09: View Performance Analytics
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows students to analyze preparation progress.
-
-**Main Flow:**
-1. Student opens the analytics dashboard.
-2. System retrieves performance history.
-3. System displays topic-wise performance.
-4. System displays difficulty-wise performance.
-5. System displays learning trends.
-6. Student reviews performance.
-
-**Postconditions:**
-- Student can understand current learning progress.
-
-### UC-10: View Placement Readiness
-
-**Actor:**  
-Student
-
-**Description:**  
-Provides an overview of the student's placement preparation.
-
-**Main Flow:**
-1. Student opens Placement Readiness.
-2. System retrieves relevant performance data.
-3. System analyzes topic and assessment performance.
-4. System displays placement preparation status.
-5. System highlights improvement areas.
-
-**Postconditions:**
-- Student receives placement readiness information.
-
-### UC-11: Attempt Miscellaneous Test
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows students to evaluate aptitude preparation across multiple topics.
-
-**Main Flow:**
-1. Student selects a Miscellaneous Test.
-2. System selects questions from configured topics.
-3. Student attempts the test.
-4. System evaluates responses.
-5. Results are stored.
-6. Analytics are updated.
-
-**Postconditions:**
-- Overall aptitude performance is available.
-
-### UC-12: Attempt Company Mock Test
-
-**Actor:**  
-Student
-
-**Description:**  
-Allows students to practice company-oriented placement assessments.
-
-**Main Flow:**
-1. Student selects a company mock test.
-2. System loads the configured assessment.
-3. Student attempts the test.
-4. System evaluates responses.
-5. Result is stored.
-6. Performance is displayed.
-
-**Postconditions:**
-- Company-oriented mock test result is available.
-
-### UC-13: Manage Questions
-
-**Actor:**  
-Administrator
-
-**Description:**  
-Allows the administrator to maintain the question bank.
-
-**Main Flow:**
-1. Administrator opens question management.
-2. Administrator adds, edits, or deletes questions.
-3. Administrator specifies the topic and difficulty.
-4. System validates the information.
-5. System updates the question bank.
-
-**Postconditions:**
-- Question bank is updated.
-
-### UC-14: Import Questions Using CSV
-
-**Actor:**  
-Administrator
-
-**Description:**  
-Allows the administrator to bulk import questions.
-
-**Main Flow:**
-1. Administrator selects a CSV file.
-2. System validates the file.
-3. System validates the question fields.
-4. System validates the topic and difficulty.
-5. Valid questions are inserted into MySQL.
-6. Invalid records are reported.
-
-**Postconditions:**
-- Valid questions are added to the question bank.
-
-### UC-15: Manage Users
-
-**Actor:**  
-Administrator
-
-**Description:**  
-Allows the administrator to manage registered users.
-
-**Main Flow:**
-1. Administrator opens user management.
-2. System displays users.
-3. Administrator views or manages user information.
-4. System applies authorized changes.
-
-**Postconditions:**
-- User information is maintained.
-
-### UC-16: Manage Company Tests
-
-**Actor:**  
-Administrator
-
-**Description:**  
-Allows the administrator to create and maintain company-oriented mock tests.
-
-**Main Flow:**
-1. Administrator opens company test management.
-2. Administrator creates or edits a company test.
-3. Administrator configures test parameters and questions.
-4. System validates the configuration.
-5. System saves the test.
-
-**Postconditions:**
-- Company mock test is available according to its configuration.
-
-### Adaptive Workflow Summary
-
-Student
-  ↓
-Start Adaptive Test
-  ↓
-Batch of 5 Questions
-  ↓
-Submit Answers
-  ↓
-Calculate Difficulty-wise Performance
-  ↓
-Adaptive Decision Engine
-  ↓
-Difficulty Distribution
-  ↓
-Question Selection Engine
-  ↓
-Next 5 Questions
-  ↓
-Repeat Until 20 Questions
-  ↓
-Performance Analytics
-  ↓
-AI Learning Agent
-  ↓
-Personalized Feedback & Recommendations
+## 5. University Data Model & Import Engine
+
+### Institutional Constraint & Realistic Decoupling
+In real-world university environments, engineering teams rarely have direct write access to central student information databases (ERP/SIS) due to security policies, legacy infrastructure, and administrative firewalls.
+
+CLIAS resolves this constraint through its **Authorized Student Import Engine**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    Admin->>CLIAS: Upload Authorized Students CSV
+    CLIAS->>CLIAS: Parse, Validate Domains, Check Duplicates & Upsert
+    CLIAS-->>Admin: Import Diagnostics (Success / Error Breakdown)
+    Note over Student, CLIAS: Registration Phase
+    Student->>CLIAS: Submits University Email (@charusat.edu.in)
+    CLIAS->>CLIAS: Validates Institutional Domain
+    CLIAS->>CLIAS: Matches Authorized Student Record
+    CLIAS->>Student: Issues Secure 6-Digit Email OTP
+    Student->>CLIAS: Submits OTP Verification Code
+    CLIAS-->>Student: Displays Read-Only Institutional Academic Details
+    Student->>CLIAS: Sets Password & Activates Account
+    CLIAS->>CLIAS: Creates User & StudentProfile Linked to Authorized Record
+```
+
+### Authoritative Academic Roster Attributes
+Administrators upload standardized CSV rosters containing:
+- **Enrollment Number** (e.g., `24CS001`)
+- **Student Full Name**
+- **University Email** (`@charusat.edu.in`)
+- **Institute Code** (e.g., `CSPIT`)
+- **Department Code** (e.g., `CSE`)
+- **Program Code / Name** (e.g., `BTECH_CSE`)
+- **Semester** (e.g., `5`)
+- **Division** (e.g., `A`)
+- **Graduation Year** (e.g., `2026`)
+
+**Zero Self-Declaration**: Students cannot self-assign their enrollment number, department, semester, or division during registration. All authoritative academic metadata is inherited strictly from the pre-approved institutional roster.
 
 ---
 
-## 🛠️ Tech Stack
+## 6. Registration & Authentication Architecture
 
-### Frontend
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-![React Router](https://img.shields.io/badge/React_Router-6-CA4245?logo=react-router&logoColor=white)
-![Axios](https://img.shields.io/badge/Axios-1.x-5A29E4?logo=axios&logoColor=white)
-![Recharts](https://img.shields.io/badge/Recharts-2.x-22B5BF)
+### Production-Grade Authentication Flow
 
-| Technology | Purpose |
-|---|---|
-| React 18 | UI framework |
-| React Router v6 | Client-side routing + route guards |
-| Axios | API client with interceptors |
-| Context API | Auth state & session management |
-| Recharts | Performance dashboard charts |
-| Tailwind CSS / CSS | Styling |
+```mermaid
+flowchart TD
+    A[Student Submits University Email] --> B{Valid Institutional Domain?}
+    B -- No --> C[Reject: Non-University Domain]
+    B -- Yes --> D{Authorized Student Record Exists?}
+    D -- No --> E[Reject: Not on Approved Department Roster]
+    D -- Yes --> F{Account Already Activated?}
+    F -- Yes --> G[Redirect to Login]
+    F -- No --> H[Generate Cryptographic OTP & Expiry Window]
+    H --> I[Dispatch OTP via Configured Email Service]
+    I --> J[Student Enters OTP Code]
+    J --> K{OTP Valid & Not Expired?}
+    K -- No --> L[Increment Rate Limiter / Reject Code]
+    K -- Yes --> M[Display Verified Academic Details Confirmation]
+    M --> N[Student Creates Strong Password]
+    N --> O[Hash Password via Bcrypt & Activate Account]
+    O --> P[Issue JWT Access Token & Refresh Token]
+    P --> Q[Redirect to Student Dashboard]
+```
 
-### Backend
-![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
-![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white)
-![JWT](https://img.shields.io/badge/JWT-Auth-000000?logo=jsonwebtokens&logoColor=white)
+### Security & Integrity Controls
+- **Bcrypt Password Hashing**: Passwords hashed with high-cost salt rounds before storage.
+- **Domain Whitelisting**: Dynamic validation against `UNIVERSITY_EMAIL_DOMAIN` (default: `charusat.edu.in`).
+- **OTP Lifecycle**: Time-bound 6-digit codes (10-minute expiration), single-use invalidation, and strict rate-limiting to prevent brute force attacks.
+- **Dual-Token JWT Pipeline**: Short-lived access tokens accompanied by secure refresh tokens.
+- **Duplicate Prevention**: Unique constraints on user email and enrollment number prevent duplicate registrations.
 
-| Technology | Purpose |
-|---|---|
-| Node.js + Express | REST API server |
-| mysql2 | Database driver with connection pooling |
-| JWT (jsonwebtoken) | Access + refresh token auth |
-| bcrypt | Password hashing |
-| multer + csv-parser | File upload & streaming CSV parse |
-| express-validator | Input validation |
-| helmet.js | HTTP security headers |
-| express-rate-limit | Brute-force protection on auth |
-| Morgan | Request logging |
-
-### Database & Dev Tools
-| Technology | Purpose |
-|---|---|
-| MySQL 8 (via XAMPP) | Relational database |
-| phpMyAdmin | DB management UI |
-| dotenv | Environment variable management |
-| Jest + Supertest | Unit & integration testing |
-| Nodemon | Dev server hot-reload |
-| Postman / Thunder Client | API testing |
+### Future Capability: University SSO
+When institutional access is formally granted, CLIAS is architected to integrate with the university's official identity provider via **SAML 2.0 / OAuth2 / OpenID Connect (OIDC)**, preserving the same underlying student profile mapping.
 
 ---
 
-## 📁 Project Structure
+## 7. Technology Stack
 
-```
-AdaptIQ/
-├── backend/
-│   ├── config/
-│   │   ├── db.js                   # MySQL connection pool
-│   │   └── env.js                  # .env validation
-│   ├── controllers/                # Thin HTTP handlers (no business logic)
-│   │   ├── authController.js
-│   │   ├── userController.js
-│   │   ├── topicController.js
-│   │   ├── questionController.js
-│   │   ├── practiceController.js
-│   │   ├── adaptiveController.js
-│   │   ├── placementScoreController.js
-│   │   ├── companyTestController.js
-│   │   ├── performanceController.js
-│   │   └── recommendationController.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── adminRoutes.js
-│   │   ├── practiceRoutes.js
-│   │   ├── adaptiveRoutes.js
-│   │   ├── companyTestRoutes.js
-│   │   ├── performanceRoutes.js
-│   │   └── index.js                # Aggregates all routers under /api
-│   ├── middleware/
-│   │   ├── authenticate.js         # JWT verification
-│   │   ├── authorize.js            # Role-based guard
-│   │   ├── validate.js             # express-validator wrapper
-│   │   ├── errorHandler.js         # Global error handler
-│   │   └── rateLimiter.js
-│   ├── services/                   # All business logic lives here
-│   │   ├── authService.js
-│   │   ├── csvImportService.js     # Parse → Validate → Batch insert
-│   │   ├── adaptiveEngine.js       # Core rule-based difficulty engine
-│   │   ├── placementScoreService.js
-│   │   ├── performanceService.js
-│   │   └── recommendationService.js
-│   ├── models/                     # Data-access layer (SQL queries only)
-│   │   ├── User.js
-│   │   ├── Topic.js
-│   │   ├── Question.js
-│   │   ├── Test.js
-│   │   ├── UserAnswer.js
-│   │   ├── Performance.js
-│   │   ├── PlacementScore.js
-│   │   ├── CompanyTest.js
-│   │   └── ActivityLog.js
-│   ├── utils/
-│   │   ├── hashUtils.js            # bcrypt wrappers
-│   │   ├── jwtUtils.js
-│   │   ├── questionHash.js         # SHA-256 for duplicate detection
-│   │   └── responseFormatter.js   # Consistent success/error envelope
-│   ├── uploads/                    # Temp CSV storage pre-import
-│   ├── tests/                      # Jest/Supertest test files
-│   ├── app.js                      # Express app + middleware setup
-│   └── server.js                   # Entry point
-│
-├── frontend/src/
-│   ├── components/
-│   │   ├── common/                 # Button, Card, Modal, LoadingSpinner
-│   │   ├── charts/                 # AccuracyPieChart, TopicBarChart, ScoreTrendLine
-│   │   ├── questions/              # QuestionCard, OptionSelector, Timer
-│   │   └── layout/                 # Navbar, Sidebar, DashboardLayout
-│   ├── pages/
-│   │   ├── auth/                   # Login, Register, ForgotPassword
-│   │   ├── student/
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── TopicPractice.jsx
-│   │   │   ├── AdaptiveTest.jsx
-│   │   │   ├── CompanyTests.jsx
-│   │   │   ├── PerformanceDashboard.jsx
-│   │   │   └── Profile.jsx
-│   │   └── admin/
-│   │       ├── AdminDashboard.jsx
-│   │       ├── TopicManagement.jsx
-│   │       ├── QuestionManagement.jsx
-│   │       ├── CsvImport.jsx
-│   │       ├── UserManagement.jsx
-│   │       └── Analytics.jsx
-│   ├── hooks/
-│   │   ├── useAuth.js
-│   │   ├── useApi.js               # Axios wrapper with token injection
-│   │   └── useAdaptiveTest.js      # Manages batch state client-side
-│   ├── services/                   # API call isolation (no direct axios in components)
-│   │   ├── apiClient.js
-│   │   ├── authService.js
-│   │   ├── questionService.js
-│   │   ├── adaptiveService.js
-│   │   └── performanceService.js
-│   ├── context/
-│   │   ├── AuthContext.jsx         # user, token, login/logout
-│   │   └── ThemeContext.jsx
-│   └── routes/
-│       ├── AppRouter.jsx
-│       ├── ProtectedRoute.jsx      # Redirects unauthenticated users
-│       └── RoleRoute.jsx           # Restricts by role
-│
-├── database/
-│   ├── schema.sql                  # Full CREATE TABLE statements
-│   └── seed.sql                    # Sample data for development
-│
-├── docs/
-│   ├── plan.md                     # Full 12-phase build plan
-│   ├── skills.md                   # Technology learning roadmap
-│   ├── database-schema.md          # Annotated schema with design notes
-│   ├── api-endpoints.md            # Complete REST API specification
-│   └── folder-structure.md        # Detailed folder annotations
-│
-├── .gitignore
-└── README.md
-```
+The platform is constructed as a modern, modular monorepo using industry-standard enterprise frameworks.
 
----
+### Current Implementation Stack
 
-## 🗄️ Database Schema
+| Layer | Technology | Version / Specification | Purpose in CLIAS |
+|---|---|---|---|
+| **Frontend Framework** | Next.js (App Router) | React 18 / Next 14 | Responsive role-based portal, server & client rendering |
+| **Language** | TypeScript | v5.3+ | End-to-end type safety across client, server, and packages |
+| **Styling & UI** | Tailwind CSS | v3.4 | Modern SaaS interface, custom color tokens, micro-interactions |
+| **Icons & Visuals** | Lucide React | v0.344+ | Consistent icon design system |
+| **Analytics Charts** | Recharts | v2.12+ | Dynamic learning curves, topic distribution, mastery graphs |
+| **Backend Framework** | NestJS | v10.3 | Modular API architecture, dependency injection, controllers |
+| **ORM & Schema** | Prisma ORM | v5.10 | Type-safe database queries, declarative migrations, schema management |
+| **Primary Database** | MySQL | 8.0+ / MariaDB | Strongly normalized relational storage, ACID compliance |
+| **Caching & State** | Redis | 7.0+ (Alpine) | Session caching, rate limiting, and OTP state store (in-memory fallback) |
+| **Authentication** | Passport JWT & Bcrypt | JWT / Bcrypt.js | Cryptographic token verification and secure password hashing |
+| **AI Microservice** | Python & FastAPI | Python 3.10+, FastAPI 0.110+ | Standalone microservice for future LLM assessment generation & RAG |
+| **Containerization** | Docker Compose | v3.8 spec | Multi-container setup for local MySQL and Redis instances |
 
-AdaptIQ uses **12 relational tables** in MySQL (3NF normalized, with intentional denormalization in `performance` for read speed).
+### Planned Technologies (Future Roadmap)
 
-### Entity Relationship Overview
-
-```
-users ──────────┬──< tests
-                ├──< user_answers
-                ├──< performance
-                ├──< placement_score
-                ├──< recommendations
-                └──< activity_logs
-
-topics ─────────┬──< questions
-                └──< performance
-
-tests ──────────┬──< test_questions
-                ├──< user_answers
-                └──>  company_tests (nullable)
-
-questions ──────┬──< test_questions
-                ├──< user_answers
-                └──< company_questions
-
-company_tests ──└──< company_questions
-```
-
-### Key Tables
-
-| Table | Purpose |
-|---|---|
-| `users` | Student & admin accounts with role enum |
-| `topics` | 10 placement topics (DSA, Aptitude, etc.) |
-| `questions` | 6000+ MCQs with SHA-256 hash for duplicate detection |
-| `tests` | Test sessions (practice / adaptive / company) |
-| `test_questions` | Questions served per session + difficulty at time |
-| `user_answers` | Every submitted answer with response time |
-| `performance` | Denormalized per-user-per-topic aggregates |
-| `placement_score` | Score history (trend graph support) |
-| `company_tests` | Company mock test configs |
-| `recommendations` | Rule-based weak-topic suggestions |
-| `activity_logs` | Full audit trail + adaptive engine decisions |
-
-> 📄 Full annotated schema in [`docs/database-schema.md`](docs/database-schema.md)
-
----
-
-## 🔌 API Reference
-
-Base URL: `/api` | Auth: `Authorization: Bearer <jwt>` on all protected routes.
-
-**Response envelope (all endpoints):**
-```json
-{ "success": true, "data": {}, "message": "" }
-{ "success": false, "error": { "code": "VALIDATION_ERROR", "message": "..." } }
-```
-
-### Endpoint Groups
-
-| Group | Prefix | Access |
+| Capability | Target Technology | Intended Role |
 |---|---|---|
-| Authentication | `/auth` | Public |
-| Student Profile | `/profile` | Student |
-| Topics | `/topics`, `/admin/topics` | Student / Admin |
-| Questions | `/admin/questions` | Admin |
-| Practice (Non-Adaptive) | ~~`/practice`~~ | *(removed — all tests are adaptive)* |
-| Adaptive Test (Topic or Full) | `/adaptive` | Student |
-| Placement Score | `/placement-score` | Student |
-| Company Tests | `/company-tests`, `/admin/company-tests` | Student / Admin |
-| Performance & Analytics | `/performance`, `/admin/analytics` | Student / Admin |
-| Recommendations | `/recommendations` | Student |
-| Activity Logs | `/admin/activity-logs` | Admin |
-
-### HTTP Status Codes
-
-| Code | Meaning |
-|---|---|
-| `200` | Success (GET, PUT) |
-| `201` | Resource created (POST) |
-| `400` | Validation error |
-| `401` | Missing / invalid token |
-| `403` | Valid token, insufficient role (e.g. locked company test) |
-| `404` | Resource not found |
-| `409` | Conflict (duplicate question, email already registered) |
-| `422` | Semantically invalid (e.g. bad CSV row) |
-| `500` | Server error |
-
-> 📄 Full endpoint specification in [`docs/api-endpoints.md`](docs/api-endpoints.md)
+| **Vector Storage & RAG** | pgvector / Qdrant / ChromaDB | Semantic retrieval of university syllabus, lecture notes, and PPTs |
+| **LLM Orchestration** | LangChain / LlamaIndex | Automated question generation pipelines and Socratic chat agents |
+| **Advanced Knowledge Modeling** | Python `pyBKT` / `scikit-survival` | Bayesian Knowledge Tracing and Item Response Theory parameter estimation |
+| **Face Biometric Embeddings** | OpenCV / MediaPipe / FaceNet | Client-side gaze tracking and on-demand face liveness verification |
+| **Real-Time Proctoring Stream** | WebRTC / WebSocket Gateway | Low-latency behavioral event streaming during institutional exams |
 
 ---
 
-## ⚙️ Adaptive Engine
+## 8. System Architecture
 
-The adaptive engine (`services/adaptiveEngine.js`) is entirely **rule-based** — no ML, fully transparent, and every decision is logged to `activity_logs`.
+```mermaid
+flowchart TB
+    subgraph Client Tier ["Client Tier (Next.js 14 App Router)"]
+        StudentUI["Student Dashboard & Practice Engine"]
+        AdminUI["Super Admin Roster & CSV Import"]
+        FacultyUI["Faculty Curriculum & Question Bank"]
+        StaffUI["Counsellor, HOD & Head Consoles"]
+    end
 
-### How It Works
+    subgraph APITier ["Backend Core API Gateway (NestJS Monolith)"]
+        AuthMod["AuthModule (JWT, OTP, Bcrypt, RBAC)"]
+        AdminMod["AdminModule (CSV Validation & Roster Upsert)"]
+        PracticeMod["PracticeModule (Sessions, Questions, Attempts)"]
+        AnalyticsMod["LearningAnalyticsService (EWMA Mastery Engine)"]
+        CoursesMod["CoursesModule (Institutes, Courses, Topics)"]
+    end
 
-Every **5 questions** (one batch), the engine evaluates:
+    subgraph AIMicroservice ["AI Microservice (FastAPI — Port 8000)"]
+        HealthEndpoint["/health — Readiness Probe"]
+        QuestionGenStub["/api/v1/ai/generate-questions-placeholder"]
+        MisconceptionStub["/api/v1/ai/analyze-misconception-placeholder"]
+        FutureRAG["Future: RAG Engine & Document Chunker"]
+    end
 
+    subgraph DataTier ["Persistence & Caching Tier"]
+        MySQL[("MySQL 8.0 Database (Prisma ORM)")]
+        Redis[("Redis 7.0 (Cache & Rate Limiting)")]
+    end
+
+    ClientTier -->|HTTPS / REST API| APITier
+    APITier --> MySQL
+    APITier --> Redis
+    APITier -.->|HTTP Proxy / Async Queue| AIMicroservice
 ```
-batchAccuracy       = correctInBatch / 5
-avgResponseTime     = totalTimeInBatch / 5
-historicalAccuracy  = weighted average of past batches at this difficulty
-
-IF batchAccuracy >= 0.8 AND avgResponseTime <= topicTimeThreshold:
-    → Increase difficulty
-
-ELSE IF batchAccuracy < 0.4 OR avgResponseTime > topicTimeThreshold × 1.5:
-    → Decrease difficulty
-
-ELSE:
-    → Maintain current difficulty
-```
-
-**Rules:**
-- Difficulty is bounded: `Easy → Medium → Hard` (cannot go below Easy or above Hard)
-- Question selection at any difficulty **excludes already-seen questions** in the active session
-- Every difficulty decision is written to `ActivityLogs` for full debuggability
 
 ---
 
-## 📊 Placement Readiness Score
+## 9. Phased Development Roadmap
 
-Recalculated after every completed **Miscellaneous (full_adaptive) test batch** and persisted to `placement_score` (history, not just latest). **Topic-wise tests do not affect this score.**
+The platform is engineered incrementally across ten structured phases. Each phase represents a distinct, verifiable upgrade to the system's capabilities.
 
 ```
-score = (accuracy × 0.6)
-      + (speedScore × 0.2)
-      + (difficultyMastery × 0.2)
+Phase 1: Foundation (✅ Completed)
+    ↓
+Phase 2: Learning Intelligence (⚠️ Partially Implemented)
+    ↓
+Phase 3: AI Learning Assistant (⏳ Planned)
+    ↓
+Phase 4: Misconception Detection & Adaptive Learning (⏳ Planned)
+    ↓
+Phase 5: Assessment Engine (⏳ Planned)
+    ↓
+Phase 6: AI Assessment Generation (⏳ Planned)
+    ↓
+Phase 7: Document-Based AI / RAG (⏳ Planned)
+    ↓
+Phase 8: University Analytics (⚠️ Partially Implemented)
+    ↓
+Phase 9: Proctored Assessment (⏳ Planned)
+    ↓
+Phase 10: Target Role / Placement Readiness (⏳ Planned)
 ```
 
-| Component | Weight | Definition |
+---
+
+### PHASE 1 — PLATFORM FOUNDATION
+**Status**: ✅ Completed  
+**Goal**: Build the secure, fully functional, multi-tier operational foundation of the university platform.
+
+- **Authentication & RBAC**:
+  - University email domain validation (`charusat.edu.in`).
+  - Development email OTP dispatch and verification.
+  - Bcrypt password hashing and JWT token issuance.
+  - Role-Based Access Control protecting routes across 6 roles.
+- **Authorized Student Management**:
+  - Authorized student database schema with academic metadata.
+  - Super Admin CSV upload with parsing diagnostics and batch upsert.
+  - Student self-registration anchored to authoritative roster.
+- **Academic Hierarchy**:
+  - Full relational hierarchy: Institute -> Department -> Program -> Course -> Topic.
+  - Topic self-relation supporting subtopic trees.
+- **Question Bank MVP**:
+  - Question schema with difficulties (`EASY`, `MEDIUM`, `HARD`) and types (`MCQ_SINGLE`).
+  - Detailed answer explanations and source tracking (`MANUAL`).
+  - Seeded with 35+ verified questions across 7 core DSA topics.
+- **Practice Session MVP**:
+  - Filter questions by course, topic, and difficulty.
+  - Single-question interactive flow with option submission.
+  - Zero answer leakage: correct answers evaluated securely server-side.
+  - Instant explanation feedback, timer tracking, and attempt logging.
+- **Initial Dashboards**:
+  - Student Dashboard with real dynamic Recharts curve, mastery progress bars, weak/strong focus cards, and activity timeline.
+  - Super Admin Dashboard with CSV import and roster management.
+  - Functional role shells for Faculty, Counsellor, HOD, and Head.
+
+---
+
+### PHASE 2 — LEARNING INTELLIGENCE
+**Status**: ⚠️ Partially Implemented  
+**Goal**: Transform raw practice logs into mathematically rigorous, transparent learning analytics.
+
+- **Current Implementation**:
+  - Dedicated `LearningAnalyticsService` computing dynamic topic mastery.
+  - Difficulty-weighted **Exponentially Weighted Moving Average (EWMA)** heuristic:
+    - $\text{Weight}(\text{EASY}) = 1.0$, $\text{Weight}(\text{MEDIUM}) = 1.25$, $\text{Weight}(\text{HARD}) = 1.5$.
+    - Smoothing factor $\alpha = 0.25$ balancing recency with historical mastery.
+  - Immutable `LearningHistory` snapshots capturing chronological learning curves.
+  - Automatic detection of strong topics ($\ge 75\%$) and weak topics ($< 50\%$).
+- **Planned Enhancements**:
+  - Benchmark against **Bayesian Knowledge Tracing (BKT)** ($P(L_0), P(T), P(G), P(S)$).
+  - Multi-topic knowledge dependency graphs (e.g., mastery in *Trees* requires prerequisite mastery in *Pointers*).
+  - Time-decay functions reflecting concept retention and forgetting curves.
+  - Aggregate cohort learning analytics for faculty and department heads.
+
+---
+
+### PHASE 3 — AI LEARNING ASSISTANT
+**Status**: ⏳ Planned *(FastAPI microservice skeleton active)*  
+**Goal**: Provide grounded, Socratic assistance whenever a student answers incorrectly during practice.
+
+```mermaid
+flowchart TD
+    A[Student Submits Incorrect Answer] --> B[System Logs Attempt & Topic]
+    B --> C[AI Analyzes Selected Distractor]
+    C --> D[Generate Socratic Explanation: Why Distractor is Incorrect]
+    D --> E[Clarify Core Theoretical Concept]
+    E --> F[Recommend Approved University Lecture Note / Video]
+    F --> G[Prompt: 'Would you like to practice a similar problem?']
+    G -- Yes --> H[Retrieve Follow-Up Question at Adjusted Difficulty]
+    G -- No --> I[Log Remediation to Student Profile]
+```
+
+- **Interactive UI Actions**:
+  - `Explain More Simply`: Rephrase the concept using beginner-level analogies.
+  - `Show Real-World Example`: Provide a code snippet or visual diagram.
+  - `Ask Follow-Up`: Ask the AI tutor targeted questions about the specific step.
+  - `Practice Similar`: Instantly queue two adjacent questions to verify comprehension.
+- **Academic Grounding**: AI responses must remain strictly grounded in university-approved course notes to prevent hallucinations.
+
+---
+
+### PHASE 4 — MISCONCEPTION DETECTION & ADAPTIVE LEARNING
+**Status**: ⏳ Planned  
+**Goal**: Move beyond binary right/wrong scoring to diagnose underlying conceptual errors and adapt difficulty dynamically.
+
+- **Misconception Taxonomy**:
+  - Classify distractors to detect recurring conceptual misconceptions.
+  - *Example*: In Binary Search, if a student repeatedly selects options assuming $O(N)$ scanning, record the misconception: *"Assumes linear scan over binary partition"*.
+- **Dynamic Adaptive Difficulty Calibration**:
+  - Real-time difficulty adjustment based on live mastery:
+    - $\text{Mastery} < 40\%$: Foundational, definition, and syntactic questions.
+    - $40\% \le \text{Mastery} < 70\%$: Standard analytical and medium application questions.
+    - $70\% \le \text{Mastery} < 85\%$: Multi-step algorithmic and edge-case questions.
+    - $\text{Mastery} \ge 85\%$: Complex synthesis questions and spaced revision prompts.
+- **Spaced Repetition Engine**:
+  - Schedule automated revision check-ins for high-mastery topics after 7, 21, and 45 days.
+
+---
+
+### PHASE 5 — ASSESSMENT ENGINE
+**Status**: ⏳ Planned  
+**Goal**: Provide a full-featured, faculty-controlled examination and assessment orchestration system.
+
+- **Faculty Assessment Authoring**:
+  - Create timed quizzes, internal tests, mid-semester exams, and mock assessments.
+  - Select questions manually from the approved question bank or filter by topic and difficulty.
+  - Configure duration, open/close time windows, passing thresholds, and negative marking.
+  - Target assignments to specific institutes, programs, semesters, or divisions.
+- **Student Assessment Experience**:
+  - View assigned assessments, start timed test sessions, and track remaining duration.
+  - Question randomization and distractor shuffling to preserve examination integrity.
+  - Clean submission pipeline with auto-save and automated server-side evaluation.
+  - Configurable result release: instant feedback vs. scheduled post-deadline release.
+
+---
+
+### PHASE 6 — AI ASSESSMENT GENERATION
+**Status**: ⏳ Planned *(FastAPI interface defined)*  
+**Goal**: Enable faculty to draft high-quality assessments in seconds using AI while maintaining human academic oversight.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    Faculty->>API: Configure Test Specs (Course, Topics, 30 Questions, Difficulty Ratios)
+    API->>AI Service: Dispatch Generation Prompt
+    AI Service-->>API: Draft Questions with Distractors & Explanations
+    API->>Database: Save Questions as STATUS = DRAFT
+    Note over Faculty, API: Human-in-the-Loop Quality Gate
+    Faculty->>UI: Review Candidate Items, Modify Distractors, Regenerate Weak Items
+    Faculty->>API: Approve & Publish Official Assessment
+    API->>Database: Update STATUS = APPROVED & Activate Assessment
+```
+
+- **Strict Human-in-the-Loop Policy**: AI-generated questions **never** automatically become live student exams without explicit faculty review and approval.
+- **Duplicate Detection**: Semantic vector similarity check against existing question bank items.
+
+---
+
+### PHASE 7 — DOCUMENT-BASED AI / RAG
+**Status**: ⏳ Planned  
+**Goal**: Ingest university-approved educational materials (syllabi, lecture notes, PDFs, PPTs) to power grounded AI features.
+
+- **Document Processing Pipeline**:
+  - Upload PDF/PPT/DOCX course handouts.
+  - Text extraction, structural chunking, and metadata tagging (course, unit, chapter).
+  - Vector embedding generation via open-source or commercial embedding models.
+  - Storage in vector database with hybrid keyword/semantic search.
+- **Target Use Cases**:
+  - *"Generate 15 medium questions exclusively from Unit 3 Operating Systems slides."*
+  - *"Explain Deadlock Detection citing Page 42 of Professor's Lecture 8."*
+  - *"Identify syllabus topics with insufficient question coverage in the existing bank."*
+
+---
+
+### PHASE 8 — UNIVERSITY ANALYTICS
+**Status**: ⚠️ Partially Implemented *(Data schemas and role shells in place)*  
+**Goal**: Provide granular, actionable dashboards tailored to each institutional tier.
+
+- **Student Console**: *"What should I practice next to boost my lowest skill before mid-terms?"*
+- **Faculty Console**: *"Which topics in CS301 are causing the highest failure rates across Division A?"*
+- **Counsellor Console**:
+  - Monitored cohort overview scoped strictly via `CounsellorAssignment`.
+  - Early warning indicators: sharp drop in practice frequency, low mastery in foundational topics.
+  - Student timeline drill-down for 1-on-1 academic mentorship meetings.
+- **HOD Console**:
+  - Department-wide curriculum mastery heatmaps across semesters.
+  - Division-to-division comparative benchmarking.
+  - Course-level learning velocity and question bank health metrics.
+- **Institutional Head Console**:
+  - High-level macro indicators across engineering departments (CSPIT, etc.).
+  - Longitudinal cohort readiness trends and NBA/NAAC accreditation evidence.
+
+---
+
+### PHASE 9 — PROCTORED ASSESSMENT (AI INTEGRITY MONITORING)
+**Status**: ⏳ Planned *(Architectural specification completed)*  
+**Goal**: Provide non-intrusive, AI-assisted exam integrity monitoring for high-stakes institutional evaluations.
+
+> [!IMPORTANT]
+> CLIAS explicitly rejects marketing claims of "100% unhackable cheating prevention". A browser-based platform cannot control secondary physical devices. CLIAS provides **AI-assisted integrity monitoring** designed to deliver an objective, auditable behavioral timeline for faculty review.
+
+- **On-Demand Face Enrollment Lifecycle**:
+  - Normal registration **never** collects biometric face data.
+  - Face enrollment is triggered only when a student is scheduled for an official proctored assessment.
+  - Requires explicit student informed consent and liveness verification.
+  - Computes and stores a compact mathematical embedding vector; raw webcam video is never stored indefinitely.
+- **Real-Time Behavioral Event Monitoring**:
+  - `TAB_SWITCH`: Browser lost focus to an external window.
+  - `WINDOW_BLUR`: Window minimized or obscured.
+  - `FULLSCREEN_EXIT`: Student exited locked exam viewport.
+  - `NO_FACE`: No human face detected in camera viewport for $> 5$ seconds.
+  - `MULTIPLE_FACES`: Secondary individuals detected in frame.
+  - `IDENTITY_MISMATCH`: Face embedding deviates beyond threshold from enrolled baseline.
+  - `CAMERA_DISABLED`: Video stream disconnected.
+- **Invigilator Review Console**: Structured timeline of flagged events with confidence scores for human invigilator determination.
+
+---
+
+### PHASE 10 — TARGET ROLE / PLACEMENT READINESS
+**Status**: ⏳ Planned  
+**Goal**: Bridge academic curriculum mastery with industry career tracks and campus placement preparation.
+
+- **Target Career Roles**:
+  - Software Development Engineer (SDE)
+  - Data Engineer / Data Analyst
+  - Machine Learning Engineer
+  - Cybersecurity Analyst
+  - Graduate Aptitude Test in Engineering (GATE)
+  - Core Technical Roles
+- **Skill Readiness Profile**:
+  - Map target roles to required curriculum topics and benchmark student mastery against industry expectations.
+  - *Example*: SDE Profile requires DSA ($\ge 85\%$), DBMS ($\ge 80\%$), OS ($\ge 75\%$), Computer Networks ($\ge 70\%$).
+- **Placement Practice Packs**:
+  - Company-style assessment simulations (e.g., "Google-style algorithmic problem solving", "Amazon-style systems design fundamentals") based on public technical skill requirements.
+  - Automated diagnostic report identifying critical gaps before campus recruitment drives.
+
+---
+
+## 10. Long-Term Learning Intelligence Model
+
+```mermaid
+flowchart TD
+    P[Student Practice / Assessment] --> AH[Immutable Attempt History]
+    AH --> MC[Difficulty-Weighted Mastery Calculation]
+    MC --> LH[Chronological Learning History Snapshots]
+    LH --> WD[Weakness & Misconception Triage]
+    WD --> AI[AI-Assisted Grounded Explanation]
+    AI --> RC[Personalized Resource Recommendation]
+    RC --> SP[Targeted Remedial Practice]
+    SP --> RA[Targeted Reassessment]
+    RA --> MU[Dynamic Mastery Update]
+    MU -->|Feeds Knowledge Model| MC
+```
+
+This model guarantees that student growth is transparent, mathematically reproducible, and immune to superficial score inflation.
+
+---
+
+## 11. System Data Flow
+
+```mermaid
+flowchart LR
+    S[Student] -->|Solves Question| PS[Practice Session]
+    PS -->|Submits Option| QA[Question Attempt]
+    QA -->|Persisted| DB[(Relational Database)]
+    DB -->|Read Attempts| AE[Analytics Engine]
+    AE -->|Computes EWMA| SM[Skill Mastery]
+    AE -->|Logs Snapshot| LH[Learning History]
+    SM & LH -->|Synthesizes| RE[Recommendation Engine]
+    RE -->|Feeds Dashboards| U[Student / Faculty / Counsellor / HOD / Head]
+```
+
+---
+
+## 12. Database Entities
+
+### Implemented Database Entities (Prisma / MySQL)
+
+| Entity | Primary Key | Description & Implemented Relationships |
 |---|---|---|
-| `accuracy` | 60% | Correct % across all Miscellaneous (full_adaptive) attempts |
-| `speedScore` | 20% | Normalized against expected time per difficulty (0–1, higher = faster) |
-| `difficultyMastery` | 20% | % of Hard-level questions answered correctly in full_adaptive sessions |
+| `User` | UUID | Core identity entity storing email, passwordHash, role, status, emailVerified |
+| `Institute` | UUID | University institute entity (e.g., CSPIT, DEPSTAR) with unique institutional code |
+| `Department` | UUID | Academic department (e.g., CSE, IT) linked to parent Institute |
+| `Program` | UUID | Degree program (e.g., BTECH_CSE) linked to Department |
+| `Course` | UUID | Academic subject (e.g., CS301 DSA) with semester and department linkage |
+| `Topic` | UUID | Syllabus concept with recursive parentTopicId self-relation for subtopics |
+| `AuthorizedStudent` | UUID | Authoritative roster entity imported via CSV (enrollment number, program, semester, division) |
+| `StudentProfile` | UUID | Operational student entity linking authenticated User to AuthorizedStudent |
+| `FacultyProfile` | UUID | Faculty entity storing employee code and department assignment |
+| `Question` | UUID | Question item storing questionText, difficulty, type, explanation, status, sourceType |
+| `QuestionOption` | UUID | Options for questions with optionText, isCorrect flag, and display order |
+| `PracticeSession` | UUID | Self-practice session tracking start, completion, questionsAttempted, and correctAnswers |
+| `QuestionAttempt` | UUID | Granular attempt log storing selected option, isCorrect, timeTakenSeconds, and difficulty |
+| `SkillMastery` | UUID | Live topic mastery score (0-100), attempt count, correct count, and lastPracticedAt |
+| `LearningHistory` | UUID | Immutable chronological snapshot of mastery score with reason enum |
+| `CounsellorAssignment` | UUID | Strict mapping table assigning specific student profiles to counsellor user accounts |
 
-> **Score ≥ 80 AND ≥ 5 Miscellaneous tests completed** unlocks Company Mock Tests.
-> - If < 5 misc tests done → *"Complete at least 5 Miscellaneous tests to unlock"*
-> - If 5+ tests done but score < 80 → shows full score breakdown so students know exactly what to improve.
+### Planned Database Entities (Upcoming Phases)
 
----
-
-## 🗓️ Development Phases
-
-| Phase | Week | Description |
+| Entity | Target Phase | Purpose |
 |---|---|---|
-| **Phase 1** | 1 | Database schema + phpMyAdmin setup |
-| **Phase 2** | 1 | Express backend skeleton + MVC structure |
-| **Phase 3** | 2 | JWT auth (register/login/refresh) + middleware |
-| **Phase 4** | 3 | Admin panel: topic/question/user CRUD |
-| **Phase 5** | 3–4 | CSV bulk import with validation + import report |
-| **Phase 6** | 4 | Student dashboard shell + profile page |
-| **Phase 7** | 5 | Topic-wise adaptive test — same engine, topic-scoped sessions |
-| **Phase 8** | 6 | **Adaptive engine** — unified service for topic & full adaptive modes |
-| **Phase 9** | 7 | Placement Readiness Score calculation |
-| **Phase 10** | 8 | Company mock tests + score-gated unlock |
-| **Phase 11** | 9 | Analytics dashboard + charts + recommendations |
-| **Phase 12** | 10 | Security hardening, testing, deployment |
-
-> 📄 Full detailed plan in [`docs/plan.md`](docs/plan.md)
+| `Test` / `Assessment` | Phase 5 | Faculty exam definition (duration, time window, passing score, assigned divisions) |
+| `TestQuestion` | Phase 5 | Association between tests and specific question bank items with custom weighting |
+| `TestAssignment` | Phase 5 | Scoped distribution of tests to specific cohorts, programs, or student groups |
+| `TestAttempt` | Phase 5 | Student exam sitting with start/finish timestamps, final score, and status |
+| `TestAnswer` | Phase 5 | Individual question response within an official test sitting |
+| `LearningResource` | Phase 3 | Curated lecture notes, video links, and textbook chapters linked to topics |
+| `AIConversation` | Phase 3 | Socratic tutoring chat messages and context history during practice remediation |
+| `Misconception` | Phase 4 | Canonical taxonomy of common conceptual mistakes per topic |
+| `StudentMisconception`| Phase 4 | Tracking occurrences of diagnosed misconceptions per student |
+| `ProctorSession` | Phase 9 | Exam proctoring session state, face verification status, and consent record |
+| `ProctorEvent` | Phase 9 | Time-stamped behavioral alerts (tab switch, no face, multiple faces, anomaly score) |
+| `CareerRoleProfile` | Phase 10 | Target industry role benchmarks (e.g., SDE, Data Analyst) and required topic weights |
 
 ---
 
-## 🚀 Getting Started
+## 13. Security & Privacy Architecture
+
+### Security Controls
+1. **Password Security**: Passwords hashed using Bcrypt with salt rounds; plaintext passwords are never logged or stored.
+2. **Server-Side Validation**: All inputs validated via `class-validator` DTOs and strict Prisma type definitions.
+3. **Session Integrity**: Stateless JWT tokens verified per request using Passport strategies and NestJS guards.
+4. **OTP Security**: 6-digit verification codes expire in 10 minutes; rate-limiting prevents credential stuffing.
+5. **Data Isolation**: Multi-role tenant boundaries prevent horizontal privilege escalation.
+6. **File Import Protection**: CSV roster imports stream through in-memory parser buffers with schema validation, preventing malformed records from contaminating the database.
+
+### Biometric & Proctoring Privacy Safeguards (Phase 9)
+- **Informed Consent**: Biometric verification is never activated without explicit student opt-in.
+- **Minimum Data Principle**: The system stores mathematical facial feature embeddings, not continuous high-definition video archives.
+- **Restricted Access**: Proctoring logs are viewable only by authorized faculty evaluators and department heads.
+- **Governance**: Real-world biometric deployment requires formal institutional review board and university ethics committee approval.
+
+---
+
+## 14. Privacy Principles
+
+1. **Educational Necessity**: CLIAS collects only data essential for learning intelligence, academic analytics, and exam administration.
+2. **Separation of Concerns**: General university registration is completely decoupled from biometric enrollment.
+3. **Transparent Mastery**: Students have full visibility into their own knowledge model and calculation reasoning.
+4. **Zero Commercial Exploitation**: Student learning data is maintained strictly for institutional educational development.
+
+---
+
+## 15. Current Project Status
+
+| Component | Implementation Status | Implementation Notes |
+|---|:---:|---|
+| **Authentication System** | ✅ Completed | Domain check (`@charusat.edu.in`), development OTP dispatch, Bcrypt password hashing, JWT |
+| **Registration Flow** | ✅ Completed | Verification against pre-imported `AuthorizedStudent` roster; pre-populated academic profile |
+| **Student Dashboard** | ✅ Completed | Live dynamic Recharts learning curve, mastery progress bars, weak/strong focus, activity log |
+| **Practice MVP** | ✅ Completed | Filter by course/topic/difficulty, single question flow, instant explanation, time tracking |
+| **Question Bank** | ✅ Completed | 35+ verified questions across 7 DSA topics, single MCQ support, difficulty tags, explanations |
+| **Learning Analytics Engine** | ✅ Completed (Phase 1) | Difficulty-weighted EWMA algorithm (`LearningAnalyticsService`), chronological history logging |
+| **Super Admin Dashboard** | ✅ Completed | Authorized student CSV upload with diagnostic parsing errors, preview, and batch upsert |
+| **Faculty Dashboard** | ⚠️ Partially Implemented | Functional UI console with CS301 overview and seeded metrics; exam authoring planned |
+| **Counsellor Dashboard** | ⚠️ Partially Implemented | Functional UI console scoped to `CounsellorAssignment`; early-warning alert triggers planned |
+| **HOD Dashboard** | ⚠️ Partially Implemented | Functional UI console for department curriculum health; cross-division comparison planned |
+| **Head Dashboard** | ⚠️ Partially Implemented | Functional UI console for institutional indicators; macro predictive models planned |
+| **AI Microservice (FastAPI)** | ⚠️ Partially Implemented | FastAPI skeleton active on port 8000 (`/health` + placeholder endpoints); LLM pending |
+| **AI Learning Assistant** | ⏳ Planned | Socratic remedial assistant scheduled for Phase 3 |
+| **Misconception Detection** | ⏳ Planned | Distractor taxonomy and adaptive calibration scheduled for Phase 4 |
+| **Assessment & Exam Engine** | ⏳ Planned | Timed faculty tests, question randomization, and grading scheduled for Phase 5 |
+| **AI Assessment Generation** | ⏳ Planned | Prompt-based test authoring and human approval pipeline scheduled for Phase 6 |
+| **Document AI / RAG** | ⏳ Planned | Lecture note ingestion and vector search scheduled for Phase 7 |
+| **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
+| **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
+
+---
+
+## 16. Roadmap Summary Table
+
+| Phase | Designation | Status | Core Deliverables |
+|:---:|---|:---:|---|
+| **Phase 1** | **Platform Foundation** | ✅ Completed | Monorepo, MySQL/Prisma schema, CSV import, OTP auth, Question bank, Practice MVP, Student dashboard |
+| **Phase 2** | **Learning Intelligence** | ⚠️ Partially Implemented | Difficulty-weighted EWMA mastery, historical curves; BKT, IRT, and decay modeling planned |
+| **Phase 3** | **AI Learning Assistant** | ⏳ Planned | FastAPI Socratic remediation tutor, distractor analysis, follow-up practice generation |
+| **Phase 4** | **Adaptive Learning & Misconceptions** | ⏳ Planned | Misconception taxonomy, real-time dynamic difficulty shifting, spaced repetition |
+| **Phase 5** | **Assessment Engine** | ⏳ Planned | Faculty test creator, scheduled exams, randomized sequence, automated grading |
+| **Phase 6** | **AI Assessment Generation** | ⏳ Planned | LLM test generation with strict human-in-the-loop faculty review and approval gate |
+| **Phase 7** | **Document AI / RAG** | ⏳ Planned | Ingestion of university notes/PPTs/PDFs, vector retrieval, grounded test creation |
+| **Phase 8** | **University Analytics** | ⚠️ Partially Implemented | Foundational schemas and role consoles active; cross-cohort aggregated heatmaps planned |
+| **Phase 9** | **Proctored Assessment** | ⏳ Planned | On-demand face enrollment, liveness checks, behavioral anomaly logging, invigilator review |
+| **Phase 10** | **Placement Readiness** | ⏳ Planned | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+
+---
+
+## 17. Project Development Principles
+
+1. **Build Incrementally**: Establish robust foundational workflows before integrating complex autonomous systems.
+2. **Data Before AI**: High-quality, reliable student interaction data must precede sophisticated machine learning recommendations.
+3. **Explainability & Transparency**: Learning scores must reflect clear, understandable formulas rather than opaque black-box outputs.
+4. **Human Academic Approval**: AI assists faculty; official university assessments require human instructor review and approval.
+5. **Privacy by Design**: Minimize data collection; collect biometric signals only during designated proctored examinations.
+6. **Strict Role Isolation**: Users access information strictly appropriate to their academic role and authority.
+7. **Empirical Analytics**: Dashboards must reflect real student interactions, avoiding synthetic numbers in production.
+8. **AI as a Teaching Assistant**: Technology empowers instructors and guides students rather than replacing human academic judgment.
+
+---
+
+## 18. Future Improvements
+
+- **Bayesian Knowledge Tracing (BKT)**: Parameterized probability models for concept mastery.
+- **Item Response Theory (IRT)**: 2PL/3PL difficulty and discrimination parameterization for questions.
+- **Coding Assessment Engine**: In-browser code runner with automated test cases and memory/runtime profiling.
+- **Plagiarism Detection**: Structural token and AST similarity checking for programming assessments.
+- **Multilingual AI Tutor**: Socratic assistance in regional languages (e.g., Hindi, Gujarati) alongside English.
+- **University Single Sign-On (SSO)**: SAML 2.0 / OIDC integration with university central identity providers.
+- **ERP / SIS Synchronization**: Automated two-way sync with institutional grade book systems.
+- **Accreditation Reporting**: Automated generation of Course Outcome (CO) and Program Outcome (PO) attainment reports for NBA/NAAC.
+- **Predictive Intervention Models**: Early identification of students at risk of course failure or semester dropouts.
+
+---
+
+## 19. Setup & Development Guide
 
 ### Prerequisites
+- **Node.js**: v18+ (tested on Node v20 / v24)
+- **npm**: v10+
+- **MySQL**: 8.0+ or MariaDB running on port `3306` (e.g., XAMPP, native service, or Docker)
+- **Python**: 3.10+ (for AI microservice)
+- **Docker** *(Optional)*: For automated containerized MySQL & Redis
 
-- Node.js 20+
-- XAMPP (MySQL 8 + phpMyAdmin)
-- Git
+---
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Jigar-CS/AdaptIQ.git
-cd AdaptIQ
-```
-
-### 2. Set up the database
-
-1. Start XAMPP and ensure MySQL is running
-2. Open phpMyAdmin → Create a database named `adaptiq`
-3. Import `database/schema.sql`
-4. (Optional) Import `database/seed.sql` for sample data
-
-### 3. Configure the backend
+### Step 1: Clone & Configure Environment
 
 ```bash
-cd backend
+# Clone the repository
+git clone <repository-url>
+cd "CHARUSAT Learning Intelligence & Assessment System"
+
+# Configure root environment
 cp .env.example .env
 ```
 
-Edit `.env`:
+Review `.env` to verify your local database credentials:
 ```env
-PORT=5000
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=adaptiq
-JWT_SECRET=your_super_secret_key
-JWT_REFRESH_SECRET=your_refresh_secret_key
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
+UNIVERSITY_NAME=CHARUSAT
+UNIVERSITY_EMAIL_DOMAIN=charusat.edu.in
+DATABASE_URL="mysql://root:@localhost:3306/clias_db"
+API_URL=http://localhost:4000/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 ```
 
-Install dependencies and start:
+---
+
+### Step 2: Database Initialization (MySQL)
+
+Ensure MySQL is running on `127.0.0.1:3306`. Create the database:
+```sql
+CREATE DATABASE IF NOT EXISTS clias_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+*Alternatively, start MySQL and Redis via Docker Compose:*
 ```bash
+docker compose up -d
+```
+
+---
+
+### Step 3: Backend Setup & Seeding
+
+Navigate to `apps/api`:
+```bash
+cd "apps/api"
+npm install
+npx prisma generate
+npx prisma db push
+npm run db:seed
+```
+
+Start the API development server:
+```bash
+npm run dev
+```
+*The NestJS API will be running at `http://localhost:4000/api/v1`.*
+
+---
+
+### Step 4: Frontend Setup
+
+Open a new terminal and navigate to `apps/web`:
+```bash
+cd "apps/web"
 npm install
 npm run dev
 ```
+*The Next.js web application will be accessible at `http://localhost:3000`.*
 
-### 4. Configure the frontend
+---
 
+### Step 5: AI Microservice Setup
+
+Open a third terminal and navigate to `apps/ai`:
 ```bash
-cd frontend
-npm install
-npm run dev
+cd "apps/ai"
+pip install -r requirements.txt
+python main.py
 ```
-
-The app will be available at `http://localhost:5173` (Vite) and the API at `http://localhost:5000/api`.
-
----
-
-## 🔑 Demo Credentials
-
-| Role | Email | Password | Access / Features |
-|---|---|---|---|
-| 👨‍💼 **Admin** | `admin@adaptiq.com` | `Admin@1234` | Topic & Question CRUD, CSV Import & Auto-Cleaner, Platform Stats |
-| 🎓 **Student** | `student@adaptiq.com` | `Student@123` | Adaptive Testing, Placement Readiness, Profile & File Uploads |
-
-> *(Alternatively, click **Register** on the login page to create a fresh student account.)*
+*The FastAPI AI service will be active at `http://localhost:8000/health`.*
 
 ---
 
-## 🔒 Security
+### Step 6: Automated Testing
 
-| Concern | Mitigation |
-|---|---|
-| SQL Injection | Parameterized queries (`mysql2` prepared statements) everywhere |
-| XSS | Output sanitization on all user-generated content |
-| Brute Force | `express-rate-limit` on `/auth/login` |
-| Sensitive Data | Passwords hashed with `bcrypt` (no plaintext storage) |
-| HTTP Headers | `helmet.js` for security headers |
-| Auth | Short-lived JWTs (15m) + refresh tokens (7d) |
-| Role Abuse | `authorize(role)` middleware on every admin route |
-| CSV Corruption | Validate-then-insert in transactions; bad rows rejected with reasons, never silently inserted |
-
----
-
-## 📚 Documentation
-
-| Document | Description |
-|---|---|
-| [`docs/plan.md`](docs/plan.md) | Full 12-phase development plan with tasks, deliverables, and exit criteria |
-| [`docs/skills.md`](docs/skills.md) | Technology learning roadmap mapped to build phases |
-| [`docs/database-schema.md`](docs/database-schema.md) | Full annotated SQL schema with design decisions |
-| [`docs/api-endpoints.md`](docs/api-endpoints.md) | Complete REST API specification with request/response examples |
-| [`docs/folder-structure.md`](docs/folder-structure.md) | Detailed folder annotations explaining the MVC architecture |
+Execute the backend test suite:
+```bash
+cd "apps/api"
+npm run test
+```
+**Tests cover:**
+- Difficulty-weighted EWMA analytics calculations and decay boundaries.
+- Authorized student CSV validation and error parsing.
+- Domain authorization and unauthorized registration rejection.
 
 ---
 
-## ⚠️ Key Risks & Mitigations
+## 20. Development Demo Credentials
 
-| Risk | Mitigation |
-|---|---|
-| 6000+ questions makes random selection slow | Index `(topic_id, difficulty)`, avoid `ORDER BY RAND()` — use offset-based selection |
-| Adaptive engine oscillates difficulty | Batch-of-5 evaluation only + every decision logged to `activity_logs` |
-| CSV import with bad data corrupts question bank | Validate → insert in a transaction; reject bad rows with reasons, never partial silent corruption |
-| Score gate frustrates near-80% students | Show full score breakdown — students see exactly what to improve |
+All pre-seeded demo accounts use the standard password: **`clias123`**
+
+| Role | University Email | Pre-Configured Persona & Capabilities |
+|---|---|---|
+| **STUDENT** | `student@charusat.edu.in` | Rahul Patel (24CS001, CSPIT CSE, Sem 5). Active dashboard with pre-seeded learning curve, topic masteries, and adaptive practice. |
+| **SUPER_ADMIN** | `admin@charusat.edu.in` | University System Administrator. Roster management and authorized student CSV import. |
+| **FACULTY** | `faculty@charusat.edu.in` | Dr. CSE Faculty. Assigned to CS301 (Data Structures); overview of question bank and class mastery. |
+| **COUNSELLOR** | `counsellor@charusat.edu.in` | Academic Mentor. Scoped view showing only assigned students via `CounsellorAssignment`. |
+| **HOD** | `hod@charusat.edu.in` | Head of Department. Department-level aggregate curriculum health across CSE semesters. |
+| **HEAD** | `head@charusat.edu.in` | Institutional Head. High-level macro indicators across CSPIT engineering programs. |
 
 ---
 
-<div align="center">
-  <p>Built for placement preparation · Rule-based adaptive engine · No ML required</p>
-  <p><strong>AdaptIQ</strong> — Learn smarter, not harder.</p>
-</div>
+## 21. Recommended Demonstration Flow
+
+For project evaluations, academic presentations, and technical reviews:
+
+1. **Administrative Roster Import**:
+   - Log in as **Super Admin** (`admin@charusat.edu.in`).
+   - Navigate to **Authorized Students** and demonstrate the CSV import engine and parsing diagnostics.
+2. **Student Institutional Registration**:
+   - Open the registration portal.
+   - Enter an authorized university email (`student@charusat.edu.in`).
+   - Observe domain check and OTP generation (displayed in API console in development).
+   - Enter OTP and observe how authoritative academic details (enrollment number, department, semester) are locked and loaded.
+3. **Student Dashboard & Knowledge Model**:
+   - Log in as **Student** (`student@charusat.edu.in`).
+   - Examine the live dynamic **Learning Curve** (Recharts), topic mastery progress bars, and weak/strong topic focus cards.
+4. **Interactive Practice MVP**:
+   - Navigate to **Practice**.
+   - Select Course: *Data Structures and Algorithms (CS301)*.
+   - Select Topic: *Arrays* or *Trees*.
+   - Answer a question; demonstrate real-time server-side evaluation, timer tracking, and instant detailed explanation.
+5. **Mastery Update & Curve Evolution**:
+   - Return to the Student Dashboard and verify that the learning curve and mastery metrics updated dynamically.
+6. **Multi-Role Scoped Consoles**:
+   - Log in as **Faculty** to inspect class-level topic mastery breakdown.
+   - Log in as **Counsellor** to observe strict mentee scoping via `CounsellorAssignment`.
+   - Log in as **HOD** and **Head** to observe institutional curriculum overview consoles.
+7. **Future Roadmap Walkthrough**:
+   - Present Phase 3 (AI Socratic Learning Assistant) and Phase 6 (AI Assessment Generation pipeline with human faculty approval).
+   - Present Phase 9 (AI-Assisted Exam Integrity Monitoring architecture and on-demand face enrollment).
+
+---
+
+*CLIAS — Engineered for Excellence at Charotar University of Science and Technology (CHARUSAT).*

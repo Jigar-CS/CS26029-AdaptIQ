@@ -1,6 +1,28 @@
 {
-  "dependencies": {
-    "dotenv": "^17.4.2",
-    "mysql2": "^3.23.3"
-  }
+  "name": "clias-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CHARUSAT Learning Intelligence & Assessment System",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "dev": "npm run dev:api",
+    "build:all": "npm --workspaces run build",
+    "test": "npm --workspace=apps/api run test",
+    "db:migrate": "npm --workspace=apps/api run db:migrate",
+    "db:seed": "npm --workspace=apps/api run db:seed",
+    "db:generate": "npm --workspace=apps/api run db:generate"
+  },
+  "keywords": [
+    "education",
+    "assessment",
+    "learning-intelligence",
+    "adaptive-learning"
+  ],
+  "author": "CLIAS Engineering Team",
+  "license": "UNLICENSED"
 }
