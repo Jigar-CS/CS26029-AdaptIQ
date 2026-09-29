@@ -7,6 +7,9 @@ import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { SocraticAssistantDrawer } from '@/components/SocraticAssistantDrawer';
+import { AdaptiveCalibrationBanner } from '@/components/AdaptiveCalibrationBanner';
+import { MisconceptionAlertCard } from '@/components/MisconceptionAlertCard';
+import { SpacedRepetitionQueueDrawer } from '@/components/SpacedRepetitionQueueDrawer';
 import {
   BrainCircuit,
   CheckCircle2,
@@ -19,6 +22,7 @@ import {
   Check,
   ChevronRight,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 
 export default function PracticePage() {
@@ -30,6 +34,12 @@ export default function PracticePage() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('MEDIUM');
+
+  // Phase 4 Adaptive & Misconception States
+  const [calibrationData, setCalibrationData] = useState<any>(null);
+  const [adaptiveMode, setAdaptiveMode] = useState<boolean>(true);
+  const [detectedMisconception, setDetectedMisconception] = useState<any>(null);
+  const [spacedDrawerOpen, setSpacedDrawerOpen] = useState<boolean>(false);
 
   // Session & Question states
   const [activeSession, setActiveSession] = useState<any>(null);
@@ -49,6 +59,25 @@ export default function PracticePage() {
       loadCourses();
     }
   }, [user, authLoading]);
+
+  // Load calibration when selected topic changes
+  useEffect(() => {
+    if (selectedTopicId) {
+      loadCalibration(selectedTopicId);
+    }
+  }, [selectedTopicId]);
+
+  const loadCalibration = async (topicId: string) => {
+    try {
+      const data = await api.get(`/adaptive/calibration/${topicId}`);
+      setCalibrationData(data);
+      if (adaptiveMode && data?.recommendedDifficulty) {
+        setSelectedDifficulty(data.recommendedDifficulty);
+      }
+    } catch (err) {
+      console.warn('Adaptive calibration unavailable', err);
+    }
+  };
 
   // Timer effect while viewing active question
   useEffect(() => {
@@ -78,21 +107,42 @@ export default function PracticePage() {
     }
   };
 
-  const handleStartSession = async () => {
+  const handleStartSession = async (overrideTopicId?: string) => {
     setLoadingQuestion(true);
     setAttemptResult(null);
+    setDetectedMisconception(null);
     setSelectedOptionId(null);
     setTimerSeconds(0);
 
-    try {
-      const res = await api.post('/practice/sessions', {
-        courseId: selectedCourseId,
-        topicId: selectedTopicId || undefined,
-        difficulty: selectedDifficulty || undefined,
-      });
+    const targetTopicId = overrideTopicId || selectedTopicId;
 
-      setActiveSession(res.session);
-      setCurrentQuestion(res.firstQuestion);
+    try {
+      let firstQ = null;
+      let session = null;
+
+      if (adaptiveMode && targetTopicId) {
+        // Fetch dynamically calibrated adaptive question
+        const adaptiveRes = await api.get(`/adaptive/next-question?topicId=${targetTopicId}&courseId=${selectedCourseId}`);
+        firstQ = adaptiveRes.question;
+        // Start or link session
+        const sessionRes = await api.post('/practice/sessions', {
+          courseId: selectedCourseId,
+          topicId: targetTopicId || undefined,
+          difficulty: adaptiveRes.calibration?.recommendedDifficulty || selectedDifficulty,
+        });
+        session = sessionRes.session;
+      } else {
+        const res = await api.post('/practice/sessions', {
+          courseId: selectedCourseId,
+          topicId: targetTopicId || undefined,
+          difficulty: selectedDifficulty || undefined,
+        });
+        session = res.session;
+        firstQ = res.firstQuestion;
+      }
+
+      setActiveSession(session);
+      setCurrentQuestion(firstQ);
     } catch (err) {
       console.error('Failed to start session', err);
     } finally {
@@ -112,6 +162,21 @@ export default function PracticePage() {
         timeTakenSeconds: timerSeconds,
       });
       setAttemptResult(res);
+
+      // Phase 4: Record attempt with adaptive engine for misconception & spaced repetition updates
+      try {
+        const adaptiveRecord = await api.post('/adaptive/record-attempt', {
+          topicId: currentQuestion.topicId || selectedTopicId,
+          selectedOptionId,
+          isCorrect: res.isCorrect,
+          responseTimeSeconds: timerSeconds,
+        });
+        if (adaptiveRecord?.misconception?.detected) {
+          setDetectedMisconception(adaptiveRecord.misconception);
+        }
+      } catch (adaptErr) {
+        console.warn('Adaptive attempt tracking skipped', adaptErr);
+      }
     } catch (err) {
       console.error('Failed to submit attempt', err);
     } finally {
@@ -123,10 +188,19 @@ export default function PracticePage() {
     if (!activeSession) return;
     setLoadingQuestion(true);
     setAttemptResult(null);
+    setDetectedMisconception(null);
     setSelectedOptionId(null);
     setTimerSeconds(0);
 
     try {
+      if (adaptiveMode && selectedTopicId) {
+        const adaptRes = await api.get(`/adaptive/next-question?topicId=${selectedTopicId}&courseId=${selectedCourseId}`);
+        if (adaptRes?.question) {
+          setCurrentQuestion(adaptRes.question);
+          setCalibrationData(adaptRes.calibration);
+          return;
+        }
+      }
       const nextQ = await api.get(`/practice/sessions/${activeSession.id}/next-question`);
       setCurrentQuestion(nextQ);
     } catch (err) {
@@ -152,15 +226,34 @@ export default function PracticePage() {
           {/* Practice Setup Header / Config Bar */}
           {!activeSession ? (
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                  <BrainCircuit className="w-5 h-5 text-indigo-600" />
-                  Configure Practice Session
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Select your target curriculum area and difficulty level. Questions adapt to your responses.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    <BrainCircuit className="w-5 h-5 text-indigo-600" />
+                    Configure Practice Session
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Select your target curriculum area and difficulty level. Questions dynamically calibrate to your real-time mastery.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSpacedDrawerOpen(true)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold shadow-sm transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Spaced Review Queue</span>
+                </button>
               </div>
+
+              {/* Adaptive Calibration preview if topic is selected */}
+              {calibrationData && (
+                <AdaptiveCalibrationBanner
+                  calibration={calibrationData}
+                  adaptiveMode={adaptiveMode}
+                  onToggleAdaptive={() => setAdaptiveMode(!adaptiveMode)}
+                />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Course Selector */}
@@ -227,7 +320,7 @@ export default function PracticePage() {
 
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={handleStartSession}
+                  onClick={() => handleStartSession()}
                   disabled={loadingQuestion}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5"
                 >
@@ -371,6 +464,14 @@ export default function PracticePage() {
                         </div>
                       </div>
 
+                      {/* Phase 4: Misconception Distractor Diagnostic Card */}
+                      {detectedMisconception && (
+                        <MisconceptionAlertCard
+                          misconception={detectedMisconception.misconception}
+                          occurrenceCount={detectedMisconception.occurrenceCount}
+                        />
+                      )}
+
                       {/* Phase 3: AI Socratic Remediation Assistant */}
                       {selectedOptionId && (
                         <SocraticAssistantDrawer
@@ -430,6 +531,16 @@ export default function PracticePage() {
           )}
         </main>
       </div>
+
+      {/* Phase 4: Ebbinghaus Spaced Repetition Queue Drawer */}
+      <SpacedRepetitionQueueDrawer
+        isOpen={spacedDrawerOpen}
+        onClose={() => setSpacedDrawerOpen(false)}
+        onSelectTopicForReview={(topicId) => {
+          setSelectedTopicId(topicId);
+          handleStartSession(topicId);
+        }}
+      />
     </div>
   );
 }
