@@ -13,6 +13,7 @@ import { AssessmentModule } from './assessment/assessment.module';
 import { AiAssessmentModule } from './ai-assessment/ai-assessment.module';
 import { RagModule } from './rag/rag.module';
 import { ProctoringModule } from './proctoring/proctoring.module';
+import { PlacementModule } from './placement/placement.module';
 
 @Module({
   imports: [
@@ -33,8 +34,10 @@ import { ProctoringModule } from './proctoring/proctoring.module';
     AiAssessmentModule,
     RagModule,
     ProctoringModule,
+    PlacementModule,
   ],
 })
 export class AppModule {}
+
 
 

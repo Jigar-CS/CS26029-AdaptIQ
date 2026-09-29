@@ -592,6 +592,136 @@ def analyze_proctoring_frame(req: ProctoringFrameRequest):
         recommended_action="CONTINUE_EXAM"
     )
 
+# ==============================================================================
+# Phase 10: Career & Placement Readiness Benchmarking
+# ==============================================================================
+
+class CareerGapAnalysisRequest(BaseModel):
+    role_type: str = "SOFTWARE_ENGINEER"
+    student_skills: Dict[str, float] = {}
+    target_benchmarks: Optional[Dict[str, float]] = None
+
+class SkillGapDetail(BaseModel):
+    skill_name: str
+    student_mastery: float
+    required_mastery: float
+    gap: float
+    status: str
+    recommended_action: str
+    remedial_topic: str
+
+class CareerGapAnalysisResponse(BaseModel):
+    role_type: str
+    readiness_score: float
+    hiring_bar_status: str
+    strengths: List[str]
+    critical_gaps: List[str]
+    skill_breakdown: List[SkillGapDetail]
+    personalized_roadmap: List[str]
+
+ROLE_DEFAULT_BENCHMARKS = {
+    "SOFTWARE_ENGINEER": {
+        "Data Structures & Algorithms": 85.0,
+        "System Design": 70.0,
+        "Database Systems & SQL": 75.0,
+        "Object Oriented Programming": 80.0,
+        "Operating Systems & Concurrency": 65.0,
+        "Computer Networks": 60.0
+    },
+    "DATA_ANALYST": {
+        "Database Systems & SQL": 90.0,
+        "Data Structures & Algorithms": 60.0,
+        "Statistical Analysis": 85.0,
+        "Data Visualization": 80.0,
+        "Business Intelligence": 75.0
+    },
+    "ML_ENGINEER": {
+        "Data Structures & Algorithms": 80.0,
+        "Machine Learning Algorithms": 85.0,
+        "Deep Learning & PyTorch": 80.0,
+        "Linear Algebra & Probability": 85.0,
+        "Model Deployment & MLOps": 70.0
+    },
+    "GATE_CS": {
+        "Discrete Mathematics": 85.0,
+        "Theory of Computation": 85.0,
+        "Compiler Design": 80.0,
+        "Operating Systems & Concurrency": 85.0,
+        "Computer Organization & Architecture": 80.0,
+        "Data Structures & Algorithms": 90.0
+    }
+}
+
+@app.post("/api/v1/ai/career/gap-analysis", response_model=CareerGapAnalysisResponse)
+def analyze_career_gap(req: CareerGapAnalysisRequest):
+    """
+    Computes industry placement readiness index and identifies personalized skill gaps.
+    """
+    benchmarks = req.target_benchmarks or ROLE_DEFAULT_BENCHMARKS.get(req.role_type, ROLE_DEFAULT_BENCHMARKS["SOFTWARE_ENGINEER"])
+    
+    breakdown = []
+    strengths = []
+    critical_gaps = []
+    total_benchmark = 0.0
+    total_student_weighted = 0.0
+
+    for skill, req_mastery in benchmarks.items():
+        stud_mastery = float(req.student_skills.get(skill, 45.0))
+        gap = round(req_mastery - stud_mastery, 1)
+        total_benchmark += req_mastery
+        total_student_weighted += min(stud_mastery, req_mastery)
+
+        if gap <= 0:
+            status = "VERIFIED"
+            rec_action = f"Strong placement readiness in {skill}. Maintain with advanced mock tests."
+            remedial_topic = f"Advanced {skill}"
+            strengths.append(skill)
+        elif gap <= 15:
+            status = "NEEDS_IMPROVEMENT"
+            rec_action = f"Close the {gap}% delta with targeted question sets."
+            remedial_topic = f"{skill} Intermediate Drills"
+        else:
+            status = "CRITICAL_GAP"
+            rec_action = f"Priority remediation required: {gap}% gap against industry benchmark."
+            remedial_topic = f"Foundational {skill} Mastery"
+            critical_gaps.append(skill)
+
+        breakdown.append(SkillGapDetail(
+            skill_name=skill,
+            student_mastery=stud_mastery,
+            required_mastery=req_mastery,
+            gap=max(0.0, gap),
+            status=status,
+            recommended_action=rec_action,
+            remedial_topic=remedial_topic
+        ))
+
+    overall_readiness = round((total_student_weighted / max(total_benchmark, 1.0)) * 100, 1)
+    
+    if overall_readiness >= 80.0:
+        hiring_bar = "MEETS_BAR"
+    elif overall_readiness >= 65.0:
+        hiring_bar = "NEAR_BAR"
+    else:
+        hiring_bar = "DEVELOPING"
+
+    roadmap = [
+        f"Week 1: Focus on highest impact gap ({critical_gaps[0] if critical_gaps else 'System Design and DSA'})",
+        "Week 2: Complete 3 timed mock coding assessments with proctored telemetry",
+        "Week 3: Undertake behavioral and technical diagnostic interviews",
+        "Week 4: Final industry placement readiness benchmark review"
+    ]
+
+    return CareerGapAnalysisResponse(
+        role_type=req.role_type,
+        readiness_score=overall_readiness,
+        hiring_bar_status=hiring_bar,
+        strengths=strengths,
+        critical_gaps=critical_gaps,
+        skill_breakdown=breakdown,
+        personalized_roadmap=roadmap
+    )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
