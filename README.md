@@ -669,7 +669,7 @@ flowchart LR
 | **AI Learning Assistant** | ✅ Completed (Phase 3) | Grounded Socratic tutor, distractor diagnosis, 4 interactive actions, and university resources |
 | **Misconception Detection** | ✅ Completed (Phase 4) | Distractor taxonomy, dynamic calibration engine, SM-2 spaced repetition scheduler |
 | **Assessment & Exam Engine** | ✅ Completed (Phase 5) | Timed exams, question randomization, auto-save, auto-grading, student test portal |
-| **AI Assessment Generation** | ⏳ Planned | Prompt-based test authoring and human approval pipeline scheduled for Phase 6 |
+| **AI Assessment Generation** | ✅ Completed (Phase 6) | Bloom-aligned prompt engine, FastAPI question generator, faculty human-in-the-loop staging board |
 | **Document AI / RAG** | ⏳ Planned | Lecture note ingestion and vector search scheduled for Phase 7 |
 | **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
 | **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
@@ -685,7 +685,7 @@ flowchart LR
 | **Phase 3** | **AI Learning Assistant** | ✅ Completed | Socratic tutoring agent, distractor diagnosis, interactive multi-turn actions, approved university resources, FastAPI microservice integration |
 | **Phase 4** | **Adaptive Learning & Misconceptions** | ✅ Completed | Distractor taxonomy, real-time dynamic difficulty shifting, Ebbinghaus SM-2 spaced repetition queue |
 | **Phase 5** | **Assessment Engine** | ✅ Completed | Faculty exam authoring studio, timed countdowns, randomized questions, auto-grading engine, itemized student review |
-| **Phase 6** | **AI Assessment Generation** | ⏳ Planned | LLM test generation with strict human-in-the-loop faculty review and approval gate |
+| **Phase 6** | **AI Assessment Generation** | ✅ Completed | Bloom-taxonomy generation, human-in-the-loop review board, direct promotion to question bank |
 | **Phase 7** | **Document AI / RAG** | ⏳ Planned | Ingestion of university notes/PPTs/PDFs, vector retrieval, grounded test creation |
 | **Phase 8** | **University Analytics** | ⚠️ Partially Implemented | Foundational schemas and role consoles active; cross-cohort aggregated heatmaps planned |
 | **Phase 9** | **Proctored Assessment** | ⏳ Planned | On-demand face enrollment, liveness checks, behavioral anomaly logging, invigilator review |

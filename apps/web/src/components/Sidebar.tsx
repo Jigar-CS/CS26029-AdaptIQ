@@ -18,6 +18,7 @@ import {
   Building2,
   BookOpen,
   LogOut,
+  Sparkles,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -43,6 +44,7 @@ export function Sidebar() {
 
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
+    { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles, badge: 'Active' },
     { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck, badge: 'Active' },
     { name: 'Question Bank', href: '/faculty/dashboard#bank', icon: BookOpen },
     { name: 'Class Analytics', href: '/faculty/dashboard#analytics', icon: TrendingUp },
