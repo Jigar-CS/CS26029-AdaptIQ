@@ -228,4 +228,79 @@ describe('LearningAnalyticsService & Phase 2 Engines', () => {
       expect(graph.courseCode).toBe('CS301');
     });
   });
+
+  // ============================================================================
+  // 5. Phase 8: OBE Attainment & At-Risk Mentorship Tests
+  // ============================================================================
+  describe('Phase 8 OBE & At-Risk Mentorship Engine', () => {
+    it('should calculate course outcome attainment and PO correlation matrix', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.course = {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c1',
+          code: 'CS301',
+          name: 'Data Structures & Algorithms',
+          department: { name: 'Computer Science & Engineering' },
+          courseOutcomes: [
+            {
+              id: 'co1',
+              code: 'CO1',
+              description: 'Analyze time-space asymptotic bounds',
+              targetAttainment: 0.70,
+              actualAttainment: 0.78,
+              questionMappings: [{ id: 'qm1' }],
+              programOutcomes: [
+                {
+                  correlationLevel: 3,
+                  programOutcome: { code: 'PO1', nbaCategory: 'Engineering Knowledge' },
+                },
+              ],
+            },
+          ],
+        }),
+      };
+
+      const result = await service.getCourseOBEAttainment('CS301');
+      expect(result.courseCode).toBe('CS301');
+      expect(result.courseOutcomes).toHaveLength(1);
+      expect(result.courseOutcomes[0].status).toBe('ATTAINED');
+      expect(result.courseOutcomes[0].actualAttainment).toBe(78);
+      expect(result.programOutcomesMatrix).toHaveLength(1);
+      expect(result.programOutcomesMatrix[0].code).toBe('PO1');
+    });
+
+    it('should fetch and format at-risk student predictive alerts', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.atRiskAlert = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'alert-1',
+            studentId: 's1',
+            severity: 'HIGH',
+            status: 'PENDING',
+            triggerReason: 'Mastery deficiency in DP',
+            suggestedIntervention: '1-on-1 Socratic session',
+            actionNotes: null,
+            createdAt: new Date(),
+            resolvedAt: null,
+            student: {
+              authorizedStudent: {
+                name: 'Rahul Patel',
+                enrollmentNumber: '24CS001',
+                semester: 4,
+                division: 'A',
+                email: '24cs001@charusat.edu.in',
+              },
+            },
+          },
+        ]),
+      };
+
+      const alerts = await service.getAtRiskAlerts();
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0].studentName).toBe('Rahul Patel');
+      expect(alerts[0].severity).toBe('HIGH');
+    });
+  });
 });
+

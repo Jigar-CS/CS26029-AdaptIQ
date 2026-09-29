@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  Patch,
+  Body,
   Param,
   Query,
   UseGuards,
@@ -11,7 +13,7 @@ import { LearningAnalyticsService } from './learning-analytics.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { UserRole } from '@prisma/client';
+import { UserRole, InterventionStatus } from '@prisma/client';
 
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -112,4 +114,36 @@ export class AnalyticsController {
   async getInstitutionalOverviewAnalytics() {
     return this.analyticsService.getInstitutionalOverviewAnalytics();
   }
+
+  // ============================================================================
+  // Phase 8: Outcome-Based Education (OBE) & At-Risk Mentorship Analytics
+  // ============================================================================
+
+  @Get('obe/courses/:courseId/attainment')
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async getCourseOBEAttainment(@Param('courseId') courseId: string) {
+    return this.analyticsService.getCourseOBEAttainment(courseId);
+  }
+
+  @Get('counsellor/at-risk')
+  @Roles(UserRole.COUNSELLOR, UserRole.HOD, UserRole.SUPER_ADMIN)
+  async getAtRiskAlerts(@Request() req) {
+    return this.analyticsService.getAtRiskAlerts();
+  }
+
+  @Patch('counsellor/at-risk/:id')
+  @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
+  async updateAtRiskIntervention(
+    @Param('id') id: string,
+    @Body() body: { status: InterventionStatus; actionNotes?: string },
+  ) {
+    return this.analyticsService.updateAtRiskIntervention(id, body.status, body.actionNotes);
+  }
+
+  @Get('hod/curriculum-health/:departmentId')
+  @Roles(UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async getHODCurriculumHealth(@Param('departmentId') departmentId: string) {
+    return this.analyticsService.getHODCurriculumHealth(departmentId);
+  }
 }
+
