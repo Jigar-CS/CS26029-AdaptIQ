@@ -15,6 +15,9 @@ import {
   DocumentProcessingStatus,
   AtRiskSeverity,
   InterventionStatus,
+  ProctoringViolationType,
+  ProctoringSessionStatus,
+  IntegrityFlagSeverity,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -24,12 +27,15 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.proctoringViolation.deleteMany();
+  await prisma.proctoringSession.deleteMany();
   await prisma.atRiskAlert.deleteMany();
   await prisma.questionCOMapping.deleteMany();
   await prisma.courseOutcomePO.deleteMany();
   await prisma.courseOutcome.deleteMany();
   await prisma.programOutcome.deleteMany();
   await prisma.documentChunk.deleteMany();
+
 
   await prisma.courseDocument.deleteMany();
   await prisma.aIGeneratedQuestion.deleteMany();
@@ -1046,7 +1052,44 @@ async function main() {
     });
   }
 
+  // Seed Phase 9 Proctoring Session & Violations
+  const proctoringSession = await prisma.proctoringSession.create({
+    data: {
+      submissionId: demoSubmission.id,
+      studentId: studentProfile.id,
+      status: ProctoringSessionStatus.COMPLETED,
+      faceEnrollmentVerified: true,
+      enrolledAt: new Date(Date.now() - 3600 * 1000 * 2 - 5 * 60 * 1000),
+      startedAt: new Date(Date.now() - 3600 * 1000 * 2),
+      completedAt: new Date(Date.now() - 3600 * 1000 * 2 + 14 * 60 * 1000),
+      trustScore: 89.5,
+      violationsCount: 2,
+      invigilatorNotes: 'Minor focus loss detected during Question 2; verified benign window readjustment. Trust score intact.',
+      violations: {
+        create: [
+          {
+            type: ProctoringViolationType.TAB_SWITCH,
+            severity: IntegrityFlagSeverity.MEDIUM,
+            confidence: 0.98,
+            timestamp: new Date(Date.now() - 3600 * 1000 * 2 + 4 * 60 * 1000),
+            details: 'Browser focus transferred to background window for 3.2 seconds during question 2.',
+            resolved: true,
+          },
+          {
+            type: ProctoringViolationType.NO_FACE,
+            severity: IntegrityFlagSeverity.LOW,
+            confidence: 0.92,
+            timestamp: new Date(Date.now() - 3600 * 1000 * 2 + 9 * 60 * 1000),
+            details: 'Webcam feed lost facial keypoints momentarily for 1.8 seconds (head tilt down).',
+            resolved: true,
+          },
+        ],
+      },
+    },
+  });
+
   // 13. Seed Course Documents & RAG Chunks (Phase 7)
+
   const syllabusDoc = await prisma.courseDocument.create({
     data: {
       courseId: dsaCourse.id,

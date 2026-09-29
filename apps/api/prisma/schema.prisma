@@ -209,6 +209,7 @@ model StudentProfile {
   spacedSchedules     SpacedRepetitionSchedule[]
   assessmentSubmissions AssessmentSubmission[]
   atRiskAlerts        AtRiskAlert[]
+  proctoringSessions  ProctoringSession[]
 }
 
 model FacultyProfile {
@@ -523,6 +524,7 @@ model AssessmentSubmission {
   percentage         Float              @default(0.0)
   passed             Boolean            @default(false)
   answers            SubmissionAnswer[]
+  proctoringSession  ProctoringSession?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -710,5 +712,71 @@ model AtRiskAlert {
 
   @@index([studentId, severity, status])
 }
+
+// ==============================================================================
+// Phase 9: AI-Assisted Assessment Integrity / Proctoring
+// ==============================================================================
+
+enum ProctoringViolationType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  NO_FACE
+  MULTIPLE_FACES
+  IDENTITY_MISMATCH
+  CAMERA_DISABLED
+  AUDIO_ANOMALY
+}
+
+enum ProctoringSessionStatus {
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+  FLAGGED
+  INVALIDATED
+}
+
+enum IntegrityFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  SEVERE
+}
+
+model ProctoringSession {
+  id                     String                  @id @default(uuid())
+  submissionId           String                  @unique
+  submission             AssessmentSubmission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  studentId              String
+  student                StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status                 ProctoringSessionStatus @default(IN_PROGRESS)
+  faceEnrollmentVerified Boolean                 @default(false)
+  enrolledAt             DateTime?
+  startedAt              DateTime                @default(now())
+  completedAt            DateTime?
+  trustScore             Float                   @default(100.0)
+  violationsCount        Int                     @default(0)
+  invigilatorNotes       String?                 @db.Text
+  violations             ProctoringViolation[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([studentId, status])
+}
+
+model ProctoringViolation {
+  id         String                  @id @default(uuid())
+  sessionId  String
+  session    ProctoringSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type       ProctoringViolationType
+  severity   IntegrityFlagSeverity   @default(MEDIUM)
+  confidence Float                   @default(0.95)
+  timestamp  DateTime                @default(now())
+  details    String?                 @db.Text
+  resolved   Boolean                 @default(false)
+
+  @@index([sessionId, type, severity])
+}
+
 
 
