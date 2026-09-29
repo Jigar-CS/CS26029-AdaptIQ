@@ -29,7 +29,7 @@ export function Sidebar() {
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
-    { name: 'Assessments', href: '/student/tests', icon: FileCheck, badge: 'Phase 5' },
+    { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck, badge: 'Active' },
     { name: 'Learning Curve', href: '/student/dashboard#curve', icon: TrendingUp },
     { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap, badge: 'Phase 4' },
   ];
@@ -43,6 +43,7 @@ export function Sidebar() {
 
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
+    { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck, badge: 'Active' },
     { name: 'Question Bank', href: '/faculty/dashboard#bank', icon: BookOpen },
     { name: 'Class Analytics', href: '/faculty/dashboard#analytics', icon: TrendingUp },
   ];

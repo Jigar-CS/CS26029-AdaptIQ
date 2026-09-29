@@ -668,7 +668,7 @@ flowchart LR
 | **AI Microservice (FastAPI)** | ✅ Completed (Phase 3) | FastAPI active with Socratic remediation, chat, distractor diagnosis, and NestJS bridge |
 | **AI Learning Assistant** | ✅ Completed (Phase 3) | Grounded Socratic tutor, distractor diagnosis, 4 interactive actions, and university resources |
 | **Misconception Detection** | ✅ Completed (Phase 4) | Distractor taxonomy, dynamic calibration engine, SM-2 spaced repetition scheduler |
-| **Assessment & Exam Engine** | ⏳ Planned | Timed faculty tests, question randomization, and grading scheduled for Phase 5 |
+| **Assessment & Exam Engine** | ✅ Completed (Phase 5) | Timed exams, question randomization, auto-save, auto-grading, student test portal |
 | **AI Assessment Generation** | ⏳ Planned | Prompt-based test authoring and human approval pipeline scheduled for Phase 6 |
 | **Document AI / RAG** | ⏳ Planned | Lecture note ingestion and vector search scheduled for Phase 7 |
 | **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
@@ -684,7 +684,7 @@ flowchart LR
 | **Phase 2** | **Learning Intelligence** | ✅ Completed | Difficulty-weighted EWMA mastery, BKT probabilistic tracing, IRT latent ability, Ebbinghaus forgetting curves, multi-topic prerequisite DAGs, multi-tier cohort analytics |
 | **Phase 3** | **AI Learning Assistant** | ✅ Completed | Socratic tutoring agent, distractor diagnosis, interactive multi-turn actions, approved university resources, FastAPI microservice integration |
 | **Phase 4** | **Adaptive Learning & Misconceptions** | ✅ Completed | Distractor taxonomy, real-time dynamic difficulty shifting, Ebbinghaus SM-2 spaced repetition queue |
-| **Phase 5** | **Assessment Engine** | ⏳ Planned | Faculty test creator, scheduled exams, randomized sequence, automated grading |
+| **Phase 5** | **Assessment Engine** | ✅ Completed | Faculty exam authoring studio, timed countdowns, randomized questions, auto-grading engine, itemized student review |
 | **Phase 6** | **AI Assessment Generation** | ⏳ Planned | LLM test generation with strict human-in-the-loop faculty review and approval gate |
 | **Phase 7** | **Document AI / RAG** | ⏳ Planned | Ingestion of university notes/PPTs/PDFs, vector retrieval, grounded test creation |
 | **Phase 8** | **University Analytics** | ⚠️ Partially Implemented | Foundational schemas and role consoles active; cross-cohort aggregated heatmaps planned |
