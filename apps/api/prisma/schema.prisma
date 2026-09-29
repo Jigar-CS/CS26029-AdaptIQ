@@ -136,6 +136,7 @@ model Course {
   topics       Topic[]
   questions    Question[]
   practiceSessions PracticeSession[]
+  assessments  Assessment[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -202,16 +203,18 @@ model StudentProfile {
   aiConversations     AIConversation[]
   misconceptions      StudentMisconception[]
   spacedSchedules     SpacedRepetitionSchedule[]
+  assessmentSubmissions AssessmentSubmission[]
 }
 
 model FacultyProfile {
-  id           String     @id @default(uuid())
-  userId       String     @unique
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employeeCode String?    @unique
+  id           String       @id @default(uuid())
+  userId       String       @unique
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode String?      @unique
   departmentId String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  assessments  Assessment[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 model Question {
@@ -230,6 +233,8 @@ model Question {
   options      QuestionOption[]
   attempts     QuestionAttempt[]
   aiConversations AIConversation[]
+  assessmentQuestions AssessmentQuestion[]
+  submissionAnswers   SubmissionAnswer[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -245,7 +250,8 @@ model QuestionOption {
   order           Int               @default(0)
   misconceptionId String?
   misconception   Misconception?    @relation(fields: [misconceptionId], references: [id], onDelete: SetNull)
-  attempts        QuestionAttempt[]
+  attempts          QuestionAttempt[]
+  submissionAnswers SubmissionAnswer[]
 }
 
 model PracticeSession {
@@ -434,5 +440,101 @@ model SpacedRepetitionSchedule {
 
   @@unique([studentId, topicId])
   @@index([studentId, status, nextReviewDate])
+}
+
+enum AssessmentType {
+  QUIZ
+  UNIT_TEST
+  MID_TERM
+  FINAL_EXAM
+}
+
+enum AssessmentStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EVALUATED
+}
+
+model Assessment {
+  id                 String               @id @default(uuid())
+  title              String
+  description        String?              @db.Text
+  code               String               @unique
+  courseId           String
+  course             Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  facultyId          String?
+  faculty            FacultyProfile?      @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  type               AssessmentType       @default(QUIZ)
+  status             AssessmentStatus     @default(PUBLISHED)
+  durationMinutes    Int                  @default(30)
+  totalMarks         Float                @default(100.0)
+  passingMarks       Float                @default(40.0)
+  totalQuestions     Int                  @default(5)
+  randomizeQuestions Boolean              @default(true)
+  allowedAttempts    Int                  @default(2)
+  scheduledStartTime DateTime?
+  scheduledEndTime   DateTime?
+  questions          AssessmentQuestion[]
+  submissions        AssessmentSubmission[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([courseId, status])
+}
+
+model AssessmentQuestion {
+  id           String     @id @default(uuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  points       Float      @default(20.0)
+  order        Int        @default(0)
+
+  @@unique([assessmentId, questionId])
+  @@index([assessmentId, order])
+}
+
+model AssessmentSubmission {
+  id                 String             @id @default(uuid())
+  assessmentId       String
+  assessment         Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  studentId          String
+  student            StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attemptNumber      Int                @default(1)
+  startedAt          DateTime           @default(now())
+  submittedAt        DateTime?
+  status             SubmissionStatus   @default(IN_PROGRESS)
+  totalScore         Float              @default(0.0)
+  percentage         Float              @default(0.0)
+  passed             Boolean            @default(false)
+  answers            SubmissionAnswer[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([assessmentId, studentId, status])
+}
+
+model SubmissionAnswer {
+  id               String               @id @default(uuid())
+  submissionId     String
+  submission       AssessmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId       String
+  question         Question             @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  selectedOption   QuestionOption?      @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  isCorrect        Boolean              @default(false)
+  pointsAwarded    Float                @default(0.0)
+  timeSpentSeconds Int                  @default(0)
+
+  @@index([submissionId, questionId])
 }
 

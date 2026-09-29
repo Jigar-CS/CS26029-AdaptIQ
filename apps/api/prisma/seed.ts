@@ -8,6 +8,9 @@ import {
   LearningHistoryReason,
   MisconceptionCategory,
   SpacedRepetitionStatus,
+  AssessmentType,
+  AssessmentStatus,
+  SubmissionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -17,6 +20,10 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.submissionAnswer.deleteMany();
+  await prisma.assessmentSubmission.deleteMany();
+  await prisma.assessmentQuestion.deleteMany();
+  await prisma.assessment.deleteMany();
   await prisma.spacedRepetitionSchedule.deleteMany();
   await prisma.studentMisconception.deleteMany();
   await prisma.misconception.deleteMany();
@@ -960,6 +967,73 @@ async function main() {
     });
   }
 
+  // 12. Seed Assessments & Submissions (Phase 5)
+  const facultyProfile = await prisma.facultyProfile.findFirst();
+
+  const assessmentQuiz = await prisma.assessment.create({
+    data: {
+      title: 'CS301 Mid-Semester Quiz: Linear & Non-Linear Structures',
+      description: 'Departmental timed benchmark testing array manipulation, pointer semantics, recursion, and search tree invariants.',
+      code: 'CS301-QUIZ-01',
+      courseId: dsaCourse.id,
+      facultyId: facultyProfile?.id,
+      type: AssessmentType.QUIZ,
+      status: AssessmentStatus.PUBLISHED,
+      durationMinutes: 20,
+      totalMarks: 100,
+      passingMarks: 40,
+      totalQuestions: 5,
+      randomizeQuestions: true,
+      allowedAttempts: 2,
+    },
+  });
+
+  const selectedFiveQuestions = createdQuestions.slice(0, 5);
+  for (let i = 0; i < selectedFiveQuestions.length; i++) {
+    await prisma.assessmentQuestion.create({
+      data: {
+        assessmentId: assessmentQuiz.id,
+        questionId: selectedFiveQuestions[i].id,
+        points: 20.0,
+        order: i + 1,
+      },
+    });
+  }
+
+  // Create a completed demo submission for Rahul Patel
+  const demoSubmission = await prisma.assessmentSubmission.create({
+    data: {
+      assessmentId: assessmentQuiz.id,
+      studentId: studentProfile.id,
+      attemptNumber: 1,
+      startedAt: new Date(Date.now() - 3600 * 1000 * 2),
+      submittedAt: new Date(Date.now() - 3600 * 1000 * 2 + 14 * 60 * 1000),
+      status: SubmissionStatus.EVALUATED,
+      totalScore: 80.0,
+      percentage: 80.0,
+      passed: true,
+    },
+  });
+
+  for (let i = 0; i < selectedFiveQuestions.length; i++) {
+    const q = selectedFiveQuestions[i];
+    const isCorrect = i !== 1; // question 2 answered wrong
+    const correctOpt = q.options.find((o) => o.isCorrect);
+    const wrongOpt = q.options.find((o) => !o.isCorrect);
+
+    await prisma.submissionAnswer.create({
+      data: {
+        submissionId: demoSubmission.id,
+        questionId: q.id,
+        selectedOptionId: isCorrect ? correctOpt?.id : wrongOpt?.id,
+        isCorrect,
+        pointsAwarded: isCorrect ? 20.0 : 0.0,
+        timeSpentSeconds: 150 + i * 20,
+      },
+    });
+  }
+
+  console.log('📝 Seeded Phase 5 Assessment, Questions, and Student Submission.');
   console.log('🧠 Seeded Phase 4 Misconceptions and Spaced Repetition Schedules.');
   console.log('📈 Seeded realistic attempts, mastery, and learning curve.');
   console.log('✅ CLIAS Database Seeding Complete!');
