@@ -18,6 +18,7 @@ import {
   ProctoringViolationType,
   ProctoringSessionStatus,
   IntegrityFlagSeverity,
+  CareerRoleType,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -27,6 +28,9 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.placementMockExam.deleteMany();
+  await prisma.studentPlacementProfile.deleteMany();
+  await prisma.careerRoleBenchmark.deleteMany();
   await prisma.proctoringViolation.deleteMany();
   await prisma.proctoringSession.deleteMany();
   await prisma.atRiskAlert.deleteMany();
@@ -35,6 +39,7 @@ async function main() {
   await prisma.courseOutcome.deleteMany();
   await prisma.programOutcome.deleteMany();
   await prisma.documentChunk.deleteMany();
+
 
 
   await prisma.courseDocument.deleteMany();
@@ -1280,6 +1285,84 @@ async function main() {
     ],
   });
 
+  // ==============================================================================
+  // Phase 10: Career & Placement Readiness
+  // ==============================================================================
+  const sdeBenchmark = await prisma.careerRoleBenchmark.create({
+    data: {
+      roleType: CareerRoleType.SDE,
+      title: 'Software Development Engineer (Tier-1 Product)',
+      description: 'Core algorithmic problem solving, recursive invariant formulation, balanced trees, and dynamic programming mastery required by top-tier product firms.',
+      targetMastery: 80.0,
+      salaryRange: '12 - 28 LPA',
+      hiringPartners: 'Google, Microsoft, Amazon, Oracle, Adobe, Atlassian',
+      requiredSkills: JSON.stringify([
+        { topicSlug: 'arrays-dynamic-arrays', topicName: 'Arrays & Dynamic Arrays', minMastery: 85, weight: 1.2 },
+        { topicSlug: 'linked-lists-pointers', topicName: 'Linked Lists & Pointers', minMastery: 75, weight: 1.0 },
+        { topicSlug: 'trees-binary-search-trees', topicName: 'Trees & Balanced Search Trees', minMastery: 80, weight: 1.2 },
+        { topicSlug: 'dynamic-programming', topicName: 'Dynamic Programming', minMastery: 75, weight: 1.3 },
+        { topicSlug: 'graph-algorithms', topicName: 'Graph Algorithms & Shortest Paths', minMastery: 70, weight: 1.1 },
+      ]),
+    },
+  });
+
+  const daBenchmark = await prisma.careerRoleBenchmark.create({
+    data: {
+      roleType: CareerRoleType.DATA_ANALYST,
+      title: 'Data Analyst & Business Intelligence Specialist',
+      description: 'Relational database querying, normalization, SQL window functions, statistical partitioning, and schema indexing.',
+      targetMastery: 75.0,
+      salaryRange: '8 - 18 LPA',
+      hiringPartners: 'Deloitte, Fractal, Mu Sigma, PwC, TCS Digital',
+      requiredSkills: JSON.stringify([
+        { topicSlug: 'arrays-dynamic-arrays', topicName: 'Structured Data Containers', minMastery: 70, weight: 1.0 },
+        { topicSlug: 'dbms-sql', topicName: 'Relational DBMS & SQL Optimization', minMastery: 85, weight: 1.5 },
+      ]),
+    },
+  });
+
+  const mlBenchmark = await prisma.careerRoleBenchmark.create({
+    data: {
+      roleType: CareerRoleType.ML_ENGINEER,
+      title: 'Machine Learning & Applied AI Engineer',
+      description: 'Vector embeddings, mathematical gradient optimization, asymptotic evaluation, and high-performance algorithms.',
+      targetMastery: 85.0,
+      salaryRange: '14 - 35 LPA',
+      hiringPartners: 'NVIDIA, Intel, Qualcomm, Zomato, Swiggy, Uber',
+      requiredSkills: JSON.stringify([
+        { topicSlug: 'arrays-dynamic-arrays', topicName: 'Contiguous Matrix Operations', minMastery: 85, weight: 1.2 },
+        { topicSlug: 'dynamic-programming', topicName: 'Optimization Paradigms', minMastery: 80, weight: 1.4 },
+        { topicSlug: 'graph-algorithms', topicName: 'Graph Neural Formulations', minMastery: 75, weight: 1.1 },
+      ]),
+    },
+  });
+
+  // Seed Student Placement Profile for Rahul Patel
+  await prisma.studentPlacementProfile.create({
+    data: {
+      studentId: studentProfile.id,
+      targetRole: CareerRoleType.SDE,
+      overallReadinessScore: 67.5,
+      verifiedSkillsCount: 2, // Arrays: 91%, Trees: 68%
+      skillGapsCount: 2,      // DP: 31%, Graph: 47%
+    },
+  });
+
+  // Seed Placement Mock Exam
+  await prisma.placementMockExam.create({
+    data: {
+      roleType: CareerRoleType.SDE,
+      companyProfile: 'Google Tier-1 Algorithmic Simulation',
+      title: 'Google SDE Campus Hiring Simulation: Invariants & Complexity',
+      description: 'Realistic 45-minute timed technical screening with multi-case algorithmic complexity verification.',
+      totalQuestions: 5,
+      durationMinutes: 45,
+      passingScore: 75.0,
+      difficulty: QuestionDifficulty.HARD,
+    },
+  });
+
+  console.log('🚀 Seeded Phase 10 Career Role Benchmarks, Skill Gap Profile, and Placement Mock Exam.');
   console.log('🏛️ Seeded Phase 8 OBE Program Outcomes, Course Outcomes, and At-Risk Predictive Alerts.');
   console.log('📚 Seeded Phase 7 Course Documents and RAG Semantic Chunks.');
   console.log('📝 Seeded Phase 5 Assessment, Questions, and Student Submission.');

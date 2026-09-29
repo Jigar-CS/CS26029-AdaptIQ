@@ -210,6 +210,7 @@ model StudentProfile {
   assessmentSubmissions AssessmentSubmission[]
   atRiskAlerts        AtRiskAlert[]
   proctoringSessions  ProctoringSession[]
+  placementProfile    StudentPlacementProfile?
 }
 
 model FacultyProfile {
@@ -777,6 +778,60 @@ model ProctoringViolation {
 
   @@index([sessionId, type, severity])
 }
+
+// ==============================================================================
+// Phase 10: Career & Placement Readiness
+// ==============================================================================
+
+enum CareerRoleType {
+  SDE
+  DATA_ANALYST
+  ML_ENGINEER
+  CYBERSECURITY_ANALYST
+  CLOUD_DEVOPS
+  GATE_CS
+}
+
+model CareerRoleBenchmark {
+  id             String         @id @default(uuid())
+  roleType       CareerRoleType @unique
+  title          String
+  description    String         @db.Text
+  targetMastery  Float          @default(80.0)
+  requiredSkills String         @db.Text // JSON: array of { topicName: string, minMastery: number, weight: number }
+  salaryRange    String?
+  hiringPartners String?        // e.g. "Google, Amazon, Microsoft, Infosys"
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model StudentPlacementProfile {
+  id                    String         @id @default(uuid())
+  studentId             String         @unique
+  student               StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  targetRole            CareerRoleType @default(SDE)
+  overallReadinessScore Float          @default(0.0) // 0 - 100%
+  verifiedSkillsCount   Int            @default(0)
+  skillGapsCount        Int            @default(0)
+  lastAssessedAt        DateTime       @default(now())
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model PlacementMockExam {
+  id              String             @id @default(uuid())
+  roleType        CareerRoleType     @default(SDE)
+  companyProfile  String             // e.g. "Google Tier-1", "Amazon SDE", "TCS Digital"
+  title           String
+  description     String             @db.Text
+  totalQuestions  Int                @default(10)
+  durationMinutes Int                @default(45)
+  passingScore    Float              @default(70.0)
+  difficulty      QuestionDifficulty @default(HARD)
+  createdAt       DateTime           @default(now())
+}
+
 
 
 
