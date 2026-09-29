@@ -466,18 +466,18 @@ sequenceDiagram
 ---
 
 ### PHASE 7 — DOCUMENT-BASED AI / RAG
-**Status**: ⏳ Planned  
+**Status**: ✅ Completed *(Course Document Ingestion, Semantic Chunking, FastAPI RAG Retrieval & Grounded Quiz Studio)*  
 **Goal**: Ingest university-approved educational materials (syllabi, lecture notes, PDFs, PPTs) to power grounded AI features.
 
 - **Document Processing Pipeline**:
-  - Upload PDF/PPT/DOCX course handouts.
-  - Text extraction, structural chunking, and metadata tagging (course, unit, chapter).
-  - Vector embedding generation via open-source or commercial embedding models.
-  - Storage in vector database with hybrid keyword/semantic search.
-- **Target Use Cases**:
-  - *"Generate 15 medium questions exclusively from Unit 3 Operating Systems slides."*
-  - *"Explain Deadlock Detection citing Page 42 of Professor's Lecture 8."*
-  - *"Identify syllabus topics with insufficient question coverage in the existing bank."*
+  - Ingestion of course syllabi, lecture presentations, and reference material with automatic structural chunking.
+  - Granular chunk metadata tracking: token counts, page numbers, and topic keywords.
+  - Hybrid lexical/semantic vector similarity retrieval with confidence scoring.
+- **Implemented Capabilities**:
+  - Semantic RAG playground across course materials (`POST /api/v1/ai/rag/query`).
+  - Grounded assessment generator synthesizing questions strictly derived from syllabus chunks with explicit citation tags (`POST /api/v1/ai/rag/generate-grounded-quiz`).
+  - Interactive Faculty Document & RAG Studio (`/faculty/documents`) with chunk inspector and direct staging into the course assessment bank.
+
 
 ---
 
@@ -670,7 +670,7 @@ flowchart LR
 | **Misconception Detection** | ✅ Completed (Phase 4) | Distractor taxonomy, dynamic calibration engine, SM-2 spaced repetition scheduler |
 | **Assessment & Exam Engine** | ✅ Completed (Phase 5) | Timed exams, question randomization, auto-save, auto-grading, student test portal |
 | **AI Assessment Generation** | ✅ Completed (Phase 6) | Bloom-aligned prompt engine, FastAPI question generator, faculty human-in-the-loop staging board |
-| **Document AI / RAG** | ⏳ Planned | Lecture note ingestion and vector search scheduled for Phase 7 |
+| **Document AI / RAG** | ✅ Completed (Phase 7) | Course document ingestion, structural chunking, semantic similarity retrieval, grounded assessment generator |
 | **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
 | **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
 
@@ -686,10 +686,11 @@ flowchart LR
 | **Phase 4** | **Adaptive Learning & Misconceptions** | ✅ Completed | Distractor taxonomy, real-time dynamic difficulty shifting, Ebbinghaus SM-2 spaced repetition queue |
 | **Phase 5** | **Assessment Engine** | ✅ Completed | Faculty exam authoring studio, timed countdowns, randomized questions, auto-grading engine, itemized student review |
 | **Phase 6** | **AI Assessment Generation** | ✅ Completed | Bloom-taxonomy generation, human-in-the-loop review board, direct promotion to question bank |
-| **Phase 7** | **Document AI / RAG** | ⏳ Planned | Ingestion of university notes/PPTs/PDFs, vector retrieval, grounded test creation |
+| **Phase 7** | **Document AI / RAG** | ✅ Completed | Ingestion of syllabi/lecture slides, vector chunking, semantic RAG retrieval, citation-grounded assessment generator, faculty RAG studio |
 | **Phase 8** | **University Analytics** | ⚠️ Partially Implemented | Foundational schemas and role consoles active; cross-cohort aggregated heatmaps planned |
 | **Phase 9** | **Proctored Assessment** | ⏳ Planned | On-demand face enrollment, liveness checks, behavioral anomaly logging, invigilator review |
 | **Phase 10** | **Placement Readiness** | ⏳ Planned | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+
 
 ---
 
