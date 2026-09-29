@@ -154,6 +154,8 @@ model Topic {
   learningHistories LearningHistory[]
   learningResources LearningResource[]
   aiConversations   AIConversation[]
+  misconceptions    Misconception[]
+  spacedSchedules   SpacedRepetitionSchedule[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -198,6 +200,8 @@ model StudentProfile {
   learningHistories   LearningHistory[]
   counsellorAssignments CounsellorAssignment[]
   aiConversations     AIConversation[]
+  misconceptions      StudentMisconception[]
+  spacedSchedules     SpacedRepetitionSchedule[]
 }
 
 model FacultyProfile {
@@ -238,8 +242,10 @@ model QuestionOption {
   question   Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
   optionText String            @db.Text
   isCorrect  Boolean           @default(false)
-  order      Int               @default(0)
-  attempts   QuestionAttempt[]
+  order           Int               @default(0)
+  misconceptionId String?
+  misconception   Misconception?    @relation(fields: [misconceptionId], references: [id], onDelete: SetNull)
+  attempts        QuestionAttempt[]
 }
 
 model PracticeSession {
@@ -363,5 +369,70 @@ model AIMessage {
   createdAt      DateTime           @default(now())
 
   @@index([conversationId])
+}
+
+enum MisconceptionCategory {
+  CONCEPTUAL_CONFUSION
+  OFF_BY_ONE_ERROR
+  COMPLEXITY_MISCALCULATION
+  BOUNDARY_EDGE_CASE
+  POINTER_REFERENCE_CONFUSION
+  SYNTAX_SEMANTICS_OVERLOOK
+}
+
+enum SpacedRepetitionStatus {
+  DUE
+  UPCOMING
+  MASTERED
+}
+
+model Misconception {
+  id                 String                @id @default(uuid())
+  code               String                @unique
+  title              String
+  description        String                @db.Text
+  category           MisconceptionCategory @default(CONCEPTUAL_CONFUSION)
+  remediationAdvice  String                @db.Text
+  topicId            String
+  topic              Topic                 @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  distractorOptions  QuestionOption[]
+  studentOccurrences StudentMisconception[]
+  createdAt          DateTime              @default(now())
+
+  @@index([topicId, category])
+}
+
+model StudentMisconception {
+  id              String        @id @default(uuid())
+  studentId       String
+  student         StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  misconceptionId String
+  misconception   Misconception @relation(fields: [misconceptionId], references: [id], onDelete: Cascade)
+  occurrenceCount Int           @default(1)
+  lastDetectedAt  DateTime      @default(now())
+  resolved        Boolean       @default(false)
+  resolvedAt      DateTime?
+
+  @@unique([studentId, misconceptionId])
+  @@index([studentId, resolved])
+}
+
+model SpacedRepetitionSchedule {
+  id               String                 @id @default(uuid())
+  studentId        String
+  student          StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  topicId          String
+  topic            Topic                  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  intervalDays     Int                    @default(1)
+  easeFactor       Float                  @default(2.5)
+  repetitionNumber Int                    @default(0)
+  nextReviewDate   DateTime
+  lastReviewedDate DateTime?
+  status           SpacedRepetitionStatus @default(DUE)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@unique([studentId, topicId])
+  @@index([studentId, status, nextReviewDate])
 }
 

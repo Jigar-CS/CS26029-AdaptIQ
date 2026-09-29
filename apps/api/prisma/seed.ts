@@ -1,4 +1,14 @@
-import { PrismaClient, UserRole, UserStatus, QuestionDifficulty, QuestionType, QuestionStatus, LearningHistoryReason } from '@prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  UserStatus,
+  QuestionDifficulty,
+  QuestionType,
+  QuestionStatus,
+  LearningHistoryReason,
+  MisconceptionCategory,
+  SpacedRepetitionStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -7,6 +17,9 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.spacedRepetitionSchedule.deleteMany();
+  await prisma.studentMisconception.deleteMany();
+  await prisma.misconception.deleteMany();
   await prisma.aIMessage.deleteMany();
   await prisma.aIConversation.deleteMany();
   await prisma.learningResource.deleteMany();
@@ -806,6 +819,148 @@ async function main() {
     });
   }
 
+  // 10. Seed Misconceptions & Taxonomy (Phase 4)
+  const seededMisconceptions = [
+    {
+      code: 'MIS_ARR_01',
+      title: 'Index Out-of-Bounds & Maximum Index Confusion',
+      description: 'Confusing 0-indexed array upper boundary (length - 1) with array length (size), leading to Off-By-One errors or runtime exceptions.',
+      category: MisconceptionCategory.OFF_BY_ONE_ERROR,
+      remediationAdvice: 'Remember 0-indexed systems store N elements at positions 0 through N-1. In loops, use < array.length instead of <= array.length.',
+      topicId: topics['arrays'].id,
+    },
+    {
+      code: 'MIS_LL_01',
+      title: 'Dangling Node & Pointer Overwrite',
+      description: 'Overwriting current.next pointer before saving reference to downstream sublist, causing orphaned nodes in memory.',
+      category: MisconceptionCategory.POINTER_REFERENCE_CONFUSION,
+      remediationAdvice: 'Always declare a temporary pointer `ListNode nextTemp = current.next` before mutating `current.next`.',
+      topicId: topics['linked-lists'].id,
+    },
+    {
+      code: 'MIS_TREE_01',
+      title: 'Local vs Global BST Invariant Misunderstanding',
+      description: 'Checking only immediate children (left < root < right) without enforcing that ALL left subtree values are strictly smaller than root.',
+      category: MisconceptionCategory.BOUNDARY_EDGE_CASE,
+      remediationAdvice: 'Validate BST using min/max bounds passed down recursively (low < node.val < high).',
+      topicId: topics['trees'].id,
+    },
+    {
+      code: 'MIS_GRAPH_01',
+      title: 'Dijkstra on Negative Edge Weights',
+      description: 'Applying Dijkstra greedy relaxation when negative edge weights are present, which yields incorrect shortest paths.',
+      category: MisconceptionCategory.CONCEPTUAL_CONFUSION,
+      remediationAdvice: 'Use Bellman-Ford or SPFA when negative edge weights can occur; Dijkstra relies on non-decreasing path costs.',
+      topicId: topics['graphs'].id,
+    },
+    {
+      code: 'MIS_DP_01',
+      title: 'Greedy Choice Fallacy in Optimal Substructure',
+      description: 'Assuming locally optimal choice leads to globally optimal solution without verifying matroid or exchange property.',
+      category: MisconceptionCategory.COMPLEXITY_MISCALCULATION,
+      remediationAdvice: 'Draw the recursion decision tree. If taking a sub-optimal choice now unlocks larger gains later, use Dynamic Programming.',
+      topicId: topics['dynamic-programming'].id,
+    },
+  ];
+
+  for (const m of seededMisconceptions) {
+    const createdMis = await prisma.misconception.upsert({
+      where: { code: m.code },
+      update: m,
+      create: m,
+    });
+
+    // Link to distractor options if topic matches
+    const topicQuestions = createdQuestions.filter((q) => q.topicId === m.topicId);
+    if (topicQuestions.length > 0) {
+      const wrongOption = topicQuestions[0].options.find((o) => !o.isCorrect);
+      if (wrongOption) {
+        await prisma.questionOption.update({
+          where: { id: wrongOption.id },
+          data: { misconceptionId: createdMis.id },
+        });
+      }
+    }
+  }
+
+  // Seed student detected misconceptions
+  const graphMisconception = await prisma.misconception.findUnique({ where: { code: 'MIS_GRAPH_01' } });
+  const dpMisconception = await prisma.misconception.findUnique({ where: { code: 'MIS_DP_01' } });
+
+  if (graphMisconception) {
+    await prisma.studentMisconception.upsert({
+      where: {
+        studentId_misconceptionId: {
+          studentId: studentProfile.id,
+          misconceptionId: graphMisconception.id,
+        },
+      },
+      update: { occurrenceCount: 3, resolved: false },
+      create: {
+        studentId: studentProfile.id,
+        misconceptionId: graphMisconception.id,
+        occurrenceCount: 3,
+        resolved: false,
+        lastDetectedAt: new Date(Date.now() - 3600 * 1000 * 5),
+      },
+    });
+  }
+
+  if (dpMisconception) {
+    await prisma.studentMisconception.upsert({
+      where: {
+        studentId_misconceptionId: {
+          studentId: studentProfile.id,
+          misconceptionId: dpMisconception.id,
+        },
+      },
+      update: { occurrenceCount: 2, resolved: false },
+      create: {
+        studentId: studentProfile.id,
+        misconceptionId: dpMisconception.id,
+        occurrenceCount: 2,
+        resolved: false,
+        lastDetectedAt: new Date(Date.now() - 3600 * 1000 * 20),
+      },
+    });
+  }
+
+  // 11. Seed Spaced Repetition Schedules (Ebbinghaus review queues)
+  const spacedTopics = [
+    { topicId: topics['graphs'].id, interval: 1, ease: 2.1, status: SpacedRepetitionStatus.DUE, daysDelta: -1 },
+    { topicId: topics['dynamic-programming'].id, interval: 2, ease: 2.3, status: SpacedRepetitionStatus.DUE, daysDelta: 0 },
+    { topicId: topics['trees'].id, interval: 7, ease: 2.5, status: SpacedRepetitionStatus.UPCOMING, daysDelta: 3 },
+    { topicId: topics['arrays'].id, interval: 21, ease: 2.8, status: SpacedRepetitionStatus.MASTERED, daysDelta: 14 },
+  ];
+
+  for (const s of spacedTopics) {
+    await prisma.spacedRepetitionSchedule.upsert({
+      where: {
+        studentId_topicId: {
+          studentId: studentProfile.id,
+          topicId: s.topicId,
+        },
+      },
+      update: {
+        intervalDays: s.interval,
+        easeFactor: s.ease,
+        status: s.status,
+        nextReviewDate: new Date(Date.now() + s.daysDelta * 86400 * 1000),
+      },
+      create: {
+        studentId: studentProfile.id,
+        topicId: s.topicId,
+        intervalDays: s.interval,
+        easeFactor: s.ease,
+        status: s.status,
+        repetitionNumber: s.status === SpacedRepetitionStatus.MASTERED ? 3 : 1,
+        nextReviewDate: new Date(Date.now() + s.daysDelta * 86400 * 1000),
+        lastReviewedDate: new Date(Date.now() - 3 * 86400 * 1000),
+      },
+    });
+  }
+
+  console.log('🧠 Seeded Phase 4 Misconceptions and Spaced Repetition Schedules.');
   console.log('📈 Seeded realistic attempts, mastery, and learning curve.');
   console.log('✅ CLIAS Database Seeding Complete!');
 }
