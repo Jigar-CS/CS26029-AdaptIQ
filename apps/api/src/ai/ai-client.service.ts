@@ -99,4 +99,34 @@ export class AiClientService {
       return null;
     }
   }
+
+  /**
+   * Dispatches Bloom-aligned question generation request to FastAPI microservice
+   */
+  async generateQuestions(payload: {
+    topic: string;
+    course_code: string;
+    bloom_level: string;
+    difficulty: string;
+    count: number;
+    syllabus_context?: string;
+  }) {
+    try {
+      const res = await fetch(`${this.aiBaseUrl}/api/v1/ai/generate-questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI generator returned HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      this.logger.warn(`FastAPI Generator unavailable (${err.message}). Using local fallback generator.`);
+      return null;
+    }
+  }
 }

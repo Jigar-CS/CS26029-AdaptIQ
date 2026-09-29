@@ -10,6 +10,7 @@ import { PracticeModule } from './practice/practice.module';
 import { AiModule } from './ai/ai.module';
 import { AdaptiveModule } from './adaptive/adaptive.module';
 import { AssessmentModule } from './assessment/assessment.module';
+import { AiAssessmentModule } from './ai-assessment/ai-assessment.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AssessmentModule } from './assessment/assessment.module';
     AiModule,
     AdaptiveModule,
     AssessmentModule,
+    AiAssessmentModule,
   ],
 })
 export class AppModule {}
