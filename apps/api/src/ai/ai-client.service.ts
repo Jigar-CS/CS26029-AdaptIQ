@@ -129,4 +129,60 @@ export class AiClientService {
       return null;
     }
   }
+
+  /**
+   * Dispatches semantic RAG query to FastAPI microservice
+   */
+  async queryRag(payload: {
+    query: string;
+    course_code?: string;
+    top_k?: number;
+  }) {
+    try {
+      const res = await fetch(`${this.aiBaseUrl}/api/v1/ai/rag/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI RAG returned HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      this.logger.warn(`FastAPI RAG query unavailable (${err.message}). Using local database semantic fallback.`);
+      return null;
+    }
+  }
+
+  /**
+   * Dispatches Grounded Assessment generation to FastAPI microservice
+   */
+  async generateGroundedQuiz(payload: {
+    course_code: string;
+    topic?: string;
+    count?: number;
+    chunk_ids?: string[];
+  }) {
+    try {
+      const res = await fetch(`${this.aiBaseUrl}/api/v1/ai/rag/generate-grounded-quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI Grounded Quiz returned HTTP ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      this.logger.warn(`FastAPI Grounded Quiz unavailable (${err.message}). Using local generator fallback.`);
+      return null;
+    }
+  }
 }
+

@@ -11,6 +11,7 @@ import { AiModule } from './ai/ai.module';
 import { AdaptiveModule } from './adaptive/adaptive.module';
 import { AssessmentModule } from './assessment/assessment.module';
 import { AiAssessmentModule } from './ai-assessment/ai-assessment.module';
+import { RagModule } from './rag/rag.module';
 
 @Module({
   imports: [
@@ -29,6 +30,8 @@ import { AiAssessmentModule } from './ai-assessment/ai-assessment.module';
     AdaptiveModule,
     AssessmentModule,
     AiAssessmentModule,
+    RagModule,
   ],
 })
 export class AppModule {}
+
