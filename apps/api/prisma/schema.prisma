@@ -137,6 +137,7 @@ model Course {
   questions    Question[]
   practiceSessions PracticeSession[]
   assessments  Assessment[]
+  documents    CourseDocument[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -574,5 +575,53 @@ model AIGeneratedQuestion {
   updatedAt          DateTime           @updatedAt
 
   @@index([topicId, status])
+}
+
+enum DocumentType {
+  SYLLABUS
+  LECTURE_NOTES
+  PRESENTATION_SLIDES
+  REFERENCE_TEXT
+}
+
+enum DocumentProcessingStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+model CourseDocument {
+  id           String                   @id @default(uuid())
+  courseId     String
+  course       Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title        String
+  fileName     String
+  fileType     String                   @default("PDF")
+  documentType DocumentType             @default(LECTURE_NOTES)
+  fileSizeKb   Int                      @default(0)
+  rawText      String                   @db.LongText
+  status       DocumentProcessingStatus @default(INDEXED)
+  chunkCount   Int                      @default(0)
+  uploadedBy   String?
+  chunks       DocumentChunk[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([courseId, documentType])
+}
+
+model DocumentChunk {
+  id              String         @id @default(uuid())
+  documentId      String
+  document        CourseDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex      Int            @default(0)
+  content         String         @db.Text
+  tokenCount      Int            @default(0)
+  vectorEmbedding String?        @db.Text
+  topicKeywords   String?
+  createdAt       DateTime       @default(now())
+
+  @@index([documentId, chunkIndex])
 }
 

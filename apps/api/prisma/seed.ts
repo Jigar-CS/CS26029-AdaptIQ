@@ -11,6 +11,8 @@ import {
   AssessmentType,
   AssessmentStatus,
   SubmissionStatus,
+  DocumentType,
+  DocumentProcessingStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -20,6 +22,9 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.documentChunk.deleteMany();
+  await prisma.courseDocument.deleteMany();
+  await prisma.aIGeneratedQuestion.deleteMany();
   await prisma.submissionAnswer.deleteMany();
   await prisma.assessmentSubmission.deleteMany();
   await prisma.assessmentQuestion.deleteMany();
@@ -1033,6 +1038,69 @@ async function main() {
     });
   }
 
+  // 13. Seed Course Documents & RAG Chunks (Phase 7)
+  const syllabusDoc = await prisma.courseDocument.create({
+    data: {
+      courseId: dsaCourse.id,
+      title: 'CS301 Official Course Syllabus & Unit Learning Outcomes',
+      fileName: 'CS301_Syllabus_2026.pdf',
+      fileType: 'PDF',
+      documentType: DocumentType.SYLLABUS,
+      fileSizeKb: 345,
+      rawText: 'Course Overview: Data Structures & Algorithms. Unit 1: Asymptotic notation, Master Theorem. Unit 2: Linear Data Structures: Arrays, Linked Lists, Stacks, Queues. Unit 3: Non-Linear Structures: Trees, BST, AVL Trees, Heaps. Unit 4: Graph Algorithms: BFS, DFS, Dijkstra, Bellman-Ford. Unit 5: Dynamic Programming & Greedy Paradigms.',
+      status: DocumentProcessingStatus.INDEXED,
+      chunkCount: 2,
+    },
+  });
+
+  const lectureDoc = await prisma.courseDocument.create({
+    data: {
+      courseId: dsaCourse.id,
+      title: 'Lecture 04: AVL Tree Balancing, Rotations, and Proof of O(log N) Height',
+      fileName: 'CS301_Lecture04_AVL.pdf',
+      fileType: 'PDF',
+      documentType: DocumentType.LECTURE_NOTES,
+      fileSizeKb: 890,
+      rawText: 'An AVL tree is a self-balancing binary search tree where the difference between heights of left and right subtrees cannot exceed 1 for all nodes. Rebalancing is achieved through single (LL, RR) or double (LR, RL) rotations. The maximum height of an AVL tree with N nodes is bounded by 1.44 * log2(N + 2) - 0.328, strictly guaranteeing O(log N) search, insertion, and deletion.',
+      status: DocumentProcessingStatus.INDEXED,
+      chunkCount: 3,
+    },
+  });
+
+  const lectureChunks = [
+    {
+      chunkIndex: 0,
+      content: 'Definition: An AVL tree is a self-balancing binary search tree where the height difference (balance factor BF = height(left) - height(right)) cannot exceed 1 for any node. Allowed balance factors are strictly {-1, 0, +1}.',
+      tokenCount: 42,
+      topicKeywords: 'AVL, balance factor, self-balancing, binary search tree',
+    },
+    {
+      chunkIndex: 1,
+      content: 'Rebalancing Mechanisms: When an insertion or deletion causes BF to become +2 or -2, tree rotations are performed. Single Right Rotation (LL) corrects left-heavy insertion. Single Left Rotation (RR) corrects right-heavy insertion. Double rotations (LR and RL) resolve zigzag imbalances.',
+      tokenCount: 48,
+      topicKeywords: 'rotations, LL rotation, RR rotation, LR rotation, RL rotation, rebalancing',
+    },
+    {
+      chunkIndex: 2,
+      content: 'Asymptotic Guarantees: The worst-case height of an AVL tree with N nodes satisfies H <= 1.44 log2(N + 2). Thus lookup, insertion, and deletion operations strictly run in O(log N) time and O(log N) stack space.',
+      tokenCount: 44,
+      topicKeywords: 'time complexity, height bound, logarithmic scaling, worst-case',
+    },
+  ];
+
+  for (const c of lectureChunks) {
+    await prisma.documentChunk.create({
+      data: {
+        documentId: lectureDoc.id,
+        chunkIndex: c.chunkIndex,
+        content: c.content,
+        tokenCount: c.tokenCount,
+        topicKeywords: c.topicKeywords,
+      },
+    });
+  }
+
+  console.log('📚 Seeded Phase 7 Course Documents and RAG Semantic Chunks.');
   console.log('📝 Seeded Phase 5 Assessment, Questions, and Student Submission.');
   console.log('🧠 Seeded Phase 4 Misconceptions and Spaced Repetition Schedules.');
   console.log('📈 Seeded realistic attempts, mastery, and learning curve.');
