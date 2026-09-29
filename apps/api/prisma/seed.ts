@@ -13,6 +13,8 @@ import {
   SubmissionStatus,
   DocumentType,
   DocumentProcessingStatus,
+  AtRiskSeverity,
+  InterventionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -22,7 +24,13 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.atRiskAlert.deleteMany();
+  await prisma.questionCOMapping.deleteMany();
+  await prisma.courseOutcomePO.deleteMany();
+  await prisma.courseOutcome.deleteMany();
+  await prisma.programOutcome.deleteMany();
   await prisma.documentChunk.deleteMany();
+
   await prisma.courseDocument.deleteMany();
   await prisma.aIGeneratedQuestion.deleteMany();
   await prisma.submissionAnswer.deleteMany();
@@ -1100,12 +1108,143 @@ async function main() {
     });
   }
 
+  // ==============================================================================
+  // Phase 8: University Institutional Analytics & OBE (Course/Program Outcomes)
+  // ==============================================================================
+  const po1 = await prisma.programOutcome.create({
+    data: {
+      departmentId: department.id,
+      code: 'PO1',
+      description: 'Engineering Knowledge: Apply knowledge of mathematics and computing fundamentals to complex engineering problems.',
+      nbaCategory: 'Engineering Knowledge',
+    },
+  });
+
+  const po2 = await prisma.programOutcome.create({
+    data: {
+      departmentId: department.id,
+      code: 'PO2',
+      description: 'Problem Analysis: Identify, formulate, and analyze algorithmic problems reaching substantiated conclusions.',
+      nbaCategory: 'Problem Analysis',
+    },
+  });
+
+  const po3 = await prisma.programOutcome.create({
+    data: {
+      departmentId: department.id,
+      code: 'PO3',
+      description: 'Design/Development of Solutions: Design solutions for complex algorithmic problems with verified time-space trade-offs.',
+      nbaCategory: 'Design/Development of Solutions',
+    },
+  });
+
+  const po4 = await prisma.programOutcome.create({
+    data: {
+      departmentId: department.id,
+      code: 'PO4',
+      description: 'Conduct Investigations: Use research-based knowledge to analyze data structures and algorithmic invariants.',
+      nbaCategory: 'Conduct Investigations',
+    },
+  });
+
+  const co1 = await prisma.courseOutcome.create({
+    data: {
+      courseId: dsaCourse.id,
+      code: 'CO1',
+      description: 'Analyze asymptotic complexity and space bounds for linear and contiguous memory data structures.',
+      targetAttainment: 0.70,
+      actualAttainment: 0.78,
+    },
+  });
+
+  const co2 = await prisma.courseOutcome.create({
+    data: {
+      courseId: dsaCourse.id,
+      code: 'CO2',
+      description: 'Implement and calibrate balanced search trees with strict rotational invariant preservation.',
+      targetAttainment: 0.70,
+      actualAttainment: 0.72,
+    },
+  });
+
+  const co3 = await prisma.courseOutcome.create({
+    data: {
+      courseId: dsaCourse.id,
+      code: 'CO3',
+      description: 'Formulate optimal dynamic programming and memoization state transitions for multi-stage decision problems.',
+      targetAttainment: 0.70,
+      actualAttainment: 0.54, // Lagging CO for intervention demonstration
+    },
+  });
+
+  const co4 = await prisma.courseOutcome.create({
+    data: {
+      courseId: dsaCourse.id,
+      code: 'CO4',
+      description: 'Formulate graph traversal, topological sorting, and shortest-path models for connected systems.',
+      targetAttainment: 0.70,
+      actualAttainment: 0.66,
+    },
+  });
+
+  // CO-PO Matrix Mappings (NBA/NAAC correlation: 1: Low, 2: Moderate, 3: Substantial)
+  await prisma.courseOutcomePO.createMany({
+    data: [
+      { courseOutcomeId: co1.id, programOutcomeId: po1.id, correlationLevel: 3 },
+      { courseOutcomeId: co1.id, programOutcomeId: po2.id, correlationLevel: 3 },
+      { courseOutcomeId: co2.id, programOutcomeId: po2.id, correlationLevel: 2 },
+      { courseOutcomeId: co2.id, programOutcomeId: po3.id, correlationLevel: 3 },
+      { courseOutcomeId: co3.id, programOutcomeId: po1.id, correlationLevel: 2 },
+      { courseOutcomeId: co3.id, programOutcomeId: po2.id, correlationLevel: 3 },
+      { courseOutcomeId: co3.id, programOutcomeId: po3.id, correlationLevel: 3 },
+      { courseOutcomeId: co4.id, programOutcomeId: po2.id, correlationLevel: 3 },
+      { courseOutcomeId: co4.id, programOutcomeId: po3.id, correlationLevel: 2 },
+      { courseOutcomeId: co4.id, programOutcomeId: po4.id, correlationLevel: 2 },
+    ],
+  });
+
+  // Map existing questions to Course Outcomes
+  if (createdQuestions.length >= 4) {
+    await prisma.questionCOMapping.createMany({
+      data: [
+        { questionId: createdQuestions[0].id, courseOutcomeId: co1.id, weight: 1.0 },
+        { questionId: createdQuestions[1].id, courseOutcomeId: co1.id, weight: 1.0 },
+        { questionId: createdQuestions[2].id, courseOutcomeId: co2.id, weight: 1.0 },
+        { questionId: createdQuestions[3].id, courseOutcomeId: co2.id, weight: 1.0 },
+      ],
+      skipDuplicates: true,
+    });
+  }
+
+  // Seed At-Risk Student Predictive Alerts
+  await prisma.atRiskAlert.createMany({
+    data: [
+      {
+        studentId: studentProfile.id,
+        severity: AtRiskSeverity.HIGH,
+        status: InterventionStatus.PENDING,
+        triggerReason: 'Critical mastery deficiency in Dynamic Programming (31% mastery) paired with 7 days of practice inactivity following 3 consecutive distractor traps on recursion invariants.',
+        suggestedIntervention: 'Prescribe Socratic interactive recursion walkthrough and schedule 1-on-1 counsellor academic advisory session.',
+      },
+      {
+        studentId: studentProfile.id,
+        severity: AtRiskSeverity.MEDIUM,
+        status: InterventionStatus.IN_PROGRESS,
+        triggerReason: 'Recurrent misconception detected in AVL Tree rotation invariants (Boundary Edge Case failure rate > 50%).',
+        suggestedIntervention: 'Direct student to Lecture 04 RAG slides and assign targeted balanced-tree remediation pack.',
+        actionNotes: 'Counsellor initiated notification; mentee reviewed Lecture 04 Slide Chunk 1.',
+      },
+    ],
+  });
+
+  console.log('🏛️ Seeded Phase 8 OBE Program Outcomes, Course Outcomes, and At-Risk Predictive Alerts.');
   console.log('📚 Seeded Phase 7 Course Documents and RAG Semantic Chunks.');
   console.log('📝 Seeded Phase 5 Assessment, Questions, and Student Submission.');
   console.log('🧠 Seeded Phase 4 Misconceptions and Spaced Repetition Schedules.');
   console.log('📈 Seeded realistic attempts, mastery, and learning curve.');
   console.log('✅ CLIAS Database Seeding Complete!');
 }
+
 
 main()
   .catch((e) => {

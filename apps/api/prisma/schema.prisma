@@ -107,6 +107,7 @@ model Department {
   code        String
   programs    Program[]
   courses     Course[]
+  programOutcomes ProgramOutcome[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -138,6 +139,7 @@ model Course {
   practiceSessions PracticeSession[]
   assessments  Assessment[]
   documents    CourseDocument[]
+  courseOutcomes CourseOutcome[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -206,6 +208,7 @@ model StudentProfile {
   misconceptions      StudentMisconception[]
   spacedSchedules     SpacedRepetitionSchedule[]
   assessmentSubmissions AssessmentSubmission[]
+  atRiskAlerts        AtRiskAlert[]
 }
 
 model FacultyProfile {
@@ -237,6 +240,7 @@ model Question {
   aiConversations AIConversation[]
   assessmentQuestions AssessmentQuestion[]
   submissionAnswers   SubmissionAnswer[]
+  coMappings          QuestionCOMapping[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -624,4 +628,87 @@ model DocumentChunk {
 
   @@index([documentId, chunkIndex])
 }
+
+enum AtRiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InterventionStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
+model ProgramOutcome {
+  id             String            @id @default(uuid())
+  departmentId   String
+  department     Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  code           String            // e.g. "PO1", "PO2"
+  description    String            @db.Text
+  nbaCategory    String            @default("Engineering Knowledge")
+  courseOutcomes CourseOutcomePO[]
+  createdAt      DateTime          @default(now())
+
+  @@unique([departmentId, code])
+}
+
+model CourseOutcome {
+  id               String              @id @default(uuid())
+  courseId         String
+  course           Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  code             String              // e.g. "CO1", "CO2"
+  description      String              @db.Text
+  targetAttainment Float               @default(0.70)
+  actualAttainment Float               @default(0.0)
+  programOutcomes  CourseOutcomePO[]
+  questionMappings QuestionCOMapping[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([courseId, code])
+}
+
+model CourseOutcomePO {
+  id               String         @id @default(uuid())
+  courseOutcomeId  String
+  courseOutcome    CourseOutcome  @relation(fields: [courseOutcomeId], references: [id], onDelete: Cascade)
+  programOutcomeId String
+  programOutcome   ProgramOutcome @relation(fields: [programOutcomeId], references: [id], onDelete: Cascade)
+  correlationLevel Int            @default(2) // 1: Low, 2: Moderate, 3: Substantial (NBA/NAAC standard)
+
+  @@unique([courseOutcomeId, programOutcomeId])
+}
+
+model QuestionCOMapping {
+  id              String        @id @default(uuid())
+  questionId      String
+  question        Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  courseOutcomeId String
+  courseOutcome   CourseOutcome @relation(fields: [courseOutcomeId], references: [id], onDelete: Cascade)
+  weight          Float         @default(1.0)
+
+  @@unique([questionId, courseOutcomeId])
+}
+
+model AtRiskAlert {
+  id                    String             @id @default(uuid())
+  studentId             String
+  student               StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  counsellorId          String?
+  severity              AtRiskSeverity     @default(MEDIUM)
+  status                InterventionStatus @default(PENDING)
+  triggerReason         String             @db.Text
+  suggestedIntervention String             @db.Text
+  actionNotes           String?            @db.Text
+  resolvedAt            DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([studentId, severity, status])
+}
+
 
