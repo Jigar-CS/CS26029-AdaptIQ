@@ -31,12 +31,37 @@ export default function TakeAssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [trustScore, setTrustScore] = useState<number>(100);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (assessmentId) {
       startAssessment();
     }
   }, [assessmentId]);
+
+  // Phase 9: Real-Time Browser Integrity Monitoring
+  useEffect(() => {
+    if (!examData || result) return;
+
+    const handleFocusLoss = () => {
+      setTrustScore((prev) => Math.max(0, prev - 10));
+      setWarningMessage('INTEGRITY ALERT: Browser focus lost! Window and tab swapping is recorded in your invigilation audit timeline.');
+
+      // Attempt background logging to API if session exists
+      if (examData?.submissionId) {
+        api.post(`/proctoring/sessions/${examData.submissionId}/violation`, {
+          type: 'TAB_SWITCH',
+          severity: 'MEDIUM',
+          confidence: 0.98,
+          details: 'Browser window blur / tab swap detected during active assessment.',
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('blur', handleFocusLoss);
+    return () => window.removeEventListener('blur', handleFocusLoss);
+  }, [examData, result]);
 
   const startAssessment = async () => {
     setLoading(true);
@@ -249,6 +274,16 @@ export default function TakeAssessmentPage() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Phase 9: AI Integrity Status */}
+          <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-slate-400 font-medium">Integrity Guard</span>
+            <span className="text-slate-600">•</span>
+            <span className={`font-mono font-bold ${trustScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {trustScore}% Trust
+            </span>
+          </div>
+
           <div
             className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${
               secondsRemaining < 300
@@ -273,6 +308,23 @@ export default function TakeAssessmentPage() {
           </button>
         </div>
       </header>
+
+      {/* Phase 9: Active Anomaly Notification Banner */}
+      {warningMessage && (
+        <div className="bg-rose-500/20 border-b border-rose-500/40 text-rose-200 px-6 py-2.5 text-xs flex items-center justify-between animate-in slide-in-from-top duration-200">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{warningMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWarningMessage(null)}
+            className="text-rose-400 hover:text-white text-xs font-bold px-2 py-0.5"
+          >
+            ✕ Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main taking workspace */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">

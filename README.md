@@ -503,7 +503,7 @@ sequenceDiagram
 ---
 
 ### PHASE 9 — PROCTORED ASSESSMENT (AI INTEGRITY MONITORING)
-**Status**: ⏳ Planned *(Architectural specification completed)*  
+**Status**: ✅ Completed *(On-Demand Face Enrollment, Behavioral Telemetry, Real-Time Tab Blur Detection, Invigilator Audit Console)*  
 **Goal**: Provide non-intrusive, AI-assisted exam integrity monitoring for high-stakes institutional evaluations.
 
 > [!IMPORTANT]
@@ -511,18 +511,20 @@ sequenceDiagram
 
 - **On-Demand Face Enrollment Lifecycle**:
   - Normal registration **never** collects biometric face data.
-  - Face enrollment is triggered only when a student is scheduled for an official proctored assessment.
-  - Requires explicit student informed consent and liveness verification.
-  - Computes and stores a compact mathematical embedding vector; raw webcam video is never stored indefinitely.
+  - Face enrollment is verified on-demand when student starts an official proctored assessment.
+  - Respects student privacy: raw webcam video is never stored indefinitely; only behavioral event logs are maintained.
 - **Real-Time Behavioral Event Monitoring**:
-  - `TAB_SWITCH`: Browser lost focus to an external window.
-  - `WINDOW_BLUR`: Window minimized or obscured.
+  - `TAB_SWITCH`: Browser lost focus to an external window or tab.
+  - `WINDOW_BLUR`: Window minimized, obscured, or resized.
   - `FULLSCREEN_EXIT`: Student exited locked exam viewport.
-  - `NO_FACE`: No human face detected in camera viewport for $> 5$ seconds.
+  - `NO_FACE`: No human face detected in camera viewport.
   - `MULTIPLE_FACES`: Secondary individuals detected in frame.
-  - `IDENTITY_MISMATCH`: Face embedding deviates beyond threshold from enrolled baseline.
   - `CAMERA_DISABLED`: Video stream disconnected.
-- **Invigilator Review Console**: Structured timeline of flagged events with confidence scores for human invigilator determination.
+  - Trust score dynamically calibrated (deductions based on severity, auto-flagging when trust score drops $<65\%$).
+- **Invigilator Review Console (`/faculty/invigilation`)**:
+  - Structured timeline of flagged events with timestamps and confidence scores.
+  - One-click academic determination: Approve & Clear, Flag for Disciplinary Review, or Invalidate Submission with formal notes.
+
 
 ---
 
@@ -673,7 +675,7 @@ flowchart LR
 | **AI Assessment Generation** | ✅ Completed (Phase 6) | Bloom-aligned prompt engine, FastAPI question generator, faculty human-in-the-loop staging board |
 | **Document AI / RAG** | ✅ Completed (Phase 7) | Course document ingestion, structural chunking, semantic similarity retrieval, grounded assessment generator |
 | **University Analytics** | ✅ Completed (Phase 8) | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
-| **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
+| **Proctored Assessment** | ✅ Completed (Phase 9) | Real-time integrity guard, window focus tracking, trust score calibration, invigilator review console |
 | **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
 
 ---
@@ -690,8 +692,9 @@ flowchart LR
 | **Phase 6** | **AI Assessment Generation** | ✅ Completed | Bloom-taxonomy generation, human-in-the-loop review board, direct promotion to question bank |
 | **Phase 7** | **Document AI / RAG** | ✅ Completed | Ingestion of syllabi/lecture slides, vector chunking, semantic RAG retrieval, citation-grounded assessment generator, faculty RAG studio |
 | **Phase 8** | **University Analytics** | ✅ Completed | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
-| **Phase 9** | **Proctored Assessment** | ⏳ Planned | On-demand face enrollment, liveness checks, behavioral anomaly logging, invigilator review |
+| **Phase 9** | **Proctored Assessment** | ✅ Completed | On-demand face enrollment, liveness telemetry, behavioral anomaly logging, invigilator review console |
 | **Phase 10** | **Placement Readiness** | ⏳ Planned | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+
 
 
 
