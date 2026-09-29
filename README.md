@@ -482,22 +482,23 @@ sequenceDiagram
 ---
 
 ### PHASE 8 — UNIVERSITY ANALYTICS
-**Status**: ⚠️ Partially Implemented *(Data schemas and role shells in place)*  
+**Status**: ✅ Completed *(OBE Attainment, CO-PO Matrix, At-Risk Early Warning Queue, Multi-Tier Institutional Consoles)*  
 **Goal**: Provide granular, actionable dashboards tailored to each institutional tier.
 
 - **Student Console**: *"What should I practice next to boost my lowest skill before mid-terms?"*
 - **Faculty Console**: *"Which topics in CS301 are causing the highest failure rates across Division A?"*
-- **Counsellor Console**:
+- **Counsellor Console (`/counsellor/dashboard`)**:
   - Monitored cohort overview scoped strictly via `CounsellorAssignment`.
-  - Early warning indicators: sharp drop in practice frequency, low mastery in foundational topics.
-  - Student timeline drill-down for 1-on-1 academic mentorship meetings.
-- **HOD Console**:
-  - Department-wide curriculum mastery heatmaps across semesters.
-  - Division-to-division comparative benchmarking.
-  - Course-level learning velocity and question bank health metrics.
-- **Institutional Head Console**:
+  - Predictive early warning queue for students at risk of course failure or severe knowledge decay.
+  - Severity-graded triage (`CRITICAL`, `HIGH`, `MEDIUM`), diagnostic trigger explanations, and one-click mentorship intervention tracking.
+- **HOD Console (`/hod/dashboard`)**:
+  - Outcome-Based Education (OBE) Course Outcome (CO1..CO4) direct attainment from student assessments.
+  - Program Outcome (PO) weighted correlation matrix conforming to NBA Criteria 3 & 4.
+  - Division-to-division comparative benchmarking (Divisions A, B, C) and curriculum health.
+- **Institutional Head Console (`/head/dashboard`)**:
   - High-level macro indicators across engineering departments (CSPIT, etc.).
-  - Longitudinal cohort readiness trends and NBA/NAAC accreditation evidence.
+  - Longitudinal cohort readiness trends and NBA/NAAC accreditation compliance.
+
 
 ---
 
@@ -671,6 +672,7 @@ flowchart LR
 | **Assessment & Exam Engine** | ✅ Completed (Phase 5) | Timed exams, question randomization, auto-save, auto-grading, student test portal |
 | **AI Assessment Generation** | ✅ Completed (Phase 6) | Bloom-aligned prompt engine, FastAPI question generator, faculty human-in-the-loop staging board |
 | **Document AI / RAG** | ✅ Completed (Phase 7) | Course document ingestion, structural chunking, semantic similarity retrieval, grounded assessment generator |
+| **University Analytics** | ✅ Completed (Phase 8) | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
 | **Proctored Assessment** | ⏳ Planned | Face enrollment and behavioral integrity monitoring scheduled for Phase 9 |
 | **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
 
@@ -687,9 +689,10 @@ flowchart LR
 | **Phase 5** | **Assessment Engine** | ✅ Completed | Faculty exam authoring studio, timed countdowns, randomized questions, auto-grading engine, itemized student review |
 | **Phase 6** | **AI Assessment Generation** | ✅ Completed | Bloom-taxonomy generation, human-in-the-loop review board, direct promotion to question bank |
 | **Phase 7** | **Document AI / RAG** | ✅ Completed | Ingestion of syllabi/lecture slides, vector chunking, semantic RAG retrieval, citation-grounded assessment generator, faculty RAG studio |
-| **Phase 8** | **University Analytics** | ⚠️ Partially Implemented | Foundational schemas and role consoles active; cross-cohort aggregated heatmaps planned |
+| **Phase 8** | **University Analytics** | ✅ Completed | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
 | **Phase 9** | **Proctored Assessment** | ⏳ Planned | On-demand face enrollment, liveness checks, behavioral anomaly logging, invigilator review |
 | **Phase 10** | **Placement Readiness** | ⏳ Planned | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+
 
 
 ---
