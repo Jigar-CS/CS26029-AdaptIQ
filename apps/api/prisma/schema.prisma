@@ -157,6 +157,7 @@ model Topic {
   aiConversations   AIConversation[]
   misconceptions    Misconception[]
   spacedSchedules   SpacedRepetitionSchedule[]
+  aiGeneratedQuestions AIGeneratedQuestion[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -536,5 +537,42 @@ model SubmissionAnswer {
   timeSpentSeconds Int                  @default(0)
 
   @@index([submissionId, questionId])
+}
+
+enum AIGenerationStatus {
+  STAGED
+  APPROVED
+  REJECTED
+  EXPORTED
+}
+
+enum BloomTaxonomyLevel {
+  REMEMBER
+  UNDERSTAND
+  APPLY
+  ANALYZE
+  EVALUATE
+  CREATE
+}
+
+model AIGeneratedQuestion {
+  id                 String             @id @default(uuid())
+  topicId            String
+  topic              Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  promptQuery        String?            @db.Text
+  bloomLevel         BloomTaxonomyLevel @default(APPLY)
+  difficulty         QuestionDifficulty @default(MEDIUM)
+  questionText       String             @db.Text
+  explanation        String             @db.Text
+  optionsJson        String             @db.Text
+  status             AIGenerationStatus @default(STAGED)
+  facultyFeedback    String?            @db.Text
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  approvedQuestionId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([topicId, status])
 }
 
