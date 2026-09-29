@@ -14,6 +14,7 @@ import { AiAssessmentModule } from './ai-assessment/ai-assessment.module';
 import { RagModule } from './rag/rag.module';
 import { ProctoringModule } from './proctoring/proctoring.module';
 import { PlacementModule } from './placement/placement.module';
+import { CodingModule } from './coding/coding.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PlacementModule } from './placement/placement.module';
     RagModule,
     ProctoringModule,
     PlacementModule,
+    CodingModule,
   ],
 })
 export class AppModule {}
