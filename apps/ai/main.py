@@ -525,7 +525,75 @@ def generate_grounded_quiz(req: GroundedQuizRequest):
         questions=questions[:req.count]
     )
 
+# ==============================================================================
+# Phase 9: AI Assessment Integrity & Proctoring Telemetry
+# ==============================================================================
+
+class ProctoringFrameRequest(BaseModel):
+    face_detected: bool = True
+    multiple_faces: bool = False
+    head_pose: str = "FORWARD" # "FORWARD", "LEFT", "RIGHT", "DOWN", "AWAY"
+    noise_level: float = 0.1
+    camera_active: bool = True
+
+class ProctoringAnalysisResponse(BaseModel):
+    anomaly_detected: bool
+    violation_type: Optional[str] = None
+    severity: str = "LOW"
+    confidence: float = 0.95
+    recommended_action: str = "NONE"
+
+@app.post("/api/v1/ai/proctoring/analyze-frame", response_model=ProctoringAnalysisResponse)
+def analyze_proctoring_frame(req: ProctoringFrameRequest):
+    """
+    Analyzes telemetry signals from student camera stream to detect behavioral anomalies.
+    """
+    if not req.camera_active:
+        return ProctoringAnalysisResponse(
+            anomaly_detected=True,
+            violation_type="CAMERA_DISABLED",
+            severity="HIGH",
+            confidence=0.99,
+            recommended_action="PROMPT_STUDENT_RECONNECT_CAMERA"
+        )
+
+    if req.multiple_faces:
+        return ProctoringAnalysisResponse(
+            anomaly_detected=True,
+            violation_type="MULTIPLE_FACES",
+            severity="HIGH",
+            confidence=0.96,
+            recommended_action="FLAG_INVIGILATOR_SECONDARY_INDIVIDUAL"
+        )
+
+    if not req.face_detected:
+        return ProctoringAnalysisResponse(
+            anomaly_detected=True,
+            violation_type="NO_FACE",
+            severity="MEDIUM",
+            confidence=0.94,
+            recommended_action="WARN_STUDENT_RETURN_TO_FRAME"
+        )
+
+    if req.head_pose in ["LEFT", "RIGHT", "AWAY"]:
+        return ProctoringAnalysisResponse(
+            anomaly_detected=True,
+            violation_type="WINDOW_BLUR",
+            severity="LOW",
+            confidence=0.88,
+            recommended_action="SUBTLE_FOCUS_REMINDER"
+        )
+
+    return ProctoringAnalysisResponse(
+        anomaly_detected=False,
+        violation_type=None,
+        severity="LOW",
+        confidence=0.99,
+        recommended_action="CONTINUE_EXAM"
+    )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
 
