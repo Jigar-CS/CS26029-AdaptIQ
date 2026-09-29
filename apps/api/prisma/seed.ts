@@ -19,6 +19,8 @@ import {
   ProctoringSessionStatus,
   IntegrityFlagSeverity,
   CareerRoleType,
+  ProgrammingLanguage,
+  JudgeSubmissionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -28,6 +30,9 @@ async function main() {
   console.log('🌱 Starting CLIAS database seeding...');
 
   // 1. Clear existing records in dependency order
+  await prisma.codeSubmission.deleteMany();
+  await prisma.testCase.deleteMany();
+  await prisma.codingProblem.deleteMany();
   await prisma.placementMockExam.deleteMany();
   await prisma.studentPlacementProfile.deleteMany();
   await prisma.careerRoleBenchmark.deleteMany();
@@ -1362,6 +1367,120 @@ async function main() {
     },
   });
 
+  // ============================================================================
+  // Phase 11: In-Browser Coding Problems & Judge Test Cases
+  // ============================================================================
+
+  const probTwoSum = await prisma.codingProblem.create({
+    data: {
+      slug: 'two-sum',
+      title: 'Two Sum',
+      description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.',
+      difficulty: QuestionDifficulty.EASY,
+      tags: 'Array, Hash Table, Two Pointers',
+      constraints: '• 2 <= nums.length <= 10^4\n• -10^9 <= nums[i] <= 10^9\n• -10^9 <= target <= 10^9\n• Only one valid answer exists.',
+      hints: JSON.stringify([
+        'A brute force approach scans all pairs in O(N^2) time. Can you do it in O(N) using a Hash Map?',
+        'As you iterate through the array, check if target - nums[i] is already in your lookup map.',
+      ]),
+      starterCodes: JSON.stringify({
+        PYTHON: 'def twoSum(nums: list[int], target: int) -> list[int]:\n    # Write your solution here\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen:\n            return [seen[diff], i]\n        seen[num] = i\n    return []\n',
+        JAVASCRIPT: 'function twoSum(nums, target) {\n    const map = new Map();\n    for (let i = 0; i < nums.length; i++) {\n        const diff = target - nums[i];\n        if (map.has(diff)) return [map.get(diff), i];\n        map.set(nums[i], i);\n    }\n    return [];\n}',
+        CPP: '#include <vector>\n#include <unordered_map>\n\nstd::vector<int> twoSum(std::vector<int>& nums, int target) {\n    std::unordered_map<int, int> map;\n    for (int i = 0; i < nums.size(); i++) {\n        int diff = target - nums[i];\n        if (map.count(diff)) return {map[diff], i};\n        map[nums[i]] = i;\n    }\n    return {};\n}',
+        JAVA: 'import java.util.HashMap;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        HashMap<Integer, Integer> map = new HashMap<>();\n        for (int i = 0; i < nums.length; i++) {\n            int diff = target - nums[i];\n            if (map.containsKey(diff)) return new int[] { map.get(diff), i };\n            map.put(nums[i], i);\n        }\n        return new int[0];\n    }\n}',
+      }),
+      testCases: {
+        create: [
+          {
+            input: 'nums = [2, 7, 11, 15], target = 9',
+            expectedOutput: '[0, 1]',
+            isHidden: false,
+            explanation: 'nums[0] + nums[1] == 2 + 7 == 9, return [0, 1].',
+            order: 1,
+          },
+          {
+            input: 'nums = [3, 2, 4], target = 6',
+            expectedOutput: '[1, 2]',
+            isHidden: false,
+            explanation: 'nums[1] + nums[2] == 2 + 4 == 6, return [1, 2].',
+            order: 2,
+          },
+          {
+            input: 'nums = [3, 3], target = 6',
+            expectedOutput: '[0, 1]',
+            isHidden: true,
+            explanation: 'Boundary test with identical duplicate values.',
+            order: 3,
+          },
+        ],
+      },
+    },
+  });
+
+  const probValidParentheses = await prisma.codingProblem.create({
+    data: {
+      slug: 'valid-parentheses',
+      title: 'Valid Parentheses',
+      description: 'Given a string `s` containing just the characters `(`, `)`, `{`, `}`, `[` and `]`, determine if the input string is valid.\n\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.',
+      difficulty: QuestionDifficulty.EASY,
+      tags: 'Stack, String, Bracket Matching',
+      constraints: '• 1 <= s.length <= 10^4\n• s consists of parentheses only: ()[]{}',
+      hints: JSON.stringify([
+        'Use a LIFO stack to remember the most recently opened bracket.',
+        'When you encounter a closing bracket, check if it matches the top element of the stack.',
+      ]),
+      starterCodes: JSON.stringify({
+        PYTHON: 'def isValid(s: str) -> bool:\n    stack = []\n    mapping = {")": "(", "}": "{", "]": "["}\n    for char in s:\n        if char in mapping:\n            top = stack.pop() if stack else "#"\n            if mapping[char] != top:\n                return False\n        else:\n            stack.append(char)\n    return not stack\n',
+        JAVASCRIPT: 'function isValid(s) {\n    const stack = [];\n    const map = { ")": "(", "}": "{", "]": "[" };\n    for (const char of s) {\n        if (map[char]) {\n            if (stack.pop() !== map[char]) return false;\n        } else {\n            stack.push(char);\n        }\n    }\n    return stack.length === 0;\n}',
+        CPP: '#include <string>\n#include <stack>\n#include <unordered_map>\n\nbool isValid(std::string s) {\n    std::stack<char> st;\n    std::unordered_map<char, char> map = {{\')\', \'(\'}, {\'}\', \'{\'}, {\']\', \'[\'}};\n    for (char c : s) {\n        if (map.count(c)) {\n            if (st.empty() || st.top() != map[c]) return false;\n            st.pop();\n        } else {\n            st.push(c);\n        }\n    }\n    return st.empty();\n}',
+        JAVA: 'import java.util.Stack;\n\nclass Solution {\n    public boolean isValid(String s) {\n        Stack<Character> stack = new Stack<>();\n        for (char c : s.toCharArray()) {\n            if (c == \'(\') stack.push(\')\');\n            else if (c == \'{\') stack.push(\'}\');\n            else if (c == \'[\') stack.push(\']\');\n            else if (stack.isEmpty() || stack.pop() != c) return false;\n        }\n        return stack.isEmpty();\n    }\n}',
+      }),
+      testCases: {
+        create: [
+          {
+            input: 's = "()"',
+            expectedOutput: 'true',
+            isHidden: false,
+            order: 1,
+          },
+          {
+            input: 's = "()[]{}"',
+            expectedOutput: 'true',
+            isHidden: false,
+            order: 2,
+          },
+          {
+            input: 's = "(]"',
+            expectedOutput: 'false',
+            isHidden: false,
+            order: 3,
+          },
+        ],
+      },
+    },
+  });
+
+  // Seed Code Submission for Rahul Patel
+  await prisma.codeSubmission.create({
+    data: {
+      studentId: studentProfile.id,
+      problemId: probTwoSum.id,
+      language: ProgrammingLanguage.PYTHON,
+      sourceCode: 'def twoSum(nums, target):\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen:\n            return [seen[diff], i]\n        seen[num] = i\n    return []',
+      status: JudgeSubmissionStatus.ACCEPTED,
+      executionTimeMs: 48,
+      memoryUsedKb: 14200,
+      testCasesPassed: 3,
+      totalTestCases: 3,
+      judgeDetails: JSON.stringify([
+        { testCase: 1, status: 'PASSED', timeMs: 14, output: '[0, 1]' },
+        { testCase: 2, status: 'PASSED', timeMs: 16, output: '[1, 2]' },
+        { testCase: 3, status: 'PASSED', timeMs: 18, output: '[0, 1]' },
+      ]),
+    },
+  });
+
+  console.log('💻 Seeded Phase 11 Coding Problems, Test Cases, and Automated Judge Submissions.');
   console.log('🚀 Seeded Phase 10 Career Role Benchmarks, Skill Gap Profile, and Placement Mock Exam.');
   console.log('🏛️ Seeded Phase 8 OBE Program Outcomes, Course Outcomes, and At-Risk Predictive Alerts.');
   console.log('📚 Seeded Phase 7 Course Documents and RAG Semantic Chunks.');

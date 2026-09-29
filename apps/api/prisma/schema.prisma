@@ -140,6 +140,7 @@ model Course {
   assessments  Assessment[]
   documents    CourseDocument[]
   courseOutcomes CourseOutcome[]
+  codingProblems CodingProblem[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -211,6 +212,7 @@ model StudentProfile {
   atRiskAlerts        AtRiskAlert[]
   proctoringSessions  ProctoringSession[]
   placementProfile    StudentPlacementProfile?
+  codeSubmissions     CodeSubmission[]
 }
 
 model FacultyProfile {
@@ -831,6 +833,84 @@ model PlacementMockExam {
   difficulty      QuestionDifficulty @default(HARD)
   createdAt       DateTime           @default(now())
 }
+
+// ==============================================================================
+// Phase 11: In-Browser Coding Assessment Engine & Automated Code Judge
+// ==============================================================================
+
+enum ProgrammingLanguage {
+  PYTHON
+  CPP
+  JAVA
+  JAVASCRIPT
+}
+
+enum JudgeSubmissionStatus {
+  PENDING
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+}
+
+model CodingProblem {
+  id              String             @id @default(uuid())
+  slug            String             @unique
+  title           String
+  description     String             @db.Text
+  difficulty      QuestionDifficulty @default(MEDIUM)
+  starterCodes    String             @db.Text // JSON: { "PYTHON": "...", "CPP": "...", ... }
+  constraints     String             @db.Text
+  hints           String?            @db.Text // JSON: array of strings
+  tags            String?            // e.g. "Array, Hash Table, Two Pointers"
+  courseId        String?
+  course          Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  testCases       TestCase[]
+  submissions     CodeSubmission[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([difficulty])
+}
+
+model TestCase {
+  id               String        @id @default(uuid())
+  problemId        String
+  problem          CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  input            String        @db.Text
+  expectedOutput   String        @db.Text
+  isHidden         Boolean       @default(false)
+  explanation      String?       @db.Text
+  timeLimitMs      Int           @default(2000)
+  memoryLimitMb    Int           @default(128)
+  order            Int           @default(0)
+  createdAt        DateTime      @default(now())
+
+  @@index([problemId])
+}
+
+model CodeSubmission {
+  id               String                @id @default(uuid())
+  studentId        String
+  student          StudentProfile        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  problemId        String
+  problem          CodingProblem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  language         ProgrammingLanguage   @default(PYTHON)
+  sourceCode       String                @db.Text
+  status           JudgeSubmissionStatus @default(PENDING)
+  executionTimeMs  Int                   @default(0)
+  memoryUsedKb     Int                   @default(0)
+  testCasesPassed  Int                   @default(0)
+  totalTestCases   Int                   @default(0)
+  judgeDetails     String?               @db.Text // JSON with per-testcase execution output
+  createdAt        DateTime              @default(now())
+
+  @@index([studentId, problemId])
+  @@index([status])
+}
+
 
 
 
