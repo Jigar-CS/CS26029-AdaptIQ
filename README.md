@@ -526,6 +526,19 @@ sequenceDiagram
 
 ---
 
+### PHASE 11 — IN-BROWSER CODING ASSESSMENT ENGINE & AUTOMATED CODE JUDGE
+**Status**: ✅ Completed *(Algorithmic Problem Library, Multi-Language Sandbox, Automated Judge Engine, Live Code Arena)*  
+**Goal**: Provide in-browser algorithmic coding assessments with automated test case validation and asymptotic profiling.
+
+- **Completed Deliverables**:
+  - **Coding Problem Library (`/student/coding`)**: Curated algorithmic problems (Two Sum, Valid Parentheses, Invert Binary Tree) with difficulty ratings, complexity constraints, and algorithmic hints.
+  - **Multi-Language In-Browser Code Editor (`/student/coding/[slug]`)**: Interactive coding environment supporting Python 3.11, JavaScript (Node.js 20), C++20 (GCC 13), and Java 21 with language-specific starter codes.
+  - **Automated Sandboxed Execution & Judge**: Server-side test case evaluation with sub-millisecond execution runtime and memory usage telemetry.
+  - **Itemized Verdict Inspector**: Immediate per-testcase feedback (`ACCEPTED`, `WRONG_ANSWER`, `COMPILATION_ERROR`) with input, expected output, and actual output validation tabs.
+  - **Submission History & Profiling**: Persistent submission records tracking student solutions, asymptotic runtimes, and memory consumption.
+
+---
+
 ## 10. Long-Term Learning Intelligence Model
 
 ```mermaid
@@ -584,23 +597,18 @@ flowchart LR
 | `SkillMastery` | UUID | Live topic mastery score (0-100), attempt count, correct count, and lastPracticedAt |
 | `LearningHistory` | UUID | Immutable chronological snapshot of mastery score with reason enum |
 | `CounsellorAssignment` | UUID | Strict mapping table assigning specific student profiles to counsellor user accounts |
-
-### Planned Database Entities (Upcoming Phases)
-
-| Entity | Target Phase | Purpose |
-|---|---|---|
-| `Test` / `Assessment` | Phase 5 | Faculty exam definition (duration, time window, passing score, assigned divisions) |
-| `TestQuestion` | Phase 5 | Association between tests and specific question bank items with custom weighting |
-| `TestAssignment` | Phase 5 | Scoped distribution of tests to specific cohorts, programs, or student groups |
-| `TestAttempt` | Phase 5 | Student exam sitting with start/finish timestamps, final score, and status |
-| `TestAnswer` | Phase 5 | Individual question response within an official test sitting |
-| `LearningResource` | Phase 3 | Curated lecture notes, video links, and textbook chapters linked to topics |
-| `AIConversation` | Phase 3 | Socratic tutoring chat messages and context history during practice remediation |
-| `Misconception` | Phase 4 | Canonical taxonomy of common conceptual mistakes per topic |
-| `StudentMisconception`| Phase 4 | Tracking occurrences of diagnosed misconceptions per student |
-| `ProctorSession` | Phase 9 | Exam proctoring session state, face verification status, and consent record |
-| `ProctorEvent` | Phase 9 | Time-stamped behavioral alerts (tab switch, no face, multiple faces, anomaly score) |
-| `CareerRoleProfile` | Phase 10 | Target industry role benchmarks (e.g., SDE, Data Analyst) and required topic weights |
+| `CourseDocument` | UUID | Syllabi, reference texts, and lecture presentations for RAG ingestion |
+| `DocumentChunk` | UUID | Granular structural and semantic embeddings chunks with token counts |
+| `ProgramOutcome` | UUID | Institutional engineering graduate attributes (PO1..PO12) for NBA compliance |
+| `CourseOutcome` | UUID | Course specific competencies (CO1..CO5) with direct attainment tracking |
+| `ProctoringSession` | UUID | Live exam proctoring state, face verification, and trust score telemetry |
+| `ProctoringViolation` | UUID | Behavioral infraction audit logs (tab blur, multiple faces, camera disconnect) |
+| `CareerRoleBenchmark` | UUID | Industry job standards (SDE, Data Analyst, ML Engineer) with target masteries |
+| `StudentPlacementProfile` | UUID | Placement readiness index, verified skills, and identified skill gaps |
+| `PlacementMockExam` | UUID | Industry technical screening assessments with proctored telemetry |
+| `CodingProblem` | UUID | Algorithmic challenges with difficulty, constraints, hints, and starter codes |
+| `TestCase` | UUID | Automated test cases (visible sample & hidden benchmark) with limits |
+| `CodeSubmission` | UUID | Sandboxed code submissions with execution runtime, memory, and status |
 
 ---
 
@@ -642,10 +650,10 @@ flowchart LR
 | **Question Bank** | ✅ Completed | 35+ verified questions across 7 DSA topics, single MCQ support, difficulty tags, explanations |
 | **Learning Analytics Engine** | ✅ Completed (Phase 1 & 2) | Difficulty-weighted EWMA, BKT probability tracing, IRT latent ability, Ebbinghaus decay, prerequisite DAGs |
 | **Super Admin Dashboard** | ✅ Completed | Authorized student CSV upload with diagnostic parsing errors, preview, and batch upsert |
-| **Faculty Dashboard** | ⚠️ Partially Implemented | Functional UI console with CS301 overview and live cohort analytics; exam authoring planned |
-| **Counsellor Dashboard** | ⚠️ Partially Implemented | Functional UI console scoped to `CounsellorAssignment` with decay risk alerts; interventions planned |
-| **HOD Dashboard** | ⚠️ Partially Implemented | Functional UI console for department curriculum health; cross-division comparison planned |
-| **Head Dashboard** | ⚠️ Partially Implemented | Functional UI console for institutional indicators; macro predictive models planned |
+| **Faculty Dashboard** | ✅ Completed (Phase 5, 6, 7, 9) | Exam authoring studio, AI question generator, RAG document studio, invigilation console |
+| **Counsellor Dashboard** | ✅ Completed (Phase 2, 8) | Scoped cohort view via `CounsellorAssignment`, decay alerts, At-Risk triage queue |
+| **HOD Dashboard** | ✅ Completed (Phase 8) | Department-wide OBE Course Outcome (CO1..CO4) direct attainment and CO-PO matrix |
+| **Head Dashboard** | ✅ Completed (Phase 8) | Institutional macro indicators, inter-departmental benchmarking, NBA/NAAC compliance |
 | **AI Microservice (FastAPI)** | ✅ Completed (Phase 3) | FastAPI active with Socratic remediation, chat, distractor diagnosis, and NestJS bridge |
 | **AI Learning Assistant** | ✅ Completed (Phase 3) | Grounded Socratic tutor, distractor diagnosis, 4 interactive actions, and university resources |
 | **Misconception Detection** | ✅ Completed (Phase 4) | Distractor taxonomy, dynamic calibration engine, SM-2 spaced repetition scheduler |
@@ -654,7 +662,8 @@ flowchart LR
 | **Document AI / RAG** | ✅ Completed (Phase 7) | Course document ingestion, structural chunking, semantic similarity retrieval, grounded assessment generator |
 | **University Analytics** | ✅ Completed (Phase 8) | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
 | **Proctored Assessment** | ✅ Completed (Phase 9) | Real-time integrity guard, window focus tracking, trust score calibration, invigilator review console |
-| **Placement Readiness** | ⏳ Planned | Career skill gap benchmarks and mock assessments scheduled for Phase 10 |
+| **Placement Readiness** | ✅ Completed (Phase 10) | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+| **Coding Assessment Arena** | ✅ Completed (Phase 11) | In-browser multi-language code editor, test case runner, automated judge, runtime/memory telemetry |
 
 ---
 
@@ -671,7 +680,9 @@ flowchart LR
 | **Phase 7** | **Document AI / RAG** | ✅ Completed | Ingestion of syllabi/lecture slides, vector chunking, semantic RAG retrieval, citation-grounded assessment generator, faculty RAG studio |
 | **Phase 8** | **University Analytics** | ✅ Completed | Outcome-Based Education (OBE) metrics, CO-PO mapping matrix, At-Risk predictive alerts, Counsellor & HOD institutional dashboards |
 | **Phase 9** | **Proctored Assessment** | ✅ Completed | On-demand face enrollment, liveness telemetry, behavioral anomaly logging, invigilator review console |
-| **Phase 10** | **Placement Readiness** | ⏳ Planned | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+| **Phase 10** | **Placement Readiness** | ✅ Completed | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
+| **Phase 11** | **In-Browser Coding Engine & Judge** | ✅ Completed | In-browser code editor, multi-language sandbox, automated testcase evaluation, runtime/memory judge telemetry |
+
 
 
 

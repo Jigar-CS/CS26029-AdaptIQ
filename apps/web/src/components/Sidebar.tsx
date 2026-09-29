@@ -20,6 +20,7 @@ import {
   LogOut,
   Sparkles,
   Briefcase,
+  Terminal,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -31,6 +32,7 @@ export function Sidebar() {
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
     { name: 'Placement Readiness', href: '/student/placement', icon: Briefcase, badge: 'Phase 10' },
+    { name: 'Coding Arena', href: '/student/coding', icon: Terminal, badge: 'Phase 11' },
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
     { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck, badge: 'Active' },
     { name: 'Learning Curve', href: '/student/dashboard#curve', icon: TrendingUp },
