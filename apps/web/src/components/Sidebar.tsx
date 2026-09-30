@@ -21,6 +21,7 @@ import {
   Sparkles,
   Briefcase,
   Terminal,
+  GitCompare,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -48,6 +49,7 @@ export function Sidebar() {
 
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
+    { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare, badge: 'Phase 12' },
     { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles, badge: 'Active' },
     { name: 'Document AI / RAG', href: '/faculty/documents', icon: FileSpreadsheet, badge: 'Phase 7' },
     { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck, badge: 'Active' },

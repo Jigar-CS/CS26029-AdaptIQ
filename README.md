@@ -539,6 +539,19 @@ sequenceDiagram
 
 ---
 
+### PHASE 12 — CODE PLAGIARISM DETECTION & STRUCTURAL AST SIMILARITY ENGINE
+**Status**: ✅ Completed *(AST Tokenization, Winnowing Fingerprint Engine, Pairwise Clone Detection, Faculty Audit Studio)*  
+**Goal**: Safeguard coding assessment integrity using structural abstract syntax tree tokenization, variable normalization, and pairwise similarity inspection.
+
+- **Completed Deliverables**:
+  - **Structural AST Tokenization Engine**: Language-agnostic token stream normalization stripping comments, formatting, and variable renaming to preserve pure algorithmic control flow.
+  - **Winnowing Fingerprinting Algorithm**: Automated k-gram hashing and winnowing window reduction (`POST /api/v1/ai/plagiarism/compare-ast`) evaluating pairwise Jaccard index similarity.
+  - **Faculty Plagiarism Audit Studio (`/faculty/plagiarism`)**: Interactive console with problem selector, configurable similarity threshold sliders (50%-95%), and summary risk metrics.
+  - **Side-by-Side Synchronized Diff Inspector**: Dual-code comparison pane highlighting matching algorithmic token blocks across student submissions.
+  - **Academic Integrity Verdict Workflow**: Faculty determination actions (`CLEARED`, `FLAGGED`, `PENALIZED`) recording formal disciplinary audit notes in the relational database.
+
+---
+
 ## 10. Long-Term Learning Intelligence Model
 
 ```mermaid
@@ -609,6 +622,8 @@ flowchart LR
 | `CodingProblem` | UUID | Algorithmic challenges with difficulty, constraints, hints, and starter codes |
 | `TestCase` | UUID | Automated test cases (visible sample & hidden benchmark) with limits |
 | `CodeSubmission` | UUID | Sandboxed code submissions with execution runtime, memory, and status |
+| `PlagiarismScan` | UUID | Cross-submission plagiarism scan jobs with similarity thresholds and candidate counts |
+| `PlagiarismMatch` | UUID | Flagged pairwise clones with similarity percentage, matching AST tokens, and verdict |
 
 ---
 
@@ -650,7 +665,7 @@ flowchart LR
 | **Question Bank** | ✅ Completed | 35+ verified questions across 7 DSA topics, single MCQ support, difficulty tags, explanations |
 | **Learning Analytics Engine** | ✅ Completed (Phase 1 & 2) | Difficulty-weighted EWMA, BKT probability tracing, IRT latent ability, Ebbinghaus decay, prerequisite DAGs |
 | **Super Admin Dashboard** | ✅ Completed | Authorized student CSV upload with diagnostic parsing errors, preview, and batch upsert |
-| **Faculty Dashboard** | ✅ Completed (Phase 5, 6, 7, 9) | Exam authoring studio, AI question generator, RAG document studio, invigilation console |
+| **Faculty Dashboard** | ✅ Completed (Phase 5, 6, 7, 9, 12) | Exam authoring studio, AI question generator, RAG document studio, invigilation console, plagiarism studio |
 | **Counsellor Dashboard** | ✅ Completed (Phase 2, 8) | Scoped cohort view via `CounsellorAssignment`, decay alerts, At-Risk triage queue |
 | **HOD Dashboard** | ✅ Completed (Phase 8) | Department-wide OBE Course Outcome (CO1..CO4) direct attainment and CO-PO matrix |
 | **Head Dashboard** | ✅ Completed (Phase 8) | Institutional macro indicators, inter-departmental benchmarking, NBA/NAAC compliance |
@@ -664,6 +679,7 @@ flowchart LR
 | **Proctored Assessment** | ✅ Completed (Phase 9) | Real-time integrity guard, window focus tracking, trust score calibration, invigilator review console |
 | **Placement Readiness** | ✅ Completed (Phase 10) | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
 | **Coding Assessment Arena** | ✅ Completed (Phase 11) | In-browser multi-language code editor, test case runner, automated judge, runtime/memory telemetry |
+| **Plagiarism & AST Clone Detection** | ✅ Completed (Phase 12) | AST tokenization, winnowing fingerprint engine, pairwise Jaccard index similarity, faculty diff inspector |
 
 ---
 
@@ -682,10 +698,7 @@ flowchart LR
 | **Phase 9** | **Proctored Assessment** | ✅ Completed | On-demand face enrollment, liveness telemetry, behavioral anomaly logging, invigilator review console |
 | **Phase 10** | **Placement Readiness** | ✅ Completed | Target industry role benchmarks (SDE, Data Analyst), skill gap radars, placement mocks |
 | **Phase 11** | **In-Browser Coding Engine & Judge** | ✅ Completed | In-browser code editor, multi-language sandbox, automated testcase evaluation, runtime/memory judge telemetry |
-
-
-
-
+| **Phase 12** | **Plagiarism Detection & AST Similarity** | ✅ Completed | Structural AST tokenization, winnowing fingerprint engine, pairwise diff inspector, faculty audit console |
 
 ---
 
@@ -706,8 +719,6 @@ flowchart LR
 
 - **Bayesian Knowledge Tracing (BKT)**: Parameterized probability models for concept mastery.
 - **Item Response Theory (IRT)**: 2PL/3PL difficulty and discrimination parameterization for questions.
-- **Coding Assessment Engine**: In-browser code runner with automated test cases and memory/runtime profiling.
-- **Plagiarism Detection**: Structural token and AST similarity checking for programming assessments.
 - **Multilingual AI Tutor**: Socratic assistance in regional languages (e.g., Hindi, Gujarati) alongside English.
 - **University Single Sign-On (SSO)**: SAML 2.0 / OIDC integration with university central identity providers.
 - **ERP / SIS Synchronization**: Automated two-way sync with institutional grade book systems.
