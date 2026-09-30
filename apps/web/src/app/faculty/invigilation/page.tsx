@@ -228,7 +228,7 @@ export default function FacultyInvigilationPage() {
               Exam Integrity & AI Proctoring Audit Console
             </h1>
             <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              Phase 9 Complete
+              Proctoring Live
             </span>
           </div>
           <p className="text-slate-400 text-sm">

@@ -150,7 +150,7 @@ export default function StudentPlacementPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
-                    Phase 10: Career & Placement Intelligence
+                    Career & Placement Intelligence
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     Live Industry Bar

@@ -207,7 +207,7 @@ export default function FacultyPlagiarismPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
                     <ShieldAlert className="w-3.5 h-3.5" />
-                    Phase 12: Code Plagiarism & AST Clone Detection
+                    Code Plagiarism & AST Clone Detection
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     AST Winnowing Algorithm

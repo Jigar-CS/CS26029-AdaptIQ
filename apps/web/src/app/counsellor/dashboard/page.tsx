@@ -193,7 +193,7 @@ export default function CounsellorDashboard() {
                   Mentorship Cohort & Early Warning Queue
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  Phase 8 Active
+                  Early Warning Active
                 </span>
               </div>
               <p className="text-xs text-slate-400">

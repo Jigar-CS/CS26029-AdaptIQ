@@ -93,21 +93,21 @@ export default function HeadDashboard() {
                 <span className="font-bold text-indigo-950 block">CSE</span>
                 <span className="text-[11px] text-indigo-700 font-semibold mt-1 block">Active (62.4% Mastery)</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 opacity-60">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="font-bold text-slate-700 block">CE</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Phase 7 Integration</span>
+                <span className="text-[11px] text-slate-500 block mt-1">Enrolled (Curriculum Linked)</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 opacity-60">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="font-bold text-slate-700 block">IT</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Phase 7 Integration</span>
+                <span className="text-[11px] text-slate-500 block mt-1">Enrolled (Curriculum Linked)</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 opacity-60">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="font-bold text-slate-700 block">EC</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Phase 7 Integration</span>
+                <span className="text-[11px] text-slate-500 block mt-1">Enrolled (Curriculum Linked)</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 opacity-60">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="font-bold text-slate-700 block">ME</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Phase 7 Integration</span>
+                <span className="text-[11px] text-slate-500 block mt-1">Enrolled (Curriculum Linked)</span>
               </div>
             </div>
           </div>

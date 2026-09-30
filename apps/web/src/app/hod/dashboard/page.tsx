@@ -181,7 +181,7 @@ export default function HodDashboard() {
                   CSE Department OBE & Curriculum Intelligence
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  Phase 8 Complete
+                  Accreditation Live
                 </span>
               </div>
               <p className="text-xs text-slate-400">

@@ -108,7 +108,7 @@ export default function CodingProblemsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
                     <Terminal className="w-3.5 h-3.5" />
-                    Phase 11: In-Browser Coding Engine & Judge
+                    Algorithmic Coding Engine & Judge
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     Live Sandboxed Execution

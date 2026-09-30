@@ -33,7 +33,7 @@ export default function LandingPage() {
             <div className="flex items-center gap-2">
               <span className="text-xl font-extrabold tracking-tight text-white">CLIAS</span>
               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Phase 1 Live
+                University Platform
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-medium">{universityName} Learning Intelligence</p>

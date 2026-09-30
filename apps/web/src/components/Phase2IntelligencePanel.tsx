@@ -44,7 +44,7 @@ export function Phase2IntelligencePanel() {
         setGraphData(res);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch Phase 2 learning intelligence.');
+      setError(err.message || 'Failed to fetch learning intelligence.');
     } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export function Phase2IntelligencePanel() {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold mb-2">
             <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-            <span>Phase 2 Learning Intelligence Active</span>
+            <span>Cognitive Intelligence Active</span>
           </div>
           <h3 className="text-xl font-black tracking-tight">Advanced Student Knowledge Modeling</h3>
           <p className="text-xs text-indigo-200 mt-1 max-w-2xl">

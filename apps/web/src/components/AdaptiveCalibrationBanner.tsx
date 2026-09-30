@@ -51,7 +51,7 @@ export function AdaptiveCalibrationBanner({
               </h3>
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                 <Sparkles className="h-3 w-3" />
-                Phase 4 Engine
+                Adaptive Engine
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-300 leading-relaxed max-w-xl">

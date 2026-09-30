@@ -77,14 +77,13 @@ export default function FacultyDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                disabled
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-50 text-indigo-400 text-xs font-bold rounded-xl border border-indigo-200 cursor-not-allowed"
-                title="Scheduled for Phase 6"
+              <Link
+                href="/faculty/ai-generator"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold rounded-xl border border-indigo-200 transition"
               >
-                <Sparkles className="w-4 h-4 text-indigo-400" />
-                <span>AI Test Generator (Phase 6)</span>
-              </button>
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>AI Question Studio</span>
+              </Link>
             </div>
           </div>
 
@@ -115,7 +114,7 @@ export default function FacultyDashboard() {
             <MetricCard
               title="Active Tests"
               value="0"
-              subtitle="Phase 5 Assessment Engine"
+              subtitle="Scheduled Assessments"
               icon={FileCheck}
               color="purple"
             />
@@ -160,13 +159,13 @@ export default function FacultyDashboard() {
             </div>
           </div>
 
-          {/* Phase Notice */}
+          {/* Platform Status */}
           <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 flex items-start gap-4">
             <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
-              <h4 className="font-bold text-indigo-950">Faculty Phase-1 Foundation Active</h4>
+              <h4 className="font-bold text-indigo-950">Faculty Management Portal Active</h4>
               <p className="text-indigo-800/80 leading-relaxed">
-                RBAC authorization and course linking are fully operational. Full custom test authoring, question randomization, timed examination assignments, and AI question generators are scheduled for Phase 5 & 6.
+                Course linking, exam authoring, question randomization, timed examination assignments, plagiarism detection, and AI question generators are fully operational.
               </p>
             </div>
           </div>

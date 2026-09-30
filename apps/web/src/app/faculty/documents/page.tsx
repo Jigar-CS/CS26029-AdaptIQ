@@ -338,7 +338,7 @@ export default function FacultyDocumentsPage() {
               Document AI & Course RAG Studio
             </h1>
             <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              Phase 7 Complete
+              Semantic RAG Live
             </span>
           </div>
           <p className="text-slate-400 text-sm">

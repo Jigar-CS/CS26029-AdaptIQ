@@ -32,28 +32,28 @@ export function Sidebar() {
 
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
-    { name: 'Placement Readiness', href: '/student/placement', icon: Briefcase, badge: 'Phase 10' },
-    { name: 'Coding Arena', href: '/student/coding', icon: Terminal, badge: 'Phase 11' },
+    { name: 'Placement Readiness', href: '/student/placement', icon: Briefcase },
+    { name: 'Coding Arena', href: '/student/coding', icon: Terminal },
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
-    { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck, badge: 'Active' },
+    { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck },
     { name: 'Learning Curve', href: '/student/dashboard#curve', icon: TrendingUp },
-    { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap, badge: 'Phase 4' },
+    { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap },
   ];
 
   const adminLinks = [
     { name: 'System Overview', href: '/admin/students', icon: LayoutDashboard },
     { name: 'Authorized Students', href: '/admin/students', icon: Users },
-    { name: 'Institution Hierarchy', href: '/admin/institutes', icon: Building2, badge: 'Active' },
-    { name: 'System Settings', href: '/admin/settings', icon: Settings, badge: 'Phase 2' },
+    { name: 'Institution Hierarchy', href: '/admin/institutes', icon: Building2 },
+    { name: 'System Settings', href: '/admin/settings', icon: Settings },
   ];
 
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
-    { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare, badge: 'Phase 12' },
-    { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles, badge: 'Active' },
-    { name: 'Document AI / RAG', href: '/faculty/documents', icon: FileSpreadsheet, badge: 'Phase 7' },
-    { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck, badge: 'Active' },
-    { name: 'Invigilation Console', href: '/faculty/invigilation', icon: ShieldCheck, badge: 'Phase 9' },
+    { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare },
+    { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles },
+    { name: 'Document AI / RAG', href: '/faculty/documents', icon: FileSpreadsheet },
+    { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck },
+    { name: 'Invigilation Console', href: '/faculty/invigilation', icon: ShieldCheck },
     { name: 'Question Bank', href: '/faculty/dashboard#bank', icon: BookOpen },
     { name: 'Class Analytics', href: '/faculty/dashboard#analytics', icon: TrendingUp },
   ];
@@ -61,7 +61,7 @@ export function Sidebar() {
   const counsellorLinks = [
     { name: 'Counsellor Dashboard', href: '/counsellor/dashboard', icon: LayoutDashboard },
     { name: 'Assigned Students', href: '/counsellor/dashboard#students', icon: Users },
-    { name: 'Intervention Alerts', href: '/counsellor/dashboard#alerts', icon: ShieldCheck, badge: 'Phase 2' },
+    { name: 'Intervention Alerts', href: '/counsellor/dashboard#alerts', icon: ShieldCheck },
   ];
 
   const hodLinks = [
