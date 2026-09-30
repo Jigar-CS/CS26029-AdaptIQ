@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CodeRunnerService } from './code-runner.service';
 import {
   ProgrammingLanguage,
   JudgeSubmissionStatus,
@@ -21,7 +22,10 @@ export interface RunCodeDto {
 export class CodingService {
   private readonly logger = new Logger('CodingService');
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly codeRunner: CodeRunnerService,
+  ) {}
 
   /**
    * Retrieves all coding problems with tags and difficulty.
@@ -96,35 +100,18 @@ export class CodingService {
       throw new NotFoundException(`Coding problem not found.`);
     }
 
-    // Determine simulation results
-    const isFailing =
-      dto.sourceCode.includes('return []') &&
-      !dto.sourceCode.includes('seen') &&
-      !dto.sourceCode.includes('diff');
+    // Execute real candidate code against visible sample testcases
+    const result = await this.codeRunner.execute(
+      dto.language,
+      dto.sourceCode,
+      problem.testCases.map((tc) => ({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        isHidden: false,
+      })),
+    );
 
-    const testResults = problem.testCases.map((tc, idx) => ({
-      testCaseNumber: idx + 1,
-      status: isFailing ? 'FAILED' : 'PASSED',
-      input: tc.input,
-      expectedOutput: tc.expectedOutput,
-      actualOutput: isFailing ? '[]' : tc.expectedOutput,
-      executionTimeMs: 14 + idx * 2,
-    }));
-
-    const passedCount = testResults.filter((r) => r.status === 'PASSED').length;
-
-    return {
-      status: passedCount === problem.testCases.length ? 'ACCEPTED' : 'WRONG_ANSWER',
-      totalTestCases: problem.testCases.length,
-      testCasesPassed: passedCount,
-      executionTimeMs: 25,
-      memoryKb: 14250,
-      testResults,
-      outputMessage:
-        passedCount === problem.testCases.length
-          ? 'Sample test cases passed! Ready for final submission.'
-          : 'Sample test cases failed.',
-    };
+    return result;
   }
 
   /**
@@ -146,42 +133,37 @@ export class CodingService {
       throw new NotFoundException(`Coding problem not found.`);
     }
 
-    const isSyntaxError =
-      dto.sourceCode.toLowerCase().includes('syntax_error') || dto.sourceCode.trim().length < 10;
-    const isWrongAnswer =
-      dto.sourceCode.includes('return []') &&
-      !dto.sourceCode.includes('seen') &&
-      !dto.sourceCode.includes('diff');
+    // Execute real candidate code against full testsuite (including hidden)
+    const result = await this.codeRunner.execute(
+      dto.language,
+      dto.sourceCode,
+      problem.testCases.map((tc) => ({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        isHidden: tc.isHidden,
+      })),
+    );
 
-    let overallStatus: JudgeSubmissionStatus = JudgeSubmissionStatus.ACCEPTED;
-    if (isSyntaxError) {
-      overallStatus = JudgeSubmissionStatus.COMPILATION_ERROR;
-    } else if (isWrongAnswer) {
-      overallStatus = JudgeSubmissionStatus.WRONG_ANSWER;
+    let mappedStatus: JudgeSubmissionStatus = JudgeSubmissionStatus.ACCEPTED;
+    if (result.status === 'WRONG_ANSWER') {
+      mappedStatus = JudgeSubmissionStatus.WRONG_ANSWER;
+    } else if (result.status === 'COMPILATION_ERROR') {
+      mappedStatus = JudgeSubmissionStatus.COMPILATION_ERROR;
+    } else if (result.status === 'TIME_LIMIT_EXCEEDED') {
+      mappedStatus = JudgeSubmissionStatus.TIME_LIMIT_EXCEEDED;
+    } else if (result.status === 'RUNTIME_ERROR') {
+      mappedStatus = JudgeSubmissionStatus.RUNTIME_ERROR;
     }
 
-    let passedCount = 0;
-    const totalCount = problem.testCases.length;
-
-    const judgeDetails = problem.testCases.map((tc, idx) => {
-      let passed = false;
-      let actualOutput = tc.expectedOutput;
-
-      if (overallStatus === JudgeSubmissionStatus.ACCEPTED) {
-        passed = true;
-        passedCount++;
-      } else if (overallStatus === JudgeSubmissionStatus.WRONG_ANSWER) {
-        passed = false;
-        actualOutput = '[]';
-      }
-
+    const judgeDetails = result.testResults.map((tr, idx) => {
+      const tc = problem.testCases[idx];
       return {
-        testCase: idx + 1,
-        status: passed ? 'PASSED' : 'FAILED',
-        input: tc.isHidden ? '[Hidden Testcase]' : tc.input,
-        expected: tc.isHidden ? '[Hidden]' : tc.expectedOutput,
-        actual: tc.isHidden ? (passed ? '[Hidden]' : actualOutput) : actualOutput,
-        timeMs: 15 + idx * 3,
+        testCase: tr.testCaseNumber,
+        status: tr.status,
+        input: tc && tc.isHidden ? '[Hidden Testcase]' : tr.input,
+        expected: tc && tc.isHidden ? '[Hidden]' : tr.expectedOutput,
+        actual: tc && tc.isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
+        timeMs: tr.executionTimeMs,
       };
     });
 
@@ -191,11 +173,11 @@ export class CodingService {
         problemId: problem.id,
         language: dto.language,
         sourceCode: dto.sourceCode,
-        status: overallStatus,
-        executionTimeMs: 45,
-        memoryUsedKb: 14320,
-        testCasesPassed: passedCount,
-        totalTestCases: totalCount,
+        status: mappedStatus,
+        executionTimeMs: Math.round(result.executionTimeMs),
+        memoryUsedKb: result.memoryKb || 14320,
+        testCasesPassed: result.testCasesPassed,
+        totalTestCases: result.totalTestCases,
         judgeDetails: JSON.stringify(judgeDetails),
       },
       include: {
@@ -206,12 +188,14 @@ export class CodingService {
     return {
       submission,
       verdict: {
-        status: overallStatus,
-        testCasesPassed: passedCount,
-        totalTestCases: totalCount,
-        executionTimeMs: 45,
-        memoryUsedKb: 14320,
+        status: mappedStatus,
+        testCasesPassed: result.testCasesPassed,
+        totalTestCases: result.totalTestCases,
+        executionTimeMs: result.executionTimeMs,
+        memoryUsedKb: result.memoryKb || 14320,
+        outputMessage: result.outputMessage,
         judgeDetails,
+        testResults: result.testResults,
       },
     };
   }

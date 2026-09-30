@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useSidebar } from '@/lib/sidebar-context';
 import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
@@ -53,6 +54,7 @@ interface SubmissionItem {
 export default function CodingProblemsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { isPinned } = useSidebar();
 
   const [problems, setProblems] = useState<CodingProblemSummary[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
@@ -96,7 +98,7 @@ export default function CodingProblemsPage() {
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-100 font-sans">
       <Sidebar />
-      <div className="flex-1 flex flex-col pl-64">
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'pl-64' : 'pl-[72px]'}`}>
         <Navbar />
 
         <main className="p-8 max-w-7xl w-full mx-auto space-y-8">

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useSidebar } from '@/lib/sidebar-context';
 import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
@@ -77,6 +78,7 @@ export default function ProblemEditorPage() {
   const { slug } = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { isPinned } = useSidebar();
 
   const [problem, setProblem] = useState<ProblemDetail | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('PYTHON');
@@ -176,7 +178,7 @@ export default function ProblemEditorPage() {
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-100 font-sans">
       <Sidebar />
-      <div className="flex-1 flex flex-col pl-64">
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'pl-64' : 'pl-[72px]'}`}>
         <Navbar />
 
         <main className="p-6 max-w-[1600px] w-full mx-auto space-y-4">
@@ -378,10 +380,14 @@ export default function ProblemEditorPage() {
                           className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
                             verdict.status === 'ACCEPTED'
                               ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                              : verdict.status === 'COMPILATION_ERROR'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : verdict.status === 'TIME_LIMIT_EXCEEDED'
+                              ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
                               : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                           }`}
                         >
-                          {verdict.status.replace('_', ' ')}
+                          {verdict.status.replace(/_/g, ' ')}
                         </span>
                         <span className="text-[11px] text-slate-400">
                           {verdict.testCasesPassed}/{verdict.totalTestCases} Passed
@@ -441,7 +447,7 @@ export default function ProblemEditorPage() {
                           <div>
                             <span className="text-slate-400">Expected Output: </span>
                             <span className="text-emerald-300">
-                              {testList[selectedTestTab].expectedOutput || testList[selectedTestTab].expected}
+                              {testList[selectedTestTab].expectedOutput ?? testList[selectedTestTab].expected ?? '(none)'}
                             </span>
                           </div>
                           <div>
@@ -453,14 +459,20 @@ export default function ProblemEditorPage() {
                                   : 'text-rose-300'
                               }
                             >
-                              {testList[selectedTestTab].actualOutput || testList[selectedTestTab].actual}
+                              {testList[selectedTestTab].actualOutput ?? testList[selectedTestTab].actual ?? '(no output)'}
                             </span>
                           </div>
                         </div>
                       )}
 
                       {verdict.outputMessage && (
-                        <div className="text-xs text-slate-300 bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                        <div className={`text-xs p-3 rounded-lg border font-mono whitespace-pre-wrap ${
+                          verdict.status === 'ACCEPTED'
+                            ? 'bg-emerald-950/20 text-emerald-300 border-emerald-800/40'
+                            : verdict.status === 'COMPILATION_ERROR'
+                            ? 'bg-amber-950/30 text-amber-200 border-amber-800/40'
+                            : 'bg-rose-950/30 text-rose-200 border-rose-800/40'
+                        }`}>
                           {verdict.outputMessage}
                         </div>
                       )}
