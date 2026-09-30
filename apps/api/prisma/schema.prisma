@@ -869,6 +869,7 @@ model CodingProblem {
   course          Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
   testCases       TestCase[]
   submissions     CodeSubmission[]
+  plagiarismScans PlagiarismScan[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -892,24 +893,80 @@ model TestCase {
 }
 
 model CodeSubmission {
-  id               String                @id @default(uuid())
-  studentId        String
-  student          StudentProfile        @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  problemId        String
-  problem          CodingProblem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  language         ProgrammingLanguage   @default(PYTHON)
-  sourceCode       String                @db.Text
-  status           JudgeSubmissionStatus @default(PENDING)
-  executionTimeMs  Int                   @default(0)
-  memoryUsedKb     Int                   @default(0)
-  testCasesPassed  Int                   @default(0)
-  totalTestCases   Int                   @default(0)
-  judgeDetails     String?               @db.Text // JSON with per-testcase execution output
-  createdAt        DateTime              @default(now())
+  id                    String                @id @default(uuid())
+  studentId             String
+  student               StudentProfile        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  problemId             String
+  problem               CodingProblem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  language              ProgrammingLanguage   @default(PYTHON)
+  sourceCode            String                @db.Text
+  status                JudgeSubmissionStatus @default(PENDING)
+  executionTimeMs       Int                   @default(0)
+  memoryUsedKb          Int                   @default(0)
+  testCasesPassed       Int                   @default(0)
+  totalTestCases        Int                   @default(0)
+  judgeDetails          String?               @db.Text // JSON with per-testcase execution output
+  matchesAsSubmissionA  PlagiarismMatch[]     @relation("SubmissionA")
+  matchesAsSubmissionB  PlagiarismMatch[]     @relation("SubmissionB")
+  createdAt             DateTime              @default(now())
 
   @@index([studentId, problemId])
   @@index([status])
 }
+
+// ==============================================================================
+// Phase 12: Code Plagiarism Detection & Structural AST Similarity Engine
+// ==============================================================================
+
+enum PlagiarismScanStatus {
+  PENDING
+  SCANNING
+  COMPLETED
+  FAILED
+}
+
+enum PlagiarismVerdict {
+  SUSPICIOUS
+  FLAGGED
+  CLEARED
+  PENALIZED
+}
+
+model PlagiarismScan {
+  id                      String               @id @default(uuid())
+  problemId               String
+  problem                 CodingProblem        @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  facultyId               String?
+  status                  PlagiarismScanStatus @default(COMPLETED)
+  threshold               Float                @default(70.0) // 0-100%
+  totalSubmissionsScanned Int                  @default(0)
+  flaggedPairsCount       Int                  @default(0)
+  matches                 PlagiarismMatch[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  @@index([problemId])
+}
+
+model PlagiarismMatch {
+  id                 String            @id @default(uuid())
+  scanId             String
+  scan               PlagiarismScan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  submissionAId      String
+  submissionA        CodeSubmission    @relation("SubmissionA", fields: [submissionAId], references: [id], onDelete: Cascade)
+  submissionBId      String
+  submissionB        CodeSubmission    @relation("SubmissionB", fields: [submissionBId], references: [id], onDelete: Cascade)
+  similarityScore    Float             @default(0.0) // 0 - 100%
+  matchedTokensCount Int               @default(0)
+  fingerprintOverlap String?           @db.Text // JSON: array of matching token ranges
+  verdict            PlagiarismVerdict @default(SUSPICIOUS)
+  facultyNotes       String?           @db.Text
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([scanId, similarityScore])
+}
+
 
 
 
