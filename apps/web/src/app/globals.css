@@ -50,3 +50,28 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
 }
+
+/* Dynamic flexible sidebar layout transitions */
+.pl-64,
+.ml-64,
+.sidebar-offset {
+  transition: padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body[data-sidebar="pinned"] .pl-64,
+body[data-sidebar="pinned"] .sidebar-offset {
+  padding-left: 16rem !important; /* 256px */
+}
+
+body[data-sidebar="pinned"] .ml-64 {
+  margin-left: 16rem !important;
+}
+
+body[data-sidebar="collapsed"] .pl-64,
+body[data-sidebar="collapsed"] .sidebar-offset {
+  padding-left: 72px !important;
+}
+
+body[data-sidebar="collapsed"] .ml-64 {
+  margin-left: 72px !important;
+}
