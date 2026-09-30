@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -30,8 +30,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { isPinned, togglePin } = useSidebar();
+  const [isHovered, setIsHovered] = useState(false);
 
   if (!user) return null;
+
+  // The sidebar is open either when pinned or when hovered over the short bar
+  const isExpanded = isPinned || isHovered;
 
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
@@ -86,17 +90,19 @@ export function Sidebar() {
 
   return (
     <aside
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 flex flex-col justify-between text-slate-300 z-40 transition-all duration-300 ease-in-out shadow-2xl ${
-        isPinned ? 'w-64' : 'w-[72px]'
+        isExpanded ? 'w-64' : 'w-[72px]'
       }`}
     >
       <div className="flex flex-col min-h-0">
-        {/* Brand Header with Pin Toggle on Top Right */}
+        {/* Brand Header */}
         <div
-          className={`border-b border-slate-800 transition-all duration-200 ${
-            isPinned
+          className={`border-b border-slate-800 transition-all duration-300 ${
+            isExpanded
               ? 'p-4 flex items-center justify-between gap-2'
-              : 'p-3 flex flex-col items-center gap-2.5'
+              : 'p-3.5 flex justify-center'
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
@@ -104,7 +110,7 @@ export function Sidebar() {
               <BrainCircuit className="w-6 h-6" />
             </div>
 
-            {isPinned && (
+            {isExpanded && (
               <div className="truncate animate-in fade-in duration-200">
                 <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-lg text-white tracking-tight">CLIAS</span>
@@ -117,26 +123,31 @@ export function Sidebar() {
             )}
           </div>
 
-          {/* Stick / Pin Button on Top Right */}
-          <button
-            onClick={togglePin}
-            title={isPinned ? 'Unpin Sidebar (Collapse to Icons)' : 'Pin Sidebar (Stick Open)'}
-            className={`p-2 rounded-lg transition-all shrink-0 ${
-              isPinned
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
-            }`}
-          >
-            <Pin
-              className={`w-4 h-4 transition-transform duration-200 ${
-                isPinned ? 'fill-white rotate-45' : 'text-slate-400 hover:rotate-12'
+          {/* Stick / Pin Toggle Button on Top Right (Appears when opened) */}
+          {isExpanded && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePin();
+              }}
+              title={isPinned ? 'Unpin Sidebar (Collapse to Icons)' : 'Pin Sidebar (Stick Open & Shift Screen)'}
+              className={`p-2 rounded-lg transition-all shrink-0 animate-in fade-in duration-200 ${
+                isPinned
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
               }`}
-            />
-          </button>
+            >
+              <Pin
+                className={`w-4 h-4 transition-transform duration-200 ${
+                  isPinned ? 'fill-white rotate-45' : 'text-slate-400 hover:rotate-12'
+                }`}
+              />
+            </button>
+          )}
         </div>
 
         {/* Role Badge */}
-        {isPinned ? (
+        {isExpanded ? (
           <div className="px-5 py-3 border-b border-slate-800/60 bg-slate-950/40 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Current Role</span>
@@ -162,7 +173,7 @@ export function Sidebar() {
             const Icon = link.icon;
             const isActive = pathname === link.href;
 
-            if (isPinned) {
+            if (isExpanded) {
               return (
                 <Link
                   key={link.name}
@@ -208,7 +219,7 @@ export function Sidebar() {
 
       {/* User Footer */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/60">
-        {isPinned ? (
+        {isExpanded ? (
           <div className="flex items-center justify-between animate-in fade-in duration-200">
             <div className="truncate pr-2">
               <p className="text-xs font-semibold text-white truncate">{user.name || user.email}</p>
