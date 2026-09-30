@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/Platform-University%20Learning%20Intelligence-indigo.svg)](#)
 [![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(NestJS%20%2B%20Next.js%20%2B%20FastAPI)-blue.svg)](#)
 [![Database](https://img.shields.io/badge/Database-MySQL%208.0%20(Prisma%20ORM)-emerald.svg)](#)
-[![Status](https://img.shields.io/badge/Status-Phase%203%20AI%20Assistant%20Active-success.svg)](#)
+[![Status](https://img.shields.io/badge/Status-All%2012%20Phases%20Completed-success.svg)](#)
 
 ---
 
@@ -30,6 +30,8 @@
    - [Phase 8: University Analytics](#phase-8--university-analytics)
    - [Phase 9: Proctored Assessment (AI Integrity Monitoring)](#phase-9--proctored-assessment-ai-integrity-monitoring)
    - [Phase 10: Target Role & Placement Readiness](#phase-10--target-role--placement-readiness)
+   - [Phase 11: In-Browser Coding Engine & Automated Code Judge](#phase-11--in-browser-coding-assessment-engine--automated-code-judge)
+   - [Phase 12: Code Plagiarism Detection & Structural AST Similarity Engine](#phase-12--code-plagiarism-detection--structural-ast-similarity-engine)
 10. [Long-Term Learning Intelligence Model](#10-long-term-learning-intelligence-model)
 11. [System Data Flow](#11-system-data-flow)
 12. [Database Entities](#12-database-entities)
