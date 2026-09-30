@@ -219,13 +219,13 @@ export default function StudentLearningPath() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="flex bg-slate-950 min-h-screen text-slate-100 font-sans">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col pl-64 min-w-0">
         <Navbar />
 
-        <main className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
           {/* Header & Course Context */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
             <div>
