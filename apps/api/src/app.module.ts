@@ -15,6 +15,7 @@ import { RagModule } from './rag/rag.module';
 import { ProctoringModule } from './proctoring/proctoring.module';
 import { PlacementModule } from './placement/placement.module';
 import { CodingModule } from './coding/coding.module';
+import { PlagiarismModule } from './plagiarism/plagiarism.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CodingModule } from './coding/coding.module';
     ProctoringModule,
     PlacementModule,
     CodingModule,
+    PlagiarismModule,
   ],
 })
 export class AppModule {}
