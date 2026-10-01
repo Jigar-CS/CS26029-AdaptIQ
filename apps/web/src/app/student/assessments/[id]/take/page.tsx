@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import { api } from '@/lib/api';
 import {
   Clock,
@@ -15,12 +16,15 @@ import {
   Loader2,
   Award,
   BookOpen,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 export default function TakeAssessmentPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const assessmentId = params.id as string;
 
   const [loading, setLoading] = useState(true);
@@ -263,23 +267,38 @@ export default function TakeAssessmentPage() {
   const answeredCount = Object.keys(answers).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-lg">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between shadow-xs">
         <div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-bold">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold">
             Formal Examination Session
           </span>
-          <h2 className="text-base font-bold text-white">{examData?.assessment?.title}</h2>
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">{examData?.assessment?.title}</h2>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Theme Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle Theme"
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-600" />
+            )}
+          </button>
+
           {/* Phase 9: AI Integrity Status */}
-          <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-400 font-medium">Integrity Guard</span>
-            <span className="text-slate-600">•</span>
-            <span className={`font-mono font-bold ${trustScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+          <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-slate-500 dark:text-slate-400 font-medium">Integrity Guard</span>
+            <span className="text-slate-400">•</span>
+            <span className={`font-mono font-bold ${trustScore >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
               {trustScore}% Trust
             </span>
           </div>
@@ -287,8 +306,8 @@ export default function TakeAssessmentPage() {
           <div
             className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${
               secondsRemaining < 300
-                ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse'
-                : 'bg-slate-800 text-indigo-300 border-slate-700'
+                ? 'bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/40 animate-pulse'
+                : 'bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-slate-200 dark:border-slate-700'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -301,7 +320,7 @@ export default function TakeAssessmentPage() {
             type="button"
             onClick={submitExam}
             disabled={submitting}
-            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             <span>Submit Exam</span>
@@ -331,9 +350,9 @@ export default function TakeAssessmentPage() {
         {/* Left: Question area */}
         <div className="lg:col-span-3 space-y-6">
           {currentQ && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <span className="text-xs font-bold text-indigo-400">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xs dark:shadow-xl space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                   Question {currentIdx + 1} of {qList.length} • {currentQ.points} Points
                 </span>
                 <button
@@ -341,15 +360,15 @@ export default function TakeAssessmentPage() {
                   onClick={() => handleToggleFlag(currentIdx)}
                   className={`text-xs font-semibold px-3 py-1 rounded-lg border transition ${
                     flagged[currentIdx]
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                      ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {flagged[currentIdx] ? '★ Flagged for Review' : '☆ Flag for Review'}
                 </button>
               </div>
 
-              <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed">
+              <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed">
                 {currentQ.questionText}
               </h3>
 
@@ -364,8 +383,8 @@ export default function TakeAssessmentPage() {
                       onClick={() => handleSelectOption(currentQ.id, opt.id)}
                       className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-medium transition flex items-center justify-between ${
                         isSelected
-                          ? 'bg-indigo-600/20 border-indigo-500 text-white ring-2 ring-indigo-500/30'
-                          : 'bg-slate-800/60 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700'
+                          ? 'bg-indigo-50 dark:bg-indigo-600/20 border-indigo-500 text-indigo-950 dark:text-white ring-2 ring-indigo-500/30'
+                          : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -373,7 +392,7 @@ export default function TakeAssessmentPage() {
                           className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold ${
                             isSelected
                               ? 'bg-indigo-600 text-white'
-                              : 'bg-slate-700 text-slate-300'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {String.fromCharCode(65 + oIdx)}
@@ -386,12 +405,12 @@ export default function TakeAssessmentPage() {
               </div>
 
               {/* Pagination controls */}
-              <div className="pt-6 border-t border-slate-800 flex items-center justify-between">
+              <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
                   disabled={currentIdx === 0}
                   onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Previous</span>
@@ -401,7 +420,7 @@ export default function TakeAssessmentPage() {
                   type="button"
                   disabled={currentIdx === qList.length - 1}
                   onClick={() => setCurrentIdx((prev) => Math.min(qList.length - 1, prev + 1))}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <span>Next</span>
                   <ChevronRight className="w-4 h-4" />
@@ -413,18 +432,18 @@ export default function TakeAssessmentPage() {
 
         {/* Right: Question Navigation Palette */}
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-            <h4 className="text-sm font-bold text-white">Question Palette</h4>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs dark:shadow-xl space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white">Question Palette</h4>
             <div className="grid grid-cols-5 gap-2">
               {qList.map((q: any, idx: number) => {
                 const isAnswered = !!answers[q.id];
                 const isCurrent = idx === currentIdx;
                 const isFlag = !!flagged[idx];
 
-                let btnClass = 'bg-slate-800 text-slate-400 border-slate-700';
+                let btnClass = 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700';
                 if (isAnswered) btnClass = 'bg-indigo-600 text-white border-indigo-500 font-bold';
-                if (isFlag) btnClass = 'bg-amber-500/30 text-amber-300 border-amber-500 font-bold';
-                if (isCurrent) btnClass += ' ring-2 ring-white';
+                if (isFlag) btnClass = 'bg-amber-100 dark:bg-amber-500/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500 font-bold';
+                if (isCurrent) btnClass += ' ring-2 ring-indigo-600 dark:ring-white';
 
                 return (
                   <button
@@ -439,14 +458,14 @@ export default function TakeAssessmentPage() {
               })}
             </div>
 
-            <div className="pt-4 border-t border-slate-800 space-y-2 text-xs text-slate-400">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2 text-xs text-slate-500 dark:text-slate-400">
               <div className="flex items-center justify-between">
                 <span>Answered:</span>
-                <strong className="text-white">{answeredCount} / {qList.length}</strong>
+                <strong className="text-slate-900 dark:text-white">{answeredCount} / {qList.length}</strong>
               </div>
               <div className="flex items-center justify-between">
                 <span>Flagged:</span>
-                <strong className="text-amber-400">{Object.values(flagged).filter(Boolean).length}</strong>
+                <strong className="text-amber-600 dark:text-amber-400">{Object.values(flagged).filter(Boolean).length}</strong>
               </div>
             </div>
           </div>

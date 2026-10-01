@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { SidebarProvider } from '@/lib/sidebar-context';
+import { ThemeProvider } from '@/lib/theme-context';
 
 export const metadata: Metadata = {
   title: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System',
@@ -23,10 +24,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-slate-50 text-slate-900 selection:bg-indigo-500 selection:text-white">
-        <AuthProvider>
-          <SidebarProvider>{children}</SidebarProvider>
-        </AuthProvider>
+      <body className="min-h-screen bg-[#F7F7F3] text-[#111827] dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-100 selection:text-blue-900">
+        <ThemeProvider>
+          <AuthProvider>
+            <SidebarProvider>{children}</SidebarProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

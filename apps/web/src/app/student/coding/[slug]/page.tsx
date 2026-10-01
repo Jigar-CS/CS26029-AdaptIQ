@@ -194,13 +194,12 @@ export default function ProblemEditorPage() {
 
             <div className="flex items-center gap-3">
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                  problem?.difficulty === 'EASY'
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${problem?.difficulty === 'EASY'
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                     : problem?.difficulty === 'MEDIUM'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                    : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                }`}
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                  }`}
               >
                 {problem?.difficulty || 'MEDIUM'}
               </span>
@@ -377,15 +376,14 @@ export default function ProblemEditorPage() {
                     {verdict && (
                       <div className="flex items-center gap-2.5">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
-                            verdict.status === 'ACCEPTED'
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${verdict.status === 'ACCEPTED'
                               ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                               : verdict.status === 'COMPILATION_ERROR'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              : verdict.status === 'TIME_LIMIT_EXCEEDED'
-                              ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
-                              : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                          }`}
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : verdict.status === 'TIME_LIMIT_EXCEEDED'
+                                  ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                                  : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                            }`}
                         >
                           {verdict.status.replace(/_/g, ' ')}
                         </span>
@@ -418,11 +416,10 @@ export default function ProblemEditorPage() {
                             <button
                               key={idx}
                               onClick={() => setSelectedTestTab(idx)}
-                              className={`text-xs font-semibold px-3 py-1 rounded-md flex items-center gap-1.5 transition-all ${
-                                selectedTestTab === idx
+                              className={`text-xs font-semibold px-3 py-1 rounded-md flex items-center gap-1.5 transition-all ${selectedTestTab === idx
                                   ? 'bg-slate-800 text-white'
                                   : 'text-slate-400 hover:text-slate-200'
-                              }`}
+                                }`}
                             >
                               {t.status === 'PASSED' ? (
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -466,13 +463,12 @@ export default function ProblemEditorPage() {
                       )}
 
                       {verdict.outputMessage && (
-                        <div className={`text-xs p-3 rounded-lg border font-mono whitespace-pre-wrap ${
-                          verdict.status === 'ACCEPTED'
+                        <div className={`text-xs p-3 rounded-lg border font-mono whitespace-pre-wrap ${verdict.status === 'ACCEPTED'
                             ? 'bg-emerald-950/20 text-emerald-300 border-emerald-800/40'
                             : verdict.status === 'COMPILATION_ERROR'
-                            ? 'bg-amber-950/30 text-amber-200 border-amber-800/40'
-                            : 'bg-rose-950/30 text-rose-200 border-rose-800/40'
-                        }`}>
+                              ? 'bg-amber-950/30 text-amber-200 border-amber-800/40'
+                              : 'bg-rose-950/30 text-rose-200 border-rose-800/40'
+                          }`}>
                           {verdict.outputMessage}
                         </div>
                       )}

@@ -68,7 +68,7 @@ export default function StudentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
       {/* Role-aware Sidebar */}
       <Sidebar />
 
@@ -150,10 +150,10 @@ export default function StudentDashboard() {
           {/* Two-Column Grid: Learning Curve & Weak Topics */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Learning Curve Chart */}
-            <div id="curve" className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+            <div id="curve" className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-indigo-600" />
                     Knowledge Curve Progression
                   </h3>
@@ -170,9 +170,9 @@ export default function StudentDashboard() {
             </div>
 
             {/* Strengths & Weaknesses Triage */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2 mb-1">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 mb-1">
                   <Target className="w-4 h-4 text-rose-500" />
                   Conceptual Focus Areas
                 </h3>
@@ -246,10 +246,10 @@ export default function StudentDashboard() {
           <Phase2IntelligencePanel />
 
           {/* Topic Mastery Grid */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
                   Detailed Topic Mastery Breakdown
                 </h3>
                 <p className="text-xs text-slate-500">
