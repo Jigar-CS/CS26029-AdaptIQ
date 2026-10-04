@@ -50,7 +50,7 @@ export function Sidebar() {
   ];
 
   const adminLinks = [
-    { name: 'System Overview', href: '/admin/students', icon: LayoutDashboard },
+    { name: 'System Overview', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Authorized Students', href: '/admin/students', icon: Users },
     { name: 'Institution Hierarchy', href: '/admin/institutes', icon: Building2 },
     { name: 'System Settings', href: '/admin/settings', icon: Settings },

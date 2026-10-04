@@ -28,7 +28,7 @@ export default function LoginPage() {
       const user = await login(email, password);
       // Role-aware redirection
       if (user.role === UserRole.SUPER_ADMIN) {
-        router.push('/admin/students');
+        router.push('/admin/dashboard');
       } else if (user.role === UserRole.FACULTY) {
         router.push('/faculty/dashboard');
       } else if (user.role === UserRole.COUNSELLOR) {
