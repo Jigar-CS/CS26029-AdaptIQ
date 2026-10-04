@@ -17,6 +17,8 @@ import {
   Search,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Sidebar } from '@/components/Sidebar';
+import { Navbar } from '@/components/Navbar';
 
 interface ViolationItem {
   id: string;
@@ -216,9 +218,16 @@ export default function FacultyInvigilationPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+    <div className="min-h-screen bg-slate-950 flex text-slate-100 font-sans">
+      <Sidebar />
+      <div className="flex-1 ml-64 flex flex-col min-w-0">
+        <Navbar
+          title="Exam Integrity & AI Invigilation Console"
+          subtitle="Real-time multi-modal proctoring logs, trust score audits & violation review"
+        />
+        <main className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300 w-full">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2.5 rounded-xl bg-gradient-to-tr from-amber-600 to-rose-500 text-white shadow-lg shadow-amber-500/20">
@@ -480,6 +489,8 @@ export default function FacultyInvigilationPage() {
             </div>
           )}
         </div>
+      </div>
+        </main>
       </div>
     </div>
   );

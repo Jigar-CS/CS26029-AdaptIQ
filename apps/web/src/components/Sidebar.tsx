@@ -46,7 +46,6 @@ export function Sidebar() {
     { name: 'Coding Arena', href: '/student/coding', icon: Terminal },
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
     { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck },
-    { name: 'Learning Curve', href: '/student/dashboard#curve', icon: TrendingUp },
     { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap },
   ];
 
@@ -59,19 +58,19 @@ export function Sidebar() {
 
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
-    { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare },
+    { name: 'Question Bank', href: '/faculty/questions', icon: BookOpen },
+    { name: 'Class Analytics', href: '/faculty/analytics', icon: TrendingUp },
     { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles },
     { name: 'Document AI / RAG', href: '/faculty/documents', icon: FileSpreadsheet },
     { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck },
+    { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare },
     { name: 'Invigilation Console', href: '/faculty/invigilation', icon: ShieldCheck },
-    { name: 'Question Bank', href: '/faculty/dashboard#bank', icon: BookOpen },
-    { name: 'Class Analytics', href: '/faculty/dashboard#analytics', icon: TrendingUp },
   ];
 
   const counsellorLinks = [
     { name: 'Counsellor Dashboard', href: '/counsellor/dashboard', icon: LayoutDashboard },
-    { name: 'Assigned Students', href: '/counsellor/dashboard#students', icon: Users },
-    { name: 'Intervention Alerts', href: '/counsellor/dashboard#alerts', icon: ShieldCheck },
+    { name: 'Assigned Students', href: '/counsellor/students', icon: Users },
+    { name: 'Intervention Alerts', href: '/counsellor/alerts', icon: ShieldCheck },
   ];
 
   const hodLinks = [
@@ -81,7 +80,7 @@ export function Sidebar() {
 
   const headLinks = [
     { name: 'Institutional Overview', href: '/head/dashboard', icon: LayoutDashboard },
-    { name: 'Program Comparison', href: '/head/dashboard#programs', icon: Building2 },
+    { name: 'Program Comparison', href: '/head/programs', icon: Building2 },
   ];
 
   let currentLinks = studentLinks;
@@ -183,6 +182,7 @@ export function Sidebar() {
                 <Link
                   key={link.name}
                   href={link.href}
+                  prefetch={false}
                   className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-semibold shadow-xs'
@@ -202,6 +202,7 @@ export function Sidebar() {
               <div key={link.name} className="relative group flex justify-center">
                 <Link
                   href={link.href}
+                  prefetch={false}
                   className={`flex items-center justify-center w-11 h-11 rounded-xl transition-all ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-xs'

@@ -23,55 +23,79 @@ export function MetricCard({
 }: MetricCardProps) {
   const colorStyles = {
     indigo: {
-      bg: 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-500/30',
-      iconBg: 'bg-indigo-600 text-white',
+      border: 'border-indigo-100 dark:border-indigo-900/50 hover:border-indigo-300 dark:hover:border-indigo-700',
+      iconBg: 'bg-indigo-600 text-white shadow-indigo-500/20',
+      accentGlow: 'from-indigo-500/5 to-transparent',
     },
     emerald: {
-      bg: 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-500/30',
-      iconBg: 'bg-emerald-600 text-white',
+      border: 'border-emerald-100 dark:border-emerald-900/50 hover:border-emerald-300 dark:hover:border-emerald-700',
+      iconBg: 'bg-emerald-600 text-white shadow-emerald-500/20',
+      accentGlow: 'from-emerald-500/5 to-transparent',
     },
     amber: {
-      bg: 'bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-500/30',
-      iconBg: 'bg-amber-600 text-white',
+      border: 'border-amber-100 dark:border-amber-900/50 hover:border-amber-300 dark:hover:border-amber-700',
+      iconBg: 'bg-amber-600 text-white shadow-amber-500/20',
+      accentGlow: 'from-amber-500/5 to-transparent',
     },
     blue: {
-      bg: 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-500/30',
-      iconBg: 'bg-blue-600 text-white',
+      border: 'border-blue-100 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-700',
+      iconBg: 'bg-blue-600 text-white shadow-blue-500/20',
+      accentGlow: 'from-blue-500/5 to-transparent',
     },
     rose: {
-      bg: 'bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-100 dark:border-rose-500/30',
-      iconBg: 'bg-rose-600 text-white',
+      border: 'border-rose-100 dark:border-rose-900/50 hover:border-rose-300 dark:hover:border-rose-700',
+      iconBg: 'bg-rose-600 text-white shadow-rose-500/20',
+      accentGlow: 'from-rose-500/5 to-transparent',
     },
     purple: {
-      bg: 'bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/30',
-      iconBg: 'bg-purple-600 text-white',
+      border: 'border-purple-100 dark:border-purple-900/50 hover:border-purple-300 dark:hover:border-purple-700',
+      iconBg: 'bg-purple-600 text-white shadow-purple-500/20',
+      accentGlow: 'from-purple-500/5 to-transparent',
     },
   };
 
-  const style = colorStyles[color];
+  const style = colorStyles[color] || colorStyles.indigo;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-md hover-lift relative overflow-hidden transition-colors duration-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</p>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">{value}</h3>
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-2xl p-5 border ${style.border} shadow-xs hover:shadow-md transition-all duration-200 relative overflow-hidden group`}
+    >
+      <div
+        className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${style.accentGlow} pointer-events-none rounded-bl-full`}
+      />
+
+      <div className="flex items-start justify-between gap-3 relative z-10">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+            {title}
+          </p>
+          <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {value}
+            </h3>
             {trend && (
               <span
-                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                  trend.isPositive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+                className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full inline-flex items-center gap-0.5 ${
+                  trend.isPositive
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
                 }`}
               >
                 {trend.isPositive ? '↑' : '↓'} {trend.value}
               </span>
             )}
           </div>
-          {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium">{subtitle}</p>}
+          {subtitle && (
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium truncate">
+              {subtitle}
+            </p>
+          )}
         </div>
 
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${style.iconBg}`}>
-          <Icon className="w-6 h-6" />
+        <div
+          className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-md shrink-0 transition-transform group-hover:scale-105 ${style.iconBg}`}
+        >
+          <Icon className="w-5 h-5 text-white" />
         </div>
       </div>
     </div>

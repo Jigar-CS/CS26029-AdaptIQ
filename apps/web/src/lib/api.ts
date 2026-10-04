@@ -26,11 +26,16 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
   const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
   try {
     const res = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const data = await res.json().catch(() => null);
 
@@ -43,6 +48,10 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
     return data as T;
   } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new ApiError(408, 'Request timed out. Please check your network connection.');
+    }
     if (err instanceof ApiError) {
       throw err;
     }

@@ -122,15 +122,28 @@ export default function FacultyDashboard() {
           </div>
 
           {/* Question Bank Preview */}
-          <div id="bank" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div id="bank" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Curriculum Topic Health</h3>
-                <p className="text-xs text-slate-500">Mastery distribution across class cohorts</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Curriculum Topic Health</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Mastery distribution across class cohorts</p>
               </div>
-              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                Live Seed Metrics
-              </span>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/faculty/questions"
+                  prefetch={false}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Open Question Bank →
+                </Link>
+                <Link
+                  href="/faculty/analytics"
+                  prefetch={false}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Class Analytics →
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">

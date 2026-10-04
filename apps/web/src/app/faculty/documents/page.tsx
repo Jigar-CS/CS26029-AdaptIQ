@@ -20,6 +20,8 @@ import {
   Hash,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { Sidebar } from '@/components/Sidebar';
+import { Navbar } from '@/components/Navbar';
 
 interface DocumentChunk {
   id: string;
@@ -326,9 +328,16 @@ export default function FacultyDocumentsPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+    <div className="min-h-screen bg-slate-950 flex text-slate-100 font-sans">
+      <Sidebar />
+      <div className="flex-1 ml-64 flex flex-col min-w-0">
+        <Navbar
+          title="Document AI & Course RAG Studio"
+          subtitle="Semantic document ingestion, contextual retrieval & grounded quiz generation"
+        />
+        <main className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300 w-full">
+          {/* Header Banner */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2.5 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-500 text-white shadow-lg shadow-cyan-500/20">
@@ -718,6 +727,8 @@ export default function FacultyDocumentsPage() {
           )}
         </div>
       )}
+        </main>
+      </div>
 
       {/* Ingest Document Modal */}
       {showUploadModal && (

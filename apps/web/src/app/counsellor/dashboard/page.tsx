@@ -238,7 +238,7 @@ export default function CounsellorDashboard() {
           </div>
 
           {/* At-Risk Student Predictive Queue */}
-          <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-6">
+          <div id="alerts" className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -354,8 +354,17 @@ export default function CounsellorDashboard() {
           </div>
 
           {/* Assigned Students Roster */}
-          <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-white">Assigned Student Knowledge Profiles</h3>
+          <div id="students" className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">Assigned Student Knowledge Profiles</h3>
+              <a
+                href="/counsellor/students"
+                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1"
+              >
+                <span>Full Roster View</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
             <div className="overflow-x-auto border border-slate-800 rounded-xl">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
