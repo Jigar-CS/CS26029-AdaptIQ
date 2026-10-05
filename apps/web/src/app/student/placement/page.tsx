@@ -173,26 +173,32 @@ export default function StudentPlacementPage() {
                   <Target className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   Target Career Role
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { id: 'SDE', label: 'SDE Core' },
-                    { id: 'DATA_ANALYST', label: 'Data Analyst' },
-                    { id: 'ML_ENGINEER', label: 'ML Engineer' },
-                    { id: 'GATE_CS', label: 'GATE CS' },
-                  ].map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => handleRoleChange(r.id)}
-                      disabled={updatingRole}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
-                        selectedRole === r.id
-                          ? 'bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30'
-                          : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/80'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-1.5">
+                  {benchmarks.map((r) => {
+                    const labelMap: Record<string, string> = {
+                      SDE: 'SDE Core',
+                      DATA_ANALYST: 'Data Analyst',
+                      ML_ENGINEER: 'ML Engineer',
+                      GATE_CS: 'GATE CS',
+                      CYBERSECURITY_ANALYST: 'Cybersecurity',
+                      CLOUD_DEVOPS: 'Cloud & DevOps',
+                    };
+                    const label = labelMap[r.roleType] || r.roleType.replace('_', ' ');
+                    return (
+                      <button
+                        key={r.roleType}
+                        onClick={() => handleRoleChange(r.roleType)}
+                        disabled={updatingRole}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          selectedRole === r.roleType
+                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30'
+                            : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/80'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -223,14 +229,14 @@ export default function StudentPlacementPage() {
                   <div className="my-4">
                     <div className="flex items-baseline gap-2">
                       <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                        {analysis?.readinessScore ?? 68.5}%
+                        {analysis?.readinessScore ?? 0}%
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">/ 100%</span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mt-3 overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-2 rounded-full transition-all duration-700"
-                        style={{ width: `${Math.min(analysis?.readinessScore ?? 68.5, 100)}%` }}
+                        style={{ width: `${Math.min(analysis?.readinessScore ?? 0, 100)}%` }}
                       />
                     </div>
                   </div>
@@ -244,7 +250,7 @@ export default function StudentPlacementPage() {
                           : 'bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/30'
                       }`}
                     >
-                      {analysis?.hiringBarStatus?.replace('_', ' ') ?? 'NEAR BAR'}
+                      {analysis?.hiringBarStatus?.replace('_', ' ') ?? 'DEVELOPING'}
                     </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">Industry Hire Bar</span>
                   </div>
@@ -278,12 +284,12 @@ export default function StudentPlacementPage() {
                   </div>
                   <div className="my-2">
                     <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {activeBenchmark?.salaryRange || '₹14 - ₹28 LPA'}
+                      {activeBenchmark?.salaryRange || 'Competitive Industry Norm'}
                     </span>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Tier-1 & Campus Placement Norms</p>
                   </div>
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1">
-                    Partners: {activeBenchmark?.hiringPartners || 'Google, Amazon, Microsoft'}
+                    Partners: {activeBenchmark?.hiringPartners || 'Tier-1 Recruiters'}
                   </div>
                 </div>
 
@@ -296,11 +302,11 @@ export default function StudentPlacementPage() {
                   <div className="my-2">
                     <div className="flex items-baseline gap-2">
                       <span className="text-3xl font-extrabold text-slate-900 dark:text-white">
-                        {analysis?.mockTestsTaken ?? 3}
+                        {analysis?.mockTestsTaken ?? 0}
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">Tests Completed</span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Avg Score: {analysis?.avgMockScore ?? 72.5}%</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Avg Score: {analysis?.avgMockScore ?? 0}%</p>
                   </div>
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
                     <CheckCircle className="w-3.5 h-3.5" />
@@ -442,9 +448,11 @@ export default function StudentPlacementPage() {
                   </div>
 
                   <div className="p-4 rounded-xl bg-indigo-50 dark:bg-gradient-to-tr dark:from-indigo-950/80 dark:to-purple-950/50 border border-indigo-200 dark:border-indigo-500/30 text-xs">
-                    <span className="font-bold text-indigo-900 dark:text-indigo-300 block mb-1">Campus Placement Guarantee</span>
+                    <span className="font-bold text-indigo-900 dark:text-indigo-300 block mb-1">
+                      Campus Placement Eligibility: {activeBenchmark?.targetMastery || 80}% Threshold
+                    </span>
                     <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Maintaining &gt;80% overall readiness qualifies your profile for prioritized campus placement interviews.
+                      Maintaining ≥{activeBenchmark?.targetMastery || 80}% overall readiness qualifies your profile for prioritized campus placement interviews with {activeBenchmark?.hiringPartners || 'Tier-1 hiring partners'}.
                     </p>
                   </div>
                 </div>
