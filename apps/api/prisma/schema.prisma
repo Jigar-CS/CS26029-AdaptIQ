@@ -213,6 +213,8 @@ model StudentProfile {
   proctoringSessions  ProctoringSession[]
   placementProfile    StudentPlacementProfile?
   codeSubmissions     CodeSubmission[]
+  questionDisputes    QuestionDispute[]
+  notifications       StudentNotification[]
 }
 
 model FacultyProfile {
@@ -222,6 +224,7 @@ model FacultyProfile {
   employeeCode String?      @unique
   departmentId String?
   assessments  Assessment[]
+  reviewedDisputes QuestionDispute[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -245,6 +248,7 @@ model Question {
   assessmentQuestions AssessmentQuestion[]
   submissionAnswers   SubmissionAnswer[]
   coMappings          QuestionCOMapping[]
+  disputes            QuestionDispute[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -967,8 +971,45 @@ model PlagiarismMatch {
   @@index([scanId, similarityScore])
 }
 
+enum DisputeStatus {
+  PENDING
+  APPROVED_STUDENT_CORRECT
+  REJECTED_AI_CORRECT
+}
 
+model QuestionDispute {
+  id                String          @id @default(uuid())
+  questionId        String
+  question          Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  studentId         String
+  student           StudentProfile  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  practiceSessionId String?
+  selectedOptionId  String?
+  reasonCategory    String          @default("WRONG_ANSWER")
+  studentComment    String          @db.Text
+  status            DisputeStatus   @default(PENDING)
+  facultyId         String?
+  faculty           FacultyProfile? @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  facultyRemarks    String?         @db.Text
+  resolvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
+  @@index([questionId])
+  @@index([studentId])
+  @@index([status])
+}
 
+model StudentNotification {
+  id        String         @id @default(uuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title     String
+  message   String         @db.Text
+  type      String         @default("DISPUTE_UPDATE")
+  read      Boolean        @default(false)
+  metadata  String?        @db.Text
+  createdAt DateTime       @default(now())
 
-
+  @@index([studentId, read])
+}

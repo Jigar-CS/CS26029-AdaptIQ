@@ -29,9 +29,16 @@ import {
   Moon,
   UserCircle,
   Trophy,
+  ShieldAlert,
+  Lock,
 } from 'lucide-react';
 
-export function Sidebar() {
+export interface SidebarProps {
+  isLocked?: boolean;
+  onLockedClick?: () => void;
+}
+
+export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { isPinned, togglePin } = useSidebar();
@@ -64,6 +71,7 @@ export function Sidebar() {
   const facultyLinks = [
     { name: 'Faculty Dashboard', href: '/faculty/dashboard', icon: LayoutDashboard },
     { name: 'Question Bank', href: '/faculty/questions', icon: BookOpen },
+    { name: 'Question Disputes', href: '/faculty/disputes', icon: ShieldAlert },
     { name: 'Class Analytics', href: '/faculty/analytics', icon: TrendingUp },
     { name: 'AI Question Studio', href: '/faculty/ai-generator', icon: Sparkles },
     { name: 'Document AI / RAG', href: '/faculty/documents', icon: FileSpreadsheet },
@@ -185,16 +193,29 @@ export function Sidebar() {
           {currentLinks.map((link) => {
             const Icon = link.icon;
             const isActive = pathname === link.href;
+            const isItemLocked = isLocked && !isActive;
+
+            const handleLinkClick = (e: React.MouseEvent) => {
+              if (isItemLocked) {
+                e.preventDefault();
+                e.stopPropagation();
+                onLockedClick?.();
+              }
+            };
 
             if (isExpanded) {
               return (
                 <Link
                   key={link.name}
                   href={link.href}
+                  onClick={handleLinkClick}
                   prefetch={false}
+                  title={isItemLocked ? `${link.name} (Locked during practice session - exit session first)` : link.name}
                   className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-semibold shadow-xs'
+                      : isItemLocked
+                      ? 'text-slate-400 dark:text-slate-500 opacity-60 cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-900/50'
                       : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -202,6 +223,9 @@ export function Sidebar() {
                     <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`} />
                     <span className="truncate">{link.name}</span>
                   </div>
+                  {isItemLocked && (
+                    <Lock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                  )}
                 </Link>
               );
             }
@@ -211,10 +235,13 @@ export function Sidebar() {
               <div key={link.name} className="relative group flex justify-center">
                 <Link
                   href={link.href}
+                  onClick={handleLinkClick}
                   prefetch={false}
                   className={`flex items-center justify-center w-11 h-11 rounded-xl transition-all ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-xs'
+                      : isItemLocked
+                      ? 'text-slate-400 dark:text-slate-600 opacity-60 cursor-not-allowed hover:bg-transparent'
                       : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -223,7 +250,7 @@ export function Sidebar() {
 
                 {/* Floating Tooltip */}
                 <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50">
-                  {link.name}
+                  {link.name} {isItemLocked && '(Locked during session)'}
                   <div className="absolute top-1/2 -left-1 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
                 </div>
               </div>
@@ -238,12 +265,19 @@ export function Sidebar() {
           <div className="flex items-center justify-between animate-in fade-in duration-200">
             <Link
               href={`/${user.role.toLowerCase()}/profile`}
+              onClick={(e) => {
+                if (isLocked) {
+                  e.preventDefault();
+                  onLockedClick?.();
+                }
+              }}
               prefetch={false}
-              className="truncate pr-2 group block hover:opacity-85 transition"
-              title="Click to view & edit profile"
+              className={`truncate pr-2 group block transition ${isLocked ? 'cursor-not-allowed opacity-60' : 'hover:opacity-85'}`}
+              title={isLocked ? 'Profile locked during active practice session' : 'Click to view & edit profile'}
             >
               <p className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center gap-1">
                 <span>{user.name || user.email}</span>
+                {isLocked && <Lock className="w-3 h-3 text-slate-400 inline ml-0.5" />}
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
             </Link>
@@ -260,8 +294,15 @@ export function Sidebar() {
                 )}
               </button>
               <button
-                onClick={logout}
-                title="Log out"
+                onClick={(e) => {
+                  if (isLocked) {
+                    e.preventDefault();
+                    onLockedClick?.();
+                    return;
+                  }
+                  logout();
+                }}
+                title={isLocked ? 'Logout locked during active practice session' : 'Log out'}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
               >
                 <LogOut className="w-4 h-4" />
@@ -283,15 +324,28 @@ export function Sidebar() {
             </button>
             <Link
               href={`/${user.role.toLowerCase()}/profile`}
+              onClick={(e) => {
+                if (isLocked) {
+                  e.preventDefault();
+                  onLockedClick?.();
+                }
+              }}
               prefetch={false}
-              title={`View Profile: ${user.name || user.email}`}
-              className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs hover:ring-2 hover:ring-blue-500 transition"
+              title={isLocked ? 'Profile locked during active session' : `View Profile: ${user.name || user.email}`}
+              className={`w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs transition ${isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:ring-2 hover:ring-blue-500'}`}
             >
               {(user.name || user.email || 'U').charAt(0).toUpperCase()}
             </Link>
             <button
-              onClick={logout}
-              title="Log out"
+              onClick={(e) => {
+                if (isLocked) {
+                  e.preventDefault();
+                  onLockedClick?.();
+                  return;
+                }
+                logout();
+              }}
+              title={isLocked ? 'Logout locked during active session' : 'Log out'}
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
             >
               <LogOut className="w-4 h-4" />

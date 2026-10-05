@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestionDifficulty, SpacedRepetitionStatus } from '@prisma/client';
+import { AiQuestionGeneratorService } from '../ai/ai-question-generator.service';
 
 export interface CalibrationResult {
   topicId: string;
@@ -27,7 +28,10 @@ export interface SpacedScheduleItem {
 
 @Injectable()
 export class AdaptiveLearningService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aiQuestionGenerator: AiQuestionGeneratorService,
+  ) {}
 
   /**
    * Calculates the dynamic calibrated difficulty tier for a student on a specific topic.
@@ -53,26 +57,28 @@ export class AdaptiveLearningService {
       },
     });
 
-    const currentMastery = mastery ? mastery.masteryScore : 50.0;
+    const hasAttempts = mastery && mastery.attemptCount > 0;
+    const currentMastery = hasAttempts ? Math.round(mastery.masteryScore * 10) / 10 : 0.0;
     let recommendedDifficulty: QuestionDifficulty;
     let pedagogicalRationale: string;
 
-    if (currentMastery < 40) {
+    if (!hasAttempts || currentMastery < 40) {
       recommendedDifficulty = QuestionDifficulty.EASY;
-      pedagogicalRationale =
-        'Current concept mastery is below 40%. Calibrating to foundational questions to reinforce core definitions and invariants.';
+      pedagogicalRationale = !hasAttempts
+        ? 'Diagnostic baseline (0% mastery). Calibrating to foundational Level 1 questions to establish initial conceptual footing.'
+        : `Current concept mastery is ${currentMastery}%. Calibrating to foundational questions to reinforce core definitions and invariants.`;
     } else if (currentMastery < 70) {
       recommendedDifficulty = QuestionDifficulty.MEDIUM;
       pedagogicalRationale =
-        'Concept mastery is in standard range (40%-70%). Calibrating to intermediate application questions to strengthen analytical problem solving.';
+        `Concept mastery is in standard range (${currentMastery}%). Calibrating to intermediate application questions to strengthen analytical problem solving.`;
     } else {
       recommendedDifficulty = QuestionDifficulty.HARD;
       pedagogicalRationale =
-        'Demonstrated strong mastery (>= 70%). Calibrating to advanced questions emphasizing edge cases, algorithmic trade-offs, and synthesis.';
+        `Demonstrated strong mastery (${currentMastery}%). Calibrating to advanced questions emphasizing edge cases, algorithmic trade-offs, and synthesis.`;
     }
 
-    const lowConfidence = Math.max(0, currentMastery - 7.5);
-    const highConfidence = Math.min(100, currentMastery + 7.5);
+    const lowConfidence = !hasAttempts ? 0 : Math.max(0, Math.round((currentMastery - 7.5) * 10) / 10);
+    const highConfidence = !hasAttempts ? 15 : Math.min(100, Math.round((currentMastery + 7.5) * 10) / 10);
 
     return {
       topicId,
@@ -85,17 +91,25 @@ export class AdaptiveLearningService {
   }
 
   /**
-   * Retrieves the next optimal question calibrated to current student ability.
+   * Retrieves the next optimal question calibrated to current student ability or user-selected difficulty override.
    */
-  async getNextAdaptiveQuestion(studentId: string, topicId: string, courseId?: string) {
+  async getNextAdaptiveQuestion(
+    studentId: string,
+    topicId: string,
+    courseId?: string,
+    preferredDifficulty?: QuestionDifficulty,
+    excludeIds?: string[],
+  ) {
     const calibration = await this.getCalibratedDifficulty(studentId, topicId);
+    const targetDifficulty = preferredDifficulty || calibration.recommendedDifficulty;
 
-    // Find questions in this topic matching the calibrated difficulty
+    // Find questions in this topic matching the target difficulty
     const candidateQuestions = await this.prisma.question.findMany({
       where: {
         topicId,
         ...(courseId ? { courseId } : {}),
-        difficulty: calibration.recommendedDifficulty,
+        difficulty: targetDifficulty,
+        ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
       },
       include: {
         options: {
@@ -112,9 +126,41 @@ export class AdaptiveLearningService {
     });
 
     if (candidateQuestions.length === 0) {
-      // Fallback to any question in topic
+      // Step A: Automatically generate a fresh, verified AI question for this topic & difficulty
+      try {
+        const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
+        if (topic) {
+          const aiResult = await this.aiQuestionGenerator.generateAndPersistQuestion({
+            topicName: topic.name,
+            courseId: courseId || topic.courseId,
+            difficulty: targetDifficulty,
+            preferredDifficulty: targetDifficulty,
+          });
+
+          if (aiResult?.question) {
+            return {
+              question: aiResult.question,
+              calibration: {
+                ...calibration,
+                activeDifficulty: targetDifficulty,
+                isManualOverride: !!preferredDifficulty,
+              },
+              isFallback: false,
+              isAiGenerated: true,
+            };
+          }
+        }
+      } catch (genErr) {
+        console.warn('AI question auto-generation fallback to database:', genErr);
+      }
+
+      // Step B: Fallback: try any question in topic not yet attempted
       const fallback = await this.prisma.question.findFirst({
-        where: { topicId },
+        where: {
+          topicId,
+          ...(courseId ? { courseId } : {}),
+          ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+        },
         include: {
           options: {
             select: { id: true, optionText: true, order: true },
@@ -126,19 +172,43 @@ export class AdaptiveLearningService {
 
       return {
         question: fallback,
-        calibration,
+        calibration: {
+          ...calibration,
+          activeDifficulty: targetDifficulty,
+          isManualOverride: !!preferredDifficulty,
+        },
         isFallback: true,
       };
     }
 
-    // Select random question from calibrated pool
+    // Select random question from eligible pool
     const selected = candidateQuestions[Math.floor(Math.random() * candidateQuestions.length)];
 
     return {
       question: selected,
-      calibration,
+      calibration: {
+        ...calibration,
+        activeDifficulty: targetDifficulty,
+        isManualOverride: !!preferredDifficulty,
+      },
       isFallback: false,
     };
+  }
+
+  /**
+   * Generates a topic-specific question on-demand using AI
+   */
+  async generateOnDemandQuestion(
+    topicName: string,
+    courseId: string,
+    difficulty?: QuestionDifficulty,
+  ) {
+    return this.aiQuestionGenerator.generateAndPersistQuestion({
+      topicName,
+      courseId,
+      difficulty: difficulty || QuestionDifficulty.MEDIUM,
+      preferredDifficulty: difficulty,
+    });
   }
 
   /**

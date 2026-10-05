@@ -14,16 +14,48 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole, SocraticActionType } from '@prisma/client';
+import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
 
 export class SocraticRemediationDto {
+  @IsString()
+  @IsNotEmpty()
   questionId: string;
+
+  @IsString()
+  @IsNotEmpty()
   selectedOptionId: string;
 }
 
 export class SocraticActionDto {
+  @IsString()
+  @IsNotEmpty()
   conversationId: string;
-  actionType: SocraticActionType;
+
+  @IsString()
+  @IsNotEmpty()
+  actionType: string;
+
+  @IsString()
+  @IsOptional()
   userMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  message?: string;
+}
+
+export class SocraticMessageDto {
+  @IsString()
+  @IsOptional()
+  actionType?: string;
+
+  @IsString()
+  @IsOptional()
+  userMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  message?: string;
 }
 
 @Controller('ai')
@@ -52,7 +84,50 @@ export class AiController {
     if (!dto.conversationId || !dto.actionType) {
       throw new BadRequestException('conversationId and actionType are required');
     }
-    return this.socraticTutorService.handleSocraticAction(req.user.studentId, dto);
+
+    let parsedActionType = dto.actionType as SocraticActionType;
+    if ((dto.actionType as string) === 'USER_QUESTION') {
+      parsedActionType = SocraticActionType.ASK_FOLLOW_UP;
+    }
+
+    const res = await this.socraticTutorService.handleSocraticAction(req.user.studentId, {
+      conversationId: dto.conversationId,
+      actionType: parsedActionType,
+      userMessage: dto.userMessage || dto.message,
+    });
+
+    return {
+      ...res,
+      message: res.reply,
+    };
+  }
+
+  @Post('socratic/conversations/:conversationId/message')
+  @Roles(UserRole.STUDENT)
+  async postConversationMessage(
+    @Request() req,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: SocraticMessageDto,
+  ) {
+    if (!req.user.studentId) {
+      throw new ForbiddenException('Authenticated user is not linked to a student profile');
+    }
+
+    let parsedActionType = (dto.actionType as SocraticActionType) || SocraticActionType.ASK_FOLLOW_UP;
+    if ((dto.actionType as string) === 'USER_QUESTION') {
+      parsedActionType = SocraticActionType.ASK_FOLLOW_UP;
+    }
+
+    const res = await this.socraticTutorService.handleSocraticAction(req.user.studentId, {
+      conversationId,
+      actionType: parsedActionType,
+      userMessage: dto.userMessage || dto.message,
+    });
+
+    return {
+      ...res,
+      message: res.reply,
+    };
   }
 
   @Get('socratic/conversation/:conversationId')

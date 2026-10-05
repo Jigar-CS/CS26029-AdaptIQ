@@ -43,10 +43,16 @@ export function SocraticAssistantDrawer({
   useEffect(() => {
     if (questionId && selectedOptionId) {
       loadSocraticRemediation();
+    } else {
+      setLoading(false);
     }
   }, [questionId, selectedOptionId]);
 
   const loadSocraticRemediation = async () => {
+    if (!questionId || !selectedOptionId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -77,16 +83,19 @@ export function SocraticAssistantDrawer({
     }
 
     try {
-      const res = await api.post(`/ai/socratic/conversations/${data.conversationId}/message`, {
+      const res = await api.post('/ai/socratic/action', {
+        conversationId: data.conversationId,
         actionType,
         userMessage: customMessage || undefined,
       });
+
+      const replyContent = res.reply || res.message || 'Pedagogical guidance generated.';
 
       setConversation((prev) => [
         ...prev,
         {
           role: 'ASSISTANT',
-          content: res.message,
+          content: replyContent,
           remedialVideoUrl: res.remedialVideoUrl,
           remedialDocSnippet: res.remedialDocSnippet,
         },
@@ -96,7 +105,7 @@ export function SocraticAssistantDrawer({
         ...prev,
         {
           role: 'ASSISTANT',
-          content: 'Sorry, I encountered an issue retrieving further pedagogical guidance.',
+          content: err?.message || 'Sorry, I encountered an issue retrieving further pedagogical guidance.',
         },
       ]);
     } finally {
@@ -108,8 +117,12 @@ export function SocraticAssistantDrawer({
   const handleSendQuery = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userQuery.trim() || actionLoading) return;
-    handleAction('USER_QUESTION', userQuery);
+    handleAction('ASK_FOLLOW_UP', userQuery);
   };
+
+  if (!questionId || !selectedOptionId) {
+    return null;
+  }
 
   if (loading) {
     return (

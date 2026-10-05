@@ -16,14 +16,23 @@ interface AdaptiveCalibrationBannerProps {
   calibration: CalibrationData | null;
   adaptiveMode: boolean;
   onToggleAdaptive: () => void;
+  selectedDifficulty?: string;
 }
 
 export function AdaptiveCalibrationBanner({
   calibration,
   adaptiveMode,
   onToggleAdaptive,
+  selectedDifficulty = 'MEDIUM',
 }: AdaptiveCalibrationBannerProps) {
   if (!calibration) return null;
+
+  const activeDifficulty = (adaptiveMode
+    ? calibration.recommendedDifficulty
+    : (selectedDifficulty as 'EASY' | 'MEDIUM' | 'HARD') || calibration.recommendedDifficulty) as
+    | 'EASY'
+    | 'MEDIUM'
+    | 'HARD';
 
   const difficultyColors = {
     EASY: 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 shadow-xs',
@@ -50,15 +59,21 @@ export function AdaptiveCalibrationBanner({
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="font-extrabold text-slate-900 dark:text-white text-base tracking-tight">
-                Adaptive Difficulty Calibration
+                {adaptiveMode ? 'Adaptive Difficulty Calibration' : 'Manual Feature Calibration'}
               </h3>
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
+                adaptiveMode
+                  ? 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30'
+                  : 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
+              }`}>
                 <Sparkles className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                Adaptive Engine
+                {adaptiveMode ? 'Adaptive Engine' : 'Custom Calibration'}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
-              {calibration.pedagogicalRationale}
+              {adaptiveMode
+                ? calibration.pedagogicalRationale
+                : `Manual challenge calibration active (${activeDifficulty}). You are manually calibrating to practice ${activeDifficulty.toLowerCase()}-tier conceptual questions in ${calibration.topicName}, overriding the automatic diagnostic baseline.`}
             </p>
           </div>
         </div>
@@ -66,14 +81,14 @@ export function AdaptiveCalibrationBanner({
         <div className="flex items-center gap-3.5 self-end sm:self-center shrink-0">
           <div className="text-right">
             <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Calibrated Tier
+              {adaptiveMode ? 'Calibrated Tier' : 'User-Selected Tier'}
             </div>
             <span
               className={`inline-block mt-1 px-3 py-1.5 rounded-xl text-xs font-extrabold border ${
-                difficultyColors[calibration.recommendedDifficulty]
+                difficultyColors[activeDifficulty] || difficultyColors.MEDIUM
               }`}
             >
-              {calibration.recommendedDifficulty} • {difficultyLabels[calibration.recommendedDifficulty]}
+              {activeDifficulty} • {difficultyLabels[activeDifficulty] || 'Custom Tier'}
             </span>
           </div>
 
@@ -83,7 +98,7 @@ export function AdaptiveCalibrationBanner({
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all border shadow-xs ${
               adaptiveMode
                 ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:border-indigo-400/40 shadow-indigo-600/20'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 dark:hover:text-white'
+                : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 dark:bg-amber-600 dark:hover:bg-amber-500 shadow-amber-500/20'
             }`}
           >
             <Sliders className="h-3.5 w-3.5" />

@@ -3,7 +3,7 @@ import { AdaptiveLearningService } from './adaptive-learning.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { UserRole } from '@prisma/client';
+import { UserRole, QuestionDifficulty } from '@prisma/client';
 
 @Controller('adaptive')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,9 +23,31 @@ export class AdaptiveController {
     @Req() req: any,
     @Query('topicId') topicId: string,
     @Query('courseId') courseId?: string,
+    @Query('difficulty') difficulty?: QuestionDifficulty,
+    @Query('excludeIds') excludeIdsStr?: string,
   ) {
     const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
-    return this.adaptiveService.getNextAdaptiveQuestion(studentProfileId, topicId, courseId);
+    const excludeIds = excludeIdsStr ? excludeIdsStr.split(',').filter(Boolean) : undefined;
+    return this.adaptiveService.getNextAdaptiveQuestion(
+      studentProfileId,
+      topicId,
+      courseId,
+      difficulty,
+      excludeIds,
+    );
+  }
+
+  @Post('generate-question')
+  @Roles(UserRole.STUDENT, UserRole.FACULTY)
+  async generateQuestion(
+    @Req() req: any,
+    @Body() body: { topicName: string; courseId: string; difficulty?: QuestionDifficulty },
+  ) {
+    return this.adaptiveService.generateOnDemandQuestion(
+      body.topicName,
+      body.courseId,
+      body.difficulty,
+    );
   }
 
   @Post('record-attempt')

@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { AdaptiveLearningService } from './adaptive-learning.service';
 import { AdaptiveController } from './adaptive.controller';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AiModule],
   providers: [AdaptiveLearningService],
   controllers: [AdaptiveController],
   exports: [AdaptiveLearningService],
