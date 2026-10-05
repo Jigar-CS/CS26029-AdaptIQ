@@ -27,6 +27,7 @@ import {
   Sparkles,
   Sun,
   Moon,
+  UserCircle,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -47,6 +48,7 @@ export function Sidebar() {
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
     { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck },
     { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap },
+    { name: 'My Profile', href: '/student/profile', icon: UserCircle },
   ];
 
   const adminLinks = [
@@ -54,6 +56,7 @@ export function Sidebar() {
     { name: 'Authorized Students', href: '/admin/students', icon: Users },
     { name: 'Institution Hierarchy', href: '/admin/institutes', icon: Building2 },
     { name: 'System Settings', href: '/admin/settings', icon: Settings },
+    { name: 'My Profile', href: '/admin/profile', icon: UserCircle },
   ];
 
   const facultyLinks = [
@@ -65,22 +68,26 @@ export function Sidebar() {
     { name: 'Exam Studio', href: '/faculty/assessments', icon: FileCheck },
     { name: 'Plagiarism Studio', href: '/faculty/plagiarism', icon: GitCompare },
     { name: 'Invigilation Console', href: '/faculty/invigilation', icon: ShieldCheck },
+    { name: 'My Profile', href: '/faculty/profile', icon: UserCircle },
   ];
 
   const counsellorLinks = [
     { name: 'Counsellor Dashboard', href: '/counsellor/dashboard', icon: LayoutDashboard },
     { name: 'Assigned Students', href: '/counsellor/students', icon: Users },
     { name: 'Intervention Alerts', href: '/counsellor/alerts', icon: ShieldCheck },
+    { name: 'My Profile', href: '/counsellor/profile', icon: UserCircle },
   ];
 
   const hodLinks = [
     { name: 'Department Dashboard', href: '/hod/dashboard', icon: LayoutDashboard },
     { name: 'Curriculum Mastery', href: '/hod/dashboard#curriculum', icon: TrendingUp },
+    { name: 'My Profile', href: '/hod/profile', icon: UserCircle },
   ];
 
   const headLinks = [
     { name: 'Institutional Overview', href: '/head/dashboard', icon: LayoutDashboard },
     { name: 'Program Comparison', href: '/head/programs', icon: Building2 },
+    { name: 'My Profile', href: '/head/profile', icon: UserCircle },
   ];
 
   let currentLinks = studentLinks;
@@ -227,10 +234,17 @@ export function Sidebar() {
       <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60">
         {isExpanded ? (
           <div className="flex items-center justify-between animate-in fade-in duration-200">
-            <div className="truncate pr-2">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{user.name || user.email}</p>
+            <Link
+              href={`/${user.role.toLowerCase()}/profile`}
+              prefetch={false}
+              className="truncate pr-2 group block hover:opacity-85 transition"
+              title="Click to view & edit profile"
+            >
+              <p className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 flex items-center gap-1">
+                <span>{user.name || user.email}</span>
+              </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
-            </div>
+            </Link>
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={toggleTheme}
@@ -265,12 +279,14 @@ export function Sidebar() {
                 <Moon className="w-4 h-4 text-slate-600" />
               )}
             </button>
-            <div
-              title={`${user.name || user.email} (${user.role})`}
-              className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs"
+            <Link
+              href={`/${user.role.toLowerCase()}/profile`}
+              prefetch={false}
+              title={`View Profile: ${user.name || user.email}`}
+              className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs hover:ring-2 hover:ring-blue-500 transition"
             >
               {(user.name || user.email || 'U').charAt(0).toUpperCase()}
-            </div>
+            </Link>
             <button
               onClick={logout}
               title="Log out"

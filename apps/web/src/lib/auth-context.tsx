@@ -22,6 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<UserSession>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
+  updateUser: (updates: Partial<UserSession>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,13 +89,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/auth/login');
   };
 
+  const updateUser = (updates: Partial<UserSession>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem('clias_user', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
   const hasRole = (roles: UserRole[]) => {
     if (!user) return false;
     return roles.includes(user.role);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, updateUser, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

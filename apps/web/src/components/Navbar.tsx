@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { Bell, Search, Shield, User as UserIcon, Sun, Moon } from 'lucide-react';
@@ -57,17 +58,24 @@ export function Navbar({ title, subtitle }: { title?: string; subtitle?: string 
 
         {/* User Card */}
         {user && (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center">
+          <Link
+            href={`/${user.role.toLowerCase()}/profile`}
+            prefetch={false}
+            title="View & Edit Profile"
+            className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition group cursor-pointer"
+          >
+            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center group-hover:ring-2 group-hover:ring-blue-500 transition">
               {user.name ? user.name.slice(0, 2).toUpperCase() : 'US'}
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-slate-900 dark:text-white leading-none">{user.name || user.email}</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white leading-none group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                {user.name || user.email}
+              </p>
               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
                 {user.role}
               </span>
             </div>
-          </div>
+          </Link>
         )}
       </div>
     </header>

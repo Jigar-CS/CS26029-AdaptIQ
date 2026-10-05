@@ -16,6 +16,7 @@ import { ProctoringModule } from './proctoring/proctoring.module';
 import { PlacementModule } from './placement/placement.module';
 import { CodingModule } from './coding/coding.module';
 import { PlagiarismModule } from './plagiarism/plagiarism.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { PlagiarismModule } from './plagiarism/plagiarism.module';
     PlacementModule,
     CodingModule,
     PlagiarismModule,
+    ProfileModule,
   ],
 })
 export class AppModule {}
