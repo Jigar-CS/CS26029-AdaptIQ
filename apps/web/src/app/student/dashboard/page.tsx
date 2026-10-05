@@ -30,105 +30,18 @@ export default function StudentDashboard() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // Baseline rich fallback profile to ensure instant display without UI lag
+  // Initial baseline for fresh student: all metrics start at zero until activity is performed
   const [summary, setSummary] = useState<any>({
-    overallMastery: 72,
-    questionsPracticed: 38,
-    accuracy: 78,
-    streakDays: 7,
-    testsAttempted: 2,
-    weakTopics: [
-      { topicId: 'top-dp', topicName: 'Dynamic Programming (Memoization)', courseCode: 'CS301', masteryScore: 31 },
-      { topicId: 'top-avl', topicName: 'AVL Tree Balancing Invariants', courseCode: 'CS301', masteryScore: 54 },
-    ],
-    strongTopics: [
-      { topicId: 'top-arr', topicName: 'Array Sliding Window & Two Pointers', courseCode: 'CS301', masteryScore: 92 },
-      { topicId: 'top-stk', topicName: 'Monotonic Stack Invariants', courseCode: 'CS301', masteryScore: 88 },
-      { topicId: 'top-bst', topicName: 'Binary Search Tree Traversals', courseCode: 'CS301', masteryScore: 84 },
-    ],
-    topicMasteries: [
-      {
-        topicId: 'top-arr',
-        topicName: 'Arrays & Two Pointers',
-        courseCode: 'CS301',
-        masteryScore: 92,
-        decayedMastery: 90,
-        retentionStatus: 'FRESH',
-        attemptCount: 16,
-      },
-      {
-        topicId: 'top-stk',
-        topicName: 'Stacks & Queues',
-        courseCode: 'CS301',
-        masteryScore: 88,
-        decayedMastery: 85,
-        retentionStatus: 'FRESH',
-        attemptCount: 12,
-      },
-      {
-        topicId: 'top-bst',
-        topicName: 'Binary Search Trees',
-        courseCode: 'CS301',
-        masteryScore: 84,
-        decayedMastery: 79,
-        retentionStatus: 'STABLE',
-        attemptCount: 14,
-      },
-      {
-        topicId: 'top-avl',
-        topicName: 'AVL Tree Rotations',
-        courseCode: 'CS301',
-        masteryScore: 54,
-        decayedMastery: 48,
-        retentionStatus: 'DECAYING',
-        attemptCount: 8,
-      },
-      {
-        topicId: 'top-dp',
-        topicName: 'Dynamic Programming',
-        courseCode: 'CS301',
-        masteryScore: 31,
-        decayedMastery: 28,
-        retentionStatus: 'CRITICAL_DECAY',
-        attemptCount: 6,
-      },
-    ],
-    learningCurve: [
-      { recordedAt: '2026-09-20', masteryScore: 45, topicName: 'Arrays' },
-      { recordedAt: '2026-09-23', masteryScore: 58, topicName: 'Stacks' },
-      { recordedAt: '2026-09-26', masteryScore: 66, topicName: 'Trees' },
-      { recordedAt: '2026-09-29', masteryScore: 71, topicName: 'BST' },
-      { recordedAt: '2026-10-02', masteryScore: 74, topicName: 'Dynamic Programming' },
-    ],
-    recentActivity: [
-      {
-        id: 'rec-1',
-        topicName: 'Dynamic Programming Memoization',
-        courseCode: 'CS301',
-        difficulty: 'MEDIUM',
-        timeTakenSeconds: 42,
-        isCorrect: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'rec-2',
-        topicName: 'Array Sliding Window',
-        courseCode: 'CS301',
-        difficulty: 'EASY',
-        timeTakenSeconds: 24,
-        isCorrect: true,
-        createdAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
-      },
-      {
-        id: 'rec-3',
-        topicName: 'Binary Search Tree Balancing',
-        courseCode: 'CS301',
-        difficulty: 'HARD',
-        timeTakenSeconds: 68,
-        isCorrect: true,
-        createdAt: new Date(Date.now() - 3600 * 1000 * 6).toISOString(),
-      },
-    ],
+    overallMastery: 0,
+    questionsPracticed: 0,
+    accuracy: 0,
+    streakDays: 0,
+    testsAttempted: 0,
+    weakTopics: [],
+    strongTopics: [],
+    topicMasteries: [],
+    learningCurve: [],
+    recentActivity: [],
   });
 
   const [loading, setLoading] = useState(false);
@@ -148,24 +61,21 @@ export default function StudentDashboard() {
     try {
       const data: any = await api.get('/analytics/student/me/summary');
       if (data && typeof data === 'object') {
-        setSummary((prev: any) => ({
-          ...prev,
-          ...data,
-          // ensure metrics are always positive and visible
-          overallMastery: data.overallMastery !== undefined ? data.overallMastery : prev.overallMastery,
-          questionsPracticed: data.questionsPracticed !== undefined ? data.questionsPracticed : prev.questionsPracticed,
-          accuracy: data.accuracy !== undefined ? data.accuracy : prev.accuracy,
-          testsAttempted: data.testsAttempted !== undefined && data.testsAttempted > 0 ? data.testsAttempted : prev.testsAttempted,
-          streakDays: data.streakDays || prev.streakDays,
-          learningCurve: data.learningCurve && data.learningCurve.length > 0 ? data.learningCurve : prev.learningCurve,
-          topicMasteries: data.topicMasteries && data.topicMasteries.length > 0 ? data.topicMasteries : prev.topicMasteries,
-          weakTopics: data.weakTopics && data.weakTopics.length > 0 ? data.weakTopics : prev.weakTopics,
-          strongTopics: data.strongTopics && data.strongTopics.length > 0 ? data.strongTopics : prev.strongTopics,
-          recentActivity: data.recentActivity && data.recentActivity.length > 0 ? data.recentActivity : prev.recentActivity,
-        }));
+        setSummary({
+          overallMastery: typeof data.overallMastery === 'number' ? data.overallMastery : 0,
+          questionsPracticed: typeof data.questionsPracticed === 'number' ? data.questionsPracticed : 0,
+          accuracy: typeof data.accuracy === 'number' ? data.accuracy : 0,
+          testsAttempted: typeof data.testsAttempted === 'number' ? data.testsAttempted : 0,
+          streakDays: typeof data.streakDays === 'number' ? data.streakDays : 0,
+          learningCurve: Array.isArray(data.learningCurve) ? data.learningCurve : [],
+          topicMasteries: Array.isArray(data.topicMasteries) ? data.topicMasteries : [],
+          weakTopics: Array.isArray(data.weakTopics) ? data.weakTopics : [],
+          strongTopics: Array.isArray(data.strongTopics) ? data.strongTopics : [],
+          recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : [],
+        });
       }
     } catch {
-      // Keep rich baseline data active
+      // Keep real zero state
     }
   };
 
@@ -190,10 +100,18 @@ export default function StudentDashboard() {
                 <span>Next Recommended Adaptive Session</span>
               </div>
               <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight text-white">
-                Strengthen Dynamic Programming &amp; Trees
+                {summary?.weakTopics && summary.weakTopics.length > 0
+                  ? `Strengthen ${summary.weakTopics[0].topicName}`
+                  : summary?.questionsPracticed > 0
+                  ? 'Continue Adaptive Mastery'
+                  : 'Begin Your Adaptive Learning Journey'}
               </h2>
               <p className="text-xs md:text-sm text-indigo-200 mt-2 leading-relaxed">
-                Your current mastery in Dynamic Programming is 31%. Completing 3 targeted practice questions will reinforce optimal substructure invariants.
+                {summary?.weakTopics && summary.weakTopics.length > 0
+                  ? `Your current mastery in ${summary.weakTopics[0].topicName} is ${summary.weakTopics[0].masteryScore}%. Completing targeted practice questions will reinforce key concepts.`
+                  : summary?.questionsPracticed > 0
+                  ? `You have practiced ${summary.questionsPracticed} questions with ${summary.accuracy}% accuracy. Keep practicing to elevate topic proficiency.`
+                  : 'Start practicing to diagnose your current mastery levels and generate your real-time knowledge curve.'}
               </p>
             </div>
 
@@ -203,7 +121,7 @@ export default function StudentDashboard() {
               className="relative z-10 inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-indigo-950 font-black text-xs shadow-xl hover:bg-blue-50 transition transform hover:-translate-y-0.5 shrink-0"
             >
               <BrainCircuit className="w-4 h-4 text-blue-600" />
-              <span>Start Adaptive Practice</span>
+              <span>{summary?.questionsPracticed > 0 ? 'Continue Practice' : 'Start Adaptive Practice'}</span>
               <ArrowRight className="w-4 h-4 text-blue-600" />
             </Link>
           </div>
@@ -221,36 +139,40 @@ export default function StudentDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <MetricCard
                 title="Overall Mastery"
-                value={`${summary?.overallMastery || 72}%`}
+                value={`${summary?.overallMastery ?? 0}%`}
                 subtitle="Knowledge Tracing Score"
                 icon={BrainCircuit}
-                trend={{ value: '14% this week', isPositive: true }}
+                trend={
+                  summary?.overallMastery > 0
+                    ? { value: `${summary.overallMastery}% achieved`, isPositive: true }
+                    : undefined
+                }
                 color="indigo"
               />
               <MetricCard
                 title="Questions Practiced"
-                value={summary?.questionsPracticed || 38}
+                value={summary?.questionsPracticed ?? 0}
                 subtitle="Total Attempts Logged"
                 icon={Target}
                 color="blue"
               />
               <MetricCard
                 title="Accuracy Rate"
-                value={`${summary?.accuracy || 78}%`}
+                value={`${summary?.accuracy ?? 0}%`}
                 subtitle="First-Attempt Precision"
                 icon={CheckCircle2}
                 color="emerald"
               />
               <MetricCard
                 title="Active Streak"
-                value={`${summary?.streakDays || 7} Days`}
+                value={`${summary?.streakDays ?? 0} Days`}
                 subtitle="Daily Learning Rhythm"
                 icon={Flame}
                 color="amber"
               />
               <MetricCard
                 title="Tests Completed"
-                value={summary?.testsAttempted || 2}
+                value={summary?.testsAttempted ?? 0}
                 subtitle="Official Assessments"
                 icon={Award}
                 color="purple"

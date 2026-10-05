@@ -273,12 +273,26 @@ export class LearningAnalyticsService {
       })),
     );
 
+    let streakDays = 0;
+    if (totalAttempts > 0) {
+      const recentAttemptsDates = await this.prisma.questionAttempt.findMany({
+        where: { studentId },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      });
+      const uniqueDays = new Set(
+        recentAttemptsDates.map((d) => d.createdAt.toISOString().slice(0, 10)),
+      );
+      streakDays = uniqueDays.size;
+    }
+
     return {
       overallMastery,
       questionsPracticed: totalAttempts,
       accuracy,
-      streakDays: 7, // Baseline calculated or default for active students
-      testsAttempted: testsCount > 0 ? testsCount : 2, // Active assessed examinations
+      streakDays,
+      testsAttempted: testsCount,
       strongTopics,
       weakTopics,
       phase2Intelligence: {
