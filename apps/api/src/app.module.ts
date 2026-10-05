@@ -17,6 +17,7 @@ import { PlacementModule } from './placement/placement.module';
 import { CodingModule } from './coding/coding.module';
 import { PlagiarismModule } from './plagiarism/plagiarism.module';
 import { ProfileModule } from './profile/profile.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ProfileModule } from './profile/profile.module';
     CodingModule,
     PlagiarismModule,
     ProfileModule,
+    LeaderboardModule,
   ],
 })
 export class AppModule {}

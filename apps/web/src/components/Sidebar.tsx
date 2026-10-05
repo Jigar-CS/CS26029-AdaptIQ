@@ -28,6 +28,7 @@ import {
   Sun,
   Moon,
   UserCircle,
+  Trophy,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -43,6 +44,7 @@ export function Sidebar() {
 
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
+    { name: 'Semester Leaderboard', href: '/student/leaderboard', icon: Trophy },
     { name: 'Placement Readiness', href: '/student/placement', icon: Briefcase },
     { name: 'Coding Arena', href: '/student/coding', icon: Terminal },
     { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
