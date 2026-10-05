@@ -59,88 +59,71 @@ export class LeaderboardService {
       orderBy: { code: 'asc' },
     });
 
-    // 3. Fetch all active student profiles in the database
-    const dbStudents = await this.prisma.studentProfile.findMany({
+    // 3. Fetch all authorized students for this semester in the database
+    const dbAuthorized = await this.prisma.authorizedStudent.findMany({
+      where: { semester: targetSemester },
       include: {
-        authorizedStudent: true,
-        user: { select: { email: true } },
-        assessmentSubmissions: {
-          where: {
-            status: SubmissionStatus.EVALUATED,
-            ...(targetCourseId ? { assessment: { courseId: targetCourseId } } : {}),
-          },
-          select: {
-            percentage: true,
-            totalScore: true,
-            passed: true,
-          },
-        },
-        skillMasteries: {
-          where: {
-            ...(targetCourseId ? { topic: { courseId: targetCourseId } } : {}),
-          },
-          select: {
-            masteryScore: true,
-            attemptCount: true,
-            correctCount: true,
-          },
-        },
-        practiceSessions: {
-          where: {
-            ...(targetCourseId ? { courseId: targetCourseId } : {}),
-          },
-          select: {
-            questionsAttempted: true,
-            correctAnswers: true,
-          },
-        },
-        attempts: {
-          select: {
-            createdAt: true,
+        studentProfile: {
+          include: {
+            user: { select: { email: true } },
+            assessmentSubmissions: {
+              where: {
+                status: SubmissionStatus.EVALUATED,
+                ...(targetCourseId ? { assessment: { courseId: targetCourseId } } : {}),
+              },
+              select: {
+                percentage: true,
+                totalScore: true,
+                passed: true,
+              },
+            },
+            skillMasteries: {
+              where: {
+                ...(targetCourseId ? { topic: { courseId: targetCourseId } } : {}),
+              },
+              select: {
+                masteryScore: true,
+                attemptCount: true,
+                correctCount: true,
+              },
+            },
+            practiceSessions: {
+              where: {
+                ...(targetCourseId ? { courseId: targetCourseId } : {}),
+              },
+              select: {
+                questionsAttempted: true,
+                correctAnswers: true,
+              },
+            },
+            attempts: {
+              select: {
+                createdAt: true,
+              },
+            },
           },
         },
       },
     });
 
-    // 4. Generate curated cohort benchmark peers to provide realistic 40-50 student semester competition
-    const peerTemplates = [
-      { name: 'Priya Sharma', num: '24CS002', div: 'CE-A', baseExam: 94.5, basePrac: 96.0, qCount: 88, streak: 14 },
-      { name: 'Aarav Desai', num: '24CS003', div: 'CE-B', baseExam: 92.0, basePrac: 94.0, qCount: 76, streak: 11 },
-      { name: 'Ananya Shah', num: '24CS004', div: 'CE-A', baseExam: 90.5, basePrac: 89.0, qCount: 65, streak: 9 },
-      { name: 'Devansh Joshi', num: '24CS005', div: 'CE-B', baseExam: 88.0, basePrac: 91.5, qCount: 62, streak: 8 },
-      { name: 'Isha Patel', num: '24CS012', div: 'CE-A', baseExam: 86.5, basePrac: 85.0, qCount: 54, streak: 7 },
-      { name: 'Kavya Trivedi', num: '24CS018', div: 'CE-B', baseExam: 85.0, basePrac: 88.0, qCount: 50, streak: 6 },
-      { name: 'Rohan Mehta', num: '24CS023', div: 'CE-A', baseExam: 83.5, basePrac: 82.0, qCount: 48, streak: 5 },
-      { name: 'Tanvi Parikh', num: '24CS031', div: 'CE-B', baseExam: 82.0, basePrac: 84.5, qCount: 45, streak: 6 },
-      { name: 'Siddharth Dave', num: '24CS045', div: 'CE-A', baseExam: 80.0, basePrac: 79.0, qCount: 42, streak: 4 },
-      { name: 'Diya Panchal', num: '24CS052', div: 'CE-B', baseExam: 78.5, basePrac: 81.0, qCount: 38, streak: 5 },
-      { name: 'Harsh Vora', num: '24CS061', div: 'CE-A', baseExam: 76.0, basePrac: 77.0, qCount: 36, streak: 3 },
-      { name: 'Nidhi Bhatt', num: '24CS074', div: 'CE-B', baseExam: 74.5, basePrac: 78.5, qCount: 35, streak: 4 },
-      { name: 'Manan Soni', num: '24CS082', div: 'CE-A', baseExam: 72.0, basePrac: 73.0, qCount: 31, streak: 2 },
-      { name: 'Kruti Pandya', num: '24CS088', div: 'CE-B', baseExam: 70.5, basePrac: 75.0, qCount: 30, streak: 3 },
-      { name: 'Yash Solanki', num: '24CS101', div: 'CE-A', baseExam: 68.0, basePrac: 70.0, qCount: 28, streak: 2 },
-      { name: 'Bhavya Modi', num: '24CS110', div: 'CE-B', baseExam: 66.5, basePrac: 68.0, qCount: 25, streak: 2 },
-      { name: 'Jatin Chauhan', num: '24CS118', div: 'CE-A', baseExam: 64.0, basePrac: 65.0, qCount: 22, streak: 1 },
-      { name: 'Pooja Barot', num: '24CS125', div: 'CE-B', baseExam: 62.0, basePrac: 63.5, qCount: 20, streak: 1 },
-      { name: 'Vatsal Zala', num: '24CS132', div: 'CE-A', baseExam: 59.5, basePrac: 61.0, qCount: 18, streak: 1 },
-      { name: 'Sneha Rana', num: '24CS140', div: 'CE-B', baseExam: 57.0, basePrac: 58.0, qCount: 15, streak: 0 },
-    ];
-
     const allEntries: LeaderboardEntry[] = [];
     const processedEnrollments = new Set<string>();
 
-    // Process real students in DB first
-    for (const st of dbStudents) {
-      const auth = st.authorizedStudent;
-      const isCurrent = st.id === currentStudentProfileId || st.userId === userId;
+    // Process genuine students from the database
+    for (const auth of dbAuthorized) {
+      const st = auth.studentProfile;
+      const isCurrent =
+        (st && (st.id === currentStudentProfileId || st.userId === userId)) ||
+        auth.userId === userId ||
+        auth.enrollmentNumber === studentRecord?.enrollmentNumber;
 
-      const enroll = auth?.enrollmentNumber || (isCurrent ? (studentRecord?.enrollmentNumber || '24CS093') : `CS-${st.id.slice(0, 5)}`);
+      const enroll = auth.enrollmentNumber;
       processedEnrollments.add(enroll);
 
       // 1. Calculate actual assessment score
       let assessmentScore = 0;
-      const subCount = st.assessmentSubmissions.length;
-      if (subCount > 0) {
+      const subCount = st?.assessmentSubmissions.length || 0;
+      if (st && subCount > 0) {
         const sumPct = st.assessmentSubmissions.reduce((acc, s) => acc + s.percentage, 0);
         assessmentScore = Math.round((sumPct / subCount) * 10) / 10;
       }
@@ -150,26 +133,28 @@ export class LeaderboardService {
       let totalQuestions = 0;
       let totalCorrect = 0;
 
-      for (const sm of st.skillMasteries) {
-        totalQuestions += sm.attemptCount;
-        totalCorrect += sm.correctCount;
-      }
-      for (const ps of st.practiceSessions) {
-        totalQuestions += ps.questionsAttempted;
-        totalCorrect += ps.correctAnswers;
-      }
+      if (st) {
+        for (const sm of st.skillMasteries) {
+          totalQuestions += sm.attemptCount;
+          totalCorrect += sm.correctCount;
+        }
+        for (const ps of st.practiceSessions) {
+          totalQuestions += ps.questionsAttempted;
+          totalCorrect += ps.correctAnswers;
+        }
 
-      if (st.skillMasteries.length > 0) {
-        const avgMastery =
-          st.skillMasteries.reduce((acc, m) => acc + m.masteryScore, 0) / st.skillMasteries.length;
-        practiceScore = Math.round(avgMastery * 10) / 10;
+        if (st.skillMasteries.length > 0) {
+          const avgMastery =
+            st.skillMasteries.reduce((acc, m) => acc + m.masteryScore, 0) / st.skillMasteries.length;
+          practiceScore = Math.round(avgMastery * 10) / 10;
+        }
       }
 
       const accuracy =
         totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
 
       const uniqueDays = new Set(
-        (st.attempts || []).map((d) => d.createdAt.toISOString().slice(0, 10)),
+        (st?.attempts || []).map((d) => d.createdAt.toISOString().slice(0, 10)),
       );
       const streakDays = uniqueDays.size;
 
@@ -181,11 +166,11 @@ export class LeaderboardService {
         score = practiceScore;
       } else {
         // Hybrid: 70% Assessments + 30% Adaptive Practice
-        if (subCount === 0 && st.skillMasteries.length === 0) {
+        if (subCount === 0 && (!st || st.skillMasteries.length === 0)) {
           score = 0;
         } else if (subCount === 0) {
           score = practiceScore;
-        } else if (st.skillMasteries.length === 0) {
+        } else if (!st || st.skillMasteries.length === 0) {
           score = assessmentScore;
         } else {
           score = Math.round((assessmentScore * 0.7 + practiceScore * 0.3) * 10) / 10;
@@ -200,11 +185,11 @@ export class LeaderboardService {
 
       allEntries.push({
         rank: 0,
-        studentId: st.id,
-        userId: st.userId,
-        name: auth?.name || (isCurrent ? (studentRecord?.name || 'Student') : 'Student Scholar'),
+        studentId: st?.id || `auth-${auth.id}`,
+        userId: auth.userId || st?.userId,
+        name: auth.name,
         enrollmentNumber: enroll,
-        division: auth?.division || (isCurrent ? (studentRecord?.division || 'CE-A') : 'CE-B'),
+        division: auth.division || 'CE-A',
         avatarSeed: enroll,
         score,
         assessmentScore,
@@ -219,7 +204,7 @@ export class LeaderboardService {
       });
     }
 
-    // Ensure the current student is always present even if DB is fresh
+    // Ensure the current student is always present even if their profile was outside the query
     if (!allEntries.some((e) => e.isCurrentUser)) {
       allEntries.push({
         rank: 0,
@@ -243,44 +228,6 @@ export class LeaderboardService {
       processedEnrollments.add(studentRecord?.enrollmentNumber || '24CS093');
     }
 
-    // Add cohort peers to ensure a full semester leaderboard experience
-    for (const p of peerTemplates) {
-      if (processedEnrollments.has(p.num)) continue;
-
-      let score = 0;
-      if (targetType === 'assessments') {
-        score = p.baseExam;
-      } else if (targetType === 'practice') {
-        score = p.basePrac;
-      } else {
-        score = Math.round((p.baseExam * 0.7 + p.basePrac * 0.3) * 10) / 10;
-      }
-
-      const badges: string[] = [];
-      if (score >= 92) badges.push('Elite Performer');
-      else if (p.streak >= 8) badges.push('Consistent Solver');
-      else if (p.qCount >= 50) badges.push('Practice Prodigy');
-
-      allEntries.push({
-        rank: 0,
-        studentId: `peer-${p.num}`,
-        name: p.name,
-        enrollmentNumber: p.num,
-        division: p.div,
-        avatarSeed: p.num,
-        score,
-        assessmentScore: p.baseExam,
-        practiceScore: p.basePrac,
-        assessmentsCount: Math.max(1, Math.floor(p.qCount / 20)),
-        questionsCount: p.qCount,
-        accuracy: Math.min(96, Math.max(70, Math.round(p.baseExam - 2 + Math.random() * 5))),
-        streakDays: p.streak,
-        trend: Math.random() > 0.5 ? 'UP' : Math.random() > 0.3 ? 'SAME' : 'DOWN',
-        badges,
-        isCurrentUser: false,
-      });
-    }
-
     // Filter by division if requested
     let filteredEntries = allEntries;
     if (targetDivision && targetDivision !== 'ALL') {
@@ -301,7 +248,26 @@ export class LeaderboardService {
 
     // Find current user's entry
     const myIndex = filteredEntries.findIndex((e) => e.isCurrentUser);
-    const myEntry = myIndex !== -1 ? filteredEntries[myIndex] : filteredEntries[0];
+    const defaultEntry: LeaderboardEntry = {
+      rank: 1,
+      studentId: currentStudentProfileId || 'student-current',
+      userId,
+      name: studentRecord?.name || 'Student',
+      enrollmentNumber: studentRecord?.enrollmentNumber || '24CS093',
+      division: studentRecord?.division || 'CE-A',
+      avatarSeed: studentRecord?.enrollmentNumber || '24CS093',
+      score: 0,
+      assessmentScore: 0,
+      practiceScore: 0,
+      assessmentsCount: 0,
+      questionsCount: 0,
+      accuracy: 0,
+      streakDays: 0,
+      trend: 'SAME',
+      badges: [],
+      isCurrentUser: true,
+    };
+    const myEntry = (myIndex !== -1 ? filteredEntries[myIndex] : filteredEntries[0]) || defaultEntry;
     const totalStudents = filteredEntries.length;
 
     const percentile =
@@ -314,7 +280,7 @@ export class LeaderboardService {
         ? Math.round((filteredEntries[myIndex - 1].score - myEntry.score) * 10) / 10
         : 0;
 
-    const top10Score = filteredEntries[Math.min(9, totalStudents - 1)]?.score || myEntry.score;
+    const top10Score = filteredEntries[Math.min(9, Math.max(0, totalStudents - 1))]?.score || myEntry.score;
     const gapToTop10 =
       myEntry.rank > 10 ? Math.round((top10Score - myEntry.score) * 10) / 10 : 0;
 

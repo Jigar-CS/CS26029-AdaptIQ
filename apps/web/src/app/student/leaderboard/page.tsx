@@ -622,6 +622,13 @@ export default function StudentLeaderboardPage() {
                       </tr>
                     );
                   })}
+                  {paginatedRankings.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        No students found for this division or filter.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
