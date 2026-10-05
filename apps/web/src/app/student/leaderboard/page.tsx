@@ -224,28 +224,15 @@ export default function StudentLeaderboardPage() {
               <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {standing.score === 0 && standing.questionsCount === 0 && standing.assessmentsCount === 0 ? (
-                      <>
-                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-500/20 text-slate-300 border border-slate-400/40 flex items-center gap-1.5">
-                          <Crown className="w-3.5 h-3.5 fill-slate-300" />
-                          Your Standing: Rank #{standing.rank} of {standing.totalStudents}
-                        </span>
-                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          New Student &bull; Baseline Entry
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
-                          <Crown className="w-3.5 h-3.5 fill-amber-300" />
-                          Your Standing: Rank #{standing.rank} of {standing.totalStudents}
-                        </span>
-                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Top {100 - standing.percentile < 1 ? '1%' : `${(100 - standing.percentile).toFixed(1)}%`} in Class
-                        </span>
-                      </>
+                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
+                      <Crown className="w-3.5 h-3.5 fill-amber-300" />
+                      Your Standing: Rank #{standing.rank} of {standing.totalStudents}
+                    </span>
+                    {standing.score > 0 && (
+                      <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Top {100 - standing.percentile < 1 ? '1%' : `${(100 - standing.percentile).toFixed(1)}%`} in Class
+                      </span>
                     )}
                   </div>
 
