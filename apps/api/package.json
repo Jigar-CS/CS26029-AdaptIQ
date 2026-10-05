@@ -15,6 +15,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:clean-activity": "ts-node prisma/clear-activity.ts",
     "test": "jest --config ./jest.config.js"
   },
   "dependencies": {
