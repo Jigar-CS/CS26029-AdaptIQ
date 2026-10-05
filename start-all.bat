@@ -1,7 +1,7 @@
 @echo off
-title CLIAS (AdaptIQ) Multi-Service Launcher
+title CLIAS Multi-Service Launcher
 echo ===================================================
-echo   Starting CLIAS (AdaptIQ) Platform Services...
+echo   Starting CLIAS Platform Services...
 echo ===================================================
 
 :: 1. Start XAMPP MySQL on Port 3307

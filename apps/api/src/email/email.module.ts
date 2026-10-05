@@ -1,14 +1,19 @@
 import { Module } from '@nestjs/common';
-import { DevelopmentEmailService, ProductionEmailService } from './email.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { DevelopmentEmailService, NodemailerEmailService } from './email.service';
 
 @Module({
+  imports: [ConfigModule],
   providers: [
     {
       provide: 'EmailService',
-      useFactory: () => {
-        return process.env.NODE_ENV === 'production' && process.env.EMAIL_SERVICE_DRIVER === 'production'
-          ? new ProductionEmailService(null as any)
-          : new DevelopmentEmailService();
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const driver = (configService.get<string>('EMAIL_SERVICE_DRIVER') || 'development').toLowerCase();
+        if (driver === 'smtp' || driver === 'production') {
+          return new NodemailerEmailService(configService);
+        }
+        return new DevelopmentEmailService();
       },
     },
   ],

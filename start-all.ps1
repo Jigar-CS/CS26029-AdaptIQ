@@ -1,6 +1,6 @@
-# CLIAS (AdaptIQ) Multi-Service PowerShell Launcher
+# CLIAS Multi-Service PowerShell Launcher
 Write-Host "===================================================" -ForegroundColor Cyan
-Write-Host "  Starting CLIAS (AdaptIQ) Platform Services...  " -ForegroundColor Cyan
+Write-Host "  Starting CLIAS Platform Services...  " -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
 
 $root = $PSScriptRoot

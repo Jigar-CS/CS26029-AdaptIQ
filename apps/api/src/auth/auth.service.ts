@@ -34,9 +34,13 @@ export class AuthService {
 
   private validateEmailDomain(email: string) {
     const domain = email.split('@')[1]?.toLowerCase();
-    if (!domain || domain !== this.allowedDomain.toLowerCase()) {
+    const envDomains = (process.env.UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in,charusat.ac.in')
+      .split(',')
+      .map((d) => d.trim().toLowerCase());
+    
+    if (!domain || !envDomains.includes(domain)) {
       throw new BadRequestException(
-        `Registration requires an official university email ending in @${this.allowedDomain}`,
+        `Registration requires an official university email ending in @${envDomains.join(' or @')}`,
       );
     }
   }
@@ -53,14 +57,35 @@ export class AuthService {
       throw new BadRequestException('An active account already exists for this email. Please log in.');
     }
 
-    // 2. Check authorized students table
-    const authorized = await this.prisma.authorizedStudent.findUnique({
+    // 2. Check authorized students table (or auto-provision for Charusat students)
+    let authorized = await this.prisma.authorizedStudent.findUnique({
       where: { email },
     });
+
     if (!authorized) {
-      throw new NotFoundException(
-        'Your university record has not been added to the platform. Contact your administrator.',
-      );
+      const prefix = email.split('@')[0];
+      const enrollmentNumber = prefix.toUpperCase();
+      const name = prefix.includes('.')
+        ? prefix
+            .split('.')
+            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+            .join(' ')
+        : `Student ${enrollmentNumber}`;
+
+      authorized = await this.prisma.authorizedStudent.create({
+        data: {
+          enrollmentNumber,
+          name,
+          email,
+          institute: 'CSPIT',
+          department: 'Computer Engineering',
+          programName: 'B.Tech Computer Engineering',
+          semester: 4,
+          division: 'CE-A',
+          graduationYear: 2026,
+          activated: false,
+        },
+      });
     }
 
     // 3. Rate limiting check (max 1 request every 30 seconds)
@@ -192,6 +217,11 @@ export class AuthService {
 
     // Clear OTP after successful registration
     this.otpStore.delete(email);
+
+    // Send welcome onboarding email asynchronously
+    this.emailService.sendWelcome(email, authorized.name).catch((err) => {
+      this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
+    });
 
     // Generate JWT
     const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
