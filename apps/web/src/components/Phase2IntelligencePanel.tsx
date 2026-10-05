@@ -119,9 +119,70 @@ export function Phase2IntelligencePanel() {
             {/* TAB 1: BKT & IRT BENCHMARK */}
             {activeTab === 'bkt' && bktData && (
               <div className="space-y-6">
+                {/* Dynamic Cognitive Intelligence Advice Card */}
+                {bktData.cognitiveAdvice && (
+                  <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-blue-50/50 to-slate-50 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900 border border-indigo-100 dark:border-indigo-900/50 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                              Cognitive Intelligence Advice
+                            </h4>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                bktData.cognitiveAdvice.urgency === 'HIGH'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400'
+                                  : bktData.cognitiveAdvice.urgency === 'MEDIUM'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-400'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400'
+                              }`}
+                            >
+                              {bktData.cognitiveAdvice.focusType.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mt-0.5">
+                            {bktData.cognitiveAdvice.headline}
+                          </p>
+                        </div>
+                      </div>
+
+                      {bktData.cognitiveAdvice.targetTopicId && (
+                        <a
+                          href={`/student/practice?topicId=${bktData.cognitiveAdvice.targetTopicId}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition shadow-sm shrink-0"
+                        >
+                          <span>Practice {bktData.cognitiveAdvice.targetTopicName}</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
+                      {bktData.cognitiveAdvice.advice}
+                    </p>
+
+                    {bktData.cognitiveAdvice.actionItems && bktData.cognitiveAdvice.actionItems.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-indigo-100/80 dark:border-slate-800">
+                        {bktData.cognitiveAdvice.actionItems.map((item: string, idx: number) => (
+                          <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-700 dark:text-slate-300">
+                            <span className="w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Latent Ability Banner */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-3">
+                  <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
                       θ
                     </div>
@@ -129,16 +190,22 @@ export function Phase2IntelligencePanel() {
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         IRT Latent Ability (θ)
                       </p>
-                      <p className="text-lg font-black text-slate-900">
-                        {bktData.overallIrtAbility?.theta ?? '+0.85'}
+                      <p className="text-lg font-black text-slate-900 dark:text-white">
+                        {bktData.totalTopicsEvaluated > 0
+                          ? bktData.overallIrtAbility?.theta >= 0
+                            ? `+${bktData.overallIrtAbility?.theta}`
+                            : bktData.overallIrtAbility?.theta
+                          : '0.00 (Uncalibrated)'}
                       </p>
-                      <span className="text-[10px] text-indigo-700 font-semibold">
-                        {bktData.overallIrtAbility?.abilityPercentile ?? 73}th Percentile Rank
+                      <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">
+                        {bktData.totalTopicsEvaluated > 0
+                          ? `${bktData.overallIrtAbility?.abilityPercentile ?? 50}th Percentile Rank`
+                          : 'Baseline Calibration'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center gap-3">
+                  <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
                       P(L)
                     </div>
@@ -146,14 +213,14 @@ export function Phase2IntelligencePanel() {
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         BKT Knowledge State
                       </p>
-                      <p className="text-lg font-black text-slate-900">Probabilistic Tracing</p>
-                      <span className="text-[10px] text-emerald-700 font-semibold">
+                      <p className="text-lg font-black text-slate-900 dark:text-white">Probabilistic Tracing</p>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
                         Slip: 10% | Guess: 20% | Transition: 15%
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-100 flex items-center gap-3">
+                  <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-sm">
                       α
                     </div>
@@ -161,8 +228,8 @@ export function Phase2IntelligencePanel() {
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         EWMA Recency Weight
                       </p>
-                      <p className="text-lg font-black text-slate-900">α = 0.25</p>
-                      <span className="text-[10px] text-amber-700 font-semibold">
+                      <p className="text-lg font-black text-slate-900 dark:text-white">α = 0.25</p>
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
                         Difficulty-Weighted (1.0x - 1.5x)
                       </span>
                     </div>
@@ -170,9 +237,9 @@ export function Phase2IntelligencePanel() {
                 </div>
 
                 {/* Side-by-Side Comparison Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px]">
                       <tr>
                         <th className="p-3">Topic</th>
                         <th className="p-3">EWMA Score</th>
@@ -182,38 +249,46 @@ export function Phase2IntelligencePanel() {
                         <th className="p-3">Recommended Mastery</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                      {bktData.topicComparisons?.map((t: any) => (
-                        <tr key={t.topicId} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3">
-                            <span className="font-bold text-slate-900">{t.topicName}</span>
-                            <span className="block text-[10px] text-slate-400">{t.courseCode}</span>
-                          </td>
-                          <td className="p-3 font-mono font-bold text-indigo-700">
-                            {t.ewmaScore}%
-                          </td>
-                          <td className="p-3 font-mono font-bold text-emerald-700">
-                            {t.bktProbabilityPct}%
-                          </td>
-                          <td className="p-3 font-mono text-slate-500">
-                            ±{t.difference}%
-                          </td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                t.concordance === 'STRONG_AGREEMENT'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
-                            >
-                              {t.concordance.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="p-3 font-extrabold text-slate-900">
-                            {t.recommendedMastery}%
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                      {bktData.topicComparisons && bktData.topicComparisons.length > 0 ? (
+                        bktData.topicComparisons.map((t: any) => (
+                          <tr key={t.topicId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
+                            <td className="p-3">
+                              <span className="font-bold text-slate-900 dark:text-white">{t.topicName}</span>
+                              <span className="block text-[10px] text-slate-400">{t.courseCode}</span>
+                            </td>
+                            <td className="p-3 font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                              {t.ewmaScore}%
+                            </td>
+                            <td className="p-3 font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                              {t.bktProbabilityPct}%
+                            </td>
+                            <td className="p-3 font-mono text-slate-500">
+                              ±{t.difference}%
+                            </td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  t.concordance === 'STRONG_AGREEMENT'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-800'
+                                }`}
+                              >
+                                {t.concordance.replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className="p-3 font-extrabold text-slate-900 dark:text-white">
+                              {t.recommendedMastery}%
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                            No topics evaluated yet. Complete practice questions to benchmark EWMA vs Bayesian Knowledge Tracing.
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -264,61 +339,67 @@ export function Phase2IntelligencePanel() {
                     Ebbinghaus Concept Decay Status
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {retentionData.topics?.map((topic: any) => (
-                      <div
-                        key={topic.topicId}
-                        className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition space-y-2.5"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">
-                              {topic.courseCode}
+                    {retentionData.topics && retentionData.topics.length > 0 ? (
+                      retentionData.topics.map((topic: any) => (
+                        <div
+                          key={topic.topicId}
+                          className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition space-y-2.5"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                {topic.courseCode}
+                              </span>
+                              <h5 className="text-sm font-bold text-slate-900">{topic.topicName}</h5>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                topic.retentionStatus === 'FRESH'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : topic.retentionStatus === 'STABLE'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                            >
+                              {topic.retentionStatus.replace('_', ' ')}
                             </span>
-                            <h5 className="text-sm font-bold text-slate-900">{topic.topicName}</h5>
                           </div>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              topic.retentionStatus === 'FRESH'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : topic.retentionStatus === 'STABLE'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
-                            }`}
-                          >
-                            {topic.retentionStatus.replace('_', ' ')}
-                          </span>
-                        </div>
 
-                        <div className="flex items-center justify-between text-xs pt-1">
-                          <span className="text-slate-500">
-                            Last practiced {topic.daysSinceLastPractice}d ago
-                          </span>
-                          <span className="font-extrabold text-slate-800">
-                            Effective: {topic.decayedMastery}%{' '}
-                            <span className="text-slate-400 font-normal">
-                              (Raw: {topic.rawMastery}%)
+                          <div className="flex items-center justify-between text-xs pt-1">
+                            <span className="text-slate-500">
+                              Last practiced {topic.daysSinceLastPractice}d ago
                             </span>
-                          </span>
-                        </div>
+                            <span className="font-extrabold text-slate-800">
+                              Effective: {topic.decayedMastery}%{' '}
+                              <span className="text-slate-400 font-normal">
+                                (Raw: {topic.rawMastery}%)
+                              </span>
+                            </span>
+                          </div>
 
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              topic.retentionRatePct >= 80
-                                ? 'bg-emerald-500'
-                                : topic.retentionRatePct >= 60
-                                ? 'bg-amber-500'
-                                : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${topic.retentionRatePct}%` }}
-                          ></div>
-                        </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                topic.retentionRatePct >= 80
+                                  ? 'bg-emerald-500'
+                                  : topic.retentionRatePct >= 60
+                                  ? 'bg-amber-500'
+                                  : 'bg-rose-500'
+                              }`}
+                              style={{ width: `${topic.retentionRatePct}%` }}
+                            ></div>
+                          </div>
 
-                        <p className="text-[11px] text-slate-500 italic">
-                          {topic.decayExplanation}
-                        </p>
+                          <p className="text-[11px] text-slate-500 italic">
+                            {topic.decayExplanation}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-2 p-8 text-center text-slate-400 italic bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                        No topic retention records found. Practice questions to begin tracking Ebbinghaus memory decay.
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>

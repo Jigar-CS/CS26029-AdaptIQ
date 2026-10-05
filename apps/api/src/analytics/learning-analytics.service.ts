@@ -184,9 +184,9 @@ export class LearningAnalyticsService {
       }));
 
     const weakTopics = masteries
-      .filter((m) => m.masteryScore < 60)
-      .slice(-5)
-      .reverse()
+      .filter((m) => m.masteryScore < 70)
+      .sort((a, b) => a.masteryScore - b.masteryScore)
+      .slice(0, 5)
       .map((m) => ({
         topicId: m.topicId,
         topicName: m.topic.name,
@@ -198,6 +198,103 @@ export class LearningAnalyticsService {
       }));
 
     return { strongTopics, weakTopics, all: masteries };
+  }
+
+  /**
+   * Generates real-time, student-specific cognitive intelligence advice
+   */
+  generateCognitiveAdvice(params: {
+    totalAttempts: number;
+    accuracy: number;
+    overallMastery: number;
+    weakTopics: any[];
+    strongTopics: any[];
+    decayingTopics: any[];
+    irtAbility: IrtAbilityResult;
+  }) {
+    const { totalAttempts, accuracy, overallMastery, weakTopics, strongTopics, decayingTopics, irtAbility } = params;
+
+    if (totalAttempts === 0) {
+      return {
+        focusType: 'CALIBRATION',
+        headline: 'Cognitive Baseline Calibration Required',
+        advice:
+          'No diagnostic interactions have been logged yet for your profile. Complete targeted questions to initialize your Bayesian Knowledge Tracing profile, calibrate your IRT latent ability parameter, and unlock personalized prerequisite learning paths.',
+        actionItems: [
+          'Begin with an introductory practice session in your core curriculum.',
+          'Solve at least 5 questions to establish an initial latent ability parameter (θ).',
+          'Review concept explanations to calibrate knowledge state beliefs.',
+        ],
+        targetTopicId: null,
+        targetTopicName: null,
+        urgency: 'LOW',
+      };
+    }
+
+    if (decayingTopics.length > 0) {
+      const topDecay = decayingTopics[0];
+      return {
+        focusType: 'RETENTION_REVIEW',
+        headline: `Memory Decay Alert: ${topDecay.topicName}`,
+        advice: `Ebbinghaus retention analysis detected ${decayingTopics.length} topic${decayingTopics.length > 1 ? 's' : ''} under active knowledge decay. Your effective retention for ${topDecay.topicName} has dropped to ${topDecay.decayedMastery}% (from raw ${topDecay.rawMastery}%). A quick spaced repetition drill will halt decay and consolidate long-term retention.`,
+        actionItems: [
+          `Review ${topDecay.topicName} immediately with spaced retrieval practice.`,
+          `Spend 5–8 minutes solving 3 targeted refresher problems.`,
+          `Prevent prerequisite blockage in downstream curriculum graph nodes.`,
+        ],
+        targetTopicId: topDecay.topicId,
+        targetTopicName: topDecay.topicName,
+        urgency: 'HIGH',
+      };
+    }
+
+    if (weakTopics.length > 0) {
+      const primaryWeak = weakTopics[0];
+      return {
+        focusType: 'REMEDIATION',
+        headline: `Conceptual Reinforcement: ${primaryWeak.topicName}`,
+        advice: `Your current mastery in ${primaryWeak.topicName} is ${primaryWeak.masteryScore}% with an accuracy of ${primaryWeak.accuracy}%. Bayesian Knowledge Tracing identifies an elevated slip probability. Reinforcing core invariants through guided practice will push this topic above the 70% mastery threshold.`,
+        actionItems: [
+          `Target 3-5 practice items in ${primaryWeak.topicName} (${primaryWeak.courseCode}).`,
+          `Focus on easy-to-medium questions before attempting complex problem statements.`,
+          `Inspect step-by-step diagnostic feedback on missed questions.`,
+        ],
+        targetTopicId: primaryWeak.topicId,
+        targetTopicName: primaryWeak.topicName,
+        urgency: primaryWeak.masteryScore < 50 ? 'HIGH' : 'MEDIUM',
+      };
+    }
+
+    if (strongTopics.length > 0 && overallMastery >= 70) {
+      const topStrong = strongTopics[0];
+      return {
+        focusType: 'ACCELERATION',
+        headline: 'Advanced Mastery Acceleration',
+        advice: `Outstanding performance! With ${overallMastery}% overall mastery and strong proficiency in ${topStrong.topicName} (${topStrong.masteryScore}%), your latent ability θ is ${irtAbility.theta >= 0 ? '+' : ''}${irtAbility.theta} (${irtAbility.abilityPercentile}th percentile). You are ready to tackle Hard difficulty challenges and advance in your curriculum graph.`,
+        actionItems: [
+          `Attempt Hard difficulty problems in ${topStrong.topicName}.`,
+          `Explore unlocked dependent topics in the curriculum Directed Acyclic Graph.`,
+          `Participate in competitive assessment challenges to elevate your standing.`,
+        ],
+        targetTopicId: topStrong.topicId,
+        targetTopicName: topStrong.topicName,
+        urgency: 'LOW',
+      };
+    }
+
+    return {
+      focusType: 'CONTINUOUS_PRACTICE',
+      headline: 'Balanced Skill Progression Active',
+      advice: `Your continuous learning velocity is healthy across ${totalAttempts} attempts with ${accuracy}% accuracy. Continue practicing across varied difficulty tiers to reach the 70% threshold in all topics.`,
+      actionItems: [
+        'Maintain daily practice streak to consolidate cognitive gains.',
+        'Diversify question selection across multiple topics.',
+        'Review diagnostic explanations after every test submission.',
+      ],
+      targetTopicId: null,
+      targetTopicName: null,
+      urgency: 'MEDIUM',
+    };
   }
 
   /**
@@ -245,6 +342,20 @@ export class LearningAnalyticsService {
       (r) => r.retentionStatus === 'DECAYING' || r.retentionStatus === 'CRITICAL_DECAY',
     ).length;
 
+    const decayingTopics = retentionAnalyses
+      .filter((r) => r.retentionStatus === 'DECAYING' || r.retentionStatus === 'CRITICAL_DECAY')
+      .map((r) => {
+        const m = allMasteries.find((mastery) => mastery.topicId === r.topicId);
+        return {
+          topicId: r.topicId,
+          topicName: m ? m.topic.name : 'Topic',
+          courseCode: m ? m.topic.course.code : '',
+          rawMastery: r.rawMastery,
+          decayedMastery: r.decayedMastery,
+          retentionStatus: r.retentionStatus,
+        };
+      });
+
     // Phase 2: Recent attempts activity
     const recentAttempts = await this.prisma.questionAttempt.findMany({
       where: { studentId },
@@ -273,6 +384,16 @@ export class LearningAnalyticsService {
       })),
     );
 
+    const cognitiveAdvice = this.generateCognitiveAdvice({
+      totalAttempts,
+      accuracy,
+      overallMastery,
+      weakTopics,
+      strongTopics,
+      decayingTopics,
+      irtAbility,
+    });
+
     let streakDays = 0;
     if (totalAttempts > 0) {
       const recentAttemptsDates = await this.prisma.questionAttempt.findMany({
@@ -295,11 +416,13 @@ export class LearningAnalyticsService {
       testsAttempted: testsCount,
       strongTopics,
       weakTopics,
+      cognitiveAdvice,
       phase2Intelligence: {
         irtTheta: irtAbility.theta,
         irtPercentile: irtAbility.abilityPercentile,
         decayingTopicsCount: decayingCount,
         totalTopicsTracked: allMasteries.length,
+        cognitiveAdvice,
       },
       topicMasteries: allMasteries.map((m) => {
         const retention = retentionAnalyses.find((r) => r.topicId === m.topicId);
@@ -399,11 +522,30 @@ export class LearningAnalyticsService {
       })),
     );
 
+    const { strongTopics, weakTopics } = await this.getTopicStrengthsAndWeaknesses(studentId);
+    const overallMastery =
+      masteries.length > 0
+        ? Math.round(masteries.reduce((sum, m) => sum + m.masteryScore, 0) / masteries.length)
+        : 0;
+    const correctAttemptsCount = allAttempts.filter((a) => a.isCorrect).length;
+    const accuracy = allAttempts.length > 0 ? Math.round((correctAttemptsCount / allAttempts.length) * 100) : 0;
+
+    const cognitiveAdvice = this.generateCognitiveAdvice({
+      totalAttempts: allAttempts.length,
+      accuracy,
+      overallMastery,
+      weakTopics,
+      strongTopics,
+      decayingTopics: [],
+      irtAbility,
+    });
+
     return {
       studentId,
       totalTopicsEvaluated: topicComparisons.length,
       overallIrtAbility: irtAbility,
       topicComparisons,
+      cognitiveAdvice,
       modelParameters: {
         bkt: {
           priorL0: 0.2,

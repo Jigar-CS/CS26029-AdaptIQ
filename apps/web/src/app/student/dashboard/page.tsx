@@ -42,6 +42,7 @@ export default function StudentDashboard() {
     topicMasteries: [],
     learningCurve: [],
     recentActivity: [],
+    cognitiveAdvice: null,
   });
 
   const [loading, setLoading] = useState(false);
@@ -72,6 +73,7 @@ export default function StudentDashboard() {
           weakTopics: Array.isArray(data.weakTopics) ? data.weakTopics : [],
           strongTopics: Array.isArray(data.strongTopics) ? data.strongTopics : [],
           recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : [],
+          cognitiveAdvice: data.cognitiveAdvice || null,
         });
       }
     } catch {
@@ -210,7 +212,7 @@ export default function StudentDashboard() {
                   Conceptual Focus Areas
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                  Topics automatically classified by knowledge depth
+                  Topics automatically classified by knowledge depth (&lt;70% focus vs &ge;70% mastered)
                 </p>
 
                 {/* Priority Weak Topics */}
@@ -222,19 +224,36 @@ export default function StudentDashboard() {
                   <div className="space-y-2">
                     {summary?.weakTopics && summary.weakTopics.length > 0 ? (
                       summary.weakTopics.map((wt: any) => (
-                        <div
+                        <Link
                           key={wt.topicId}
-                          className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between"
+                          href={`/student/practice?topicId=${wt.topicId}`}
+                          className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between hover:bg-rose-100/60 dark:hover:bg-rose-950/40 transition group cursor-pointer"
                         >
                           <div>
-                            <p className="text-xs font-bold text-slate-900 dark:text-white">{wt.topicName}</p>
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400">{wt.courseCode}</span>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition flex items-center gap-1.5">
+                              {wt.topicName}
+                              <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </p>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {wt.courseCode} • {wt.attemptCount || 0} attempts
+                            </span>
                           </div>
-                          <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400">{wt.masteryScore}%</span>
-                        </div>
+                          <div className="text-right">
+                            <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400">
+                              {wt.masteryScore}%
+                            </span>
+                            <span className="block text-[9px] text-rose-500 font-semibold">
+                              Target 70%
+                            </span>
+                          </div>
+                        </Link>
                       ))
+                    ) : summary?.questionsPracticed > 0 ? (
+                      <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                        🎉 All practiced topics have reached mastery (&ge;70%)! Select any topic in the curriculum to level up.
+                      </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic">No weak topics identified yet.</p>
+                      <p className="text-xs text-slate-400 italic">No weak topics identified yet. Start practicing to calibrate.</p>
                     )}
                   </div>
                 </div>
@@ -243,7 +262,7 @@ export default function StudentDashboard() {
                 <div>
                   <span className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Mastered Concepts:
+                    Mastered Concepts (&ge;70%):
                   </span>
                   <div className="space-y-2">
                     {summary?.strongTopics && summary.strongTopics.length > 0 ? (
@@ -254,13 +273,15 @@ export default function StudentDashboard() {
                         >
                           <div>
                             <p className="text-xs font-bold text-slate-900 dark:text-white">{st.topicName}</p>
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400">{st.courseCode}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {st.courseCode} • {st.accuracy}% accuracy
+                            </span>
                           </div>
                           <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">{st.masteryScore}%</span>
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-400 italic">Complete practice to identify mastered topics.</p>
+                      <p className="text-xs text-slate-400 italic">Complete practice and achieve 70%+ score to promote topics here.</p>
                     )}
                   </div>
                 </div>
@@ -275,6 +296,63 @@ export default function StudentDashboard() {
               </Link>
             </div>
           </div>
+
+          {/* Cognitive Intelligence Advice Banner */}
+          {summary?.cognitiveAdvice && (
+            <div className="p-5 md:p-6 rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white shadow-xl shadow-indigo-950/10 border border-indigo-500/20 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
+
+              <div className="relative z-10">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/30 border border-indigo-400/40 text-indigo-300 flex items-center justify-center font-bold shadow-md">
+                      <Sparkles className="w-4 h-4 text-indigo-300" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black tracking-tight text-white uppercase">
+                          Cognitive Intelligence Advice
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 border border-white/20 text-indigo-200">
+                          {summary.cognitiveAdvice.focusType.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-indigo-300 mt-0.5">
+                        {summary.cognitiveAdvice.headline}
+                      </p>
+                    </div>
+                  </div>
+
+                  {summary.cognitiveAdvice.targetTopicId && (
+                    <Link
+                      href={`/student/practice?topicId=${summary.cognitiveAdvice.targetTopicId}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-black transition shadow-lg shrink-0"
+                    >
+                      <span>Practice {summary.cognitiveAdvice.targetTopicName}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  )}
+                </div>
+
+                <p className="text-xs md:text-sm text-indigo-100/90 leading-relaxed mb-4 max-w-4xl">
+                  {summary.cognitiveAdvice.advice}
+                </p>
+
+                {summary.cognitiveAdvice.actionItems && summary.cognitiveAdvice.actionItems.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-indigo-500/20">
+                    {summary.cognitiveAdvice.actionItems.map((item: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2 text-xs text-indigo-200">
+                        <span className="w-4 h-4 rounded-full bg-white/10 border border-white/20 text-white flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Phase 2: Bayesian Knowledge Tracing, Forgetting Curves & Prerequisite DAG */}
           <Phase2IntelligencePanel />
