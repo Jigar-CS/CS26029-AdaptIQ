@@ -94,6 +94,11 @@ export class LeaderboardService {
             correctAnswers: true,
           },
         },
+        attempts: {
+          select: {
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -129,21 +134,19 @@ export class LeaderboardService {
       const auth = st.authorizedStudent;
       const isCurrent = st.id === currentStudentProfileId || st.userId === userId;
 
-      const enroll = auth?.enrollmentNumber || (isCurrent ? '24CS093' : `CS-${st.id.slice(0, 5)}`);
+      const enroll = auth?.enrollmentNumber || (isCurrent ? (studentRecord?.enrollmentNumber || '24CS093') : `CS-${st.id.slice(0, 5)}`);
       processedEnrollments.add(enroll);
 
       // 1. Calculate actual assessment score
-      let assessmentScore = 78.0;
+      let assessmentScore = 0;
       const subCount = st.assessmentSubmissions.length;
       if (subCount > 0) {
         const sumPct = st.assessmentSubmissions.reduce((acc, s) => acc + s.percentage, 0);
         assessmentScore = Math.round((sumPct / subCount) * 10) / 10;
-      } else if (isCurrent) {
-        assessmentScore = 85.0; // Baseline for active student
       }
 
       // 2. Calculate practice score and accuracy
-      let practiceScore = 75.0;
+      let practiceScore = 0;
       let totalQuestions = 0;
       let totalCorrect = 0;
 
@@ -160,14 +163,15 @@ export class LeaderboardService {
         const avgMastery =
           st.skillMasteries.reduce((acc, m) => acc + m.masteryScore, 0) / st.skillMasteries.length;
         practiceScore = Math.round(avgMastery * 10) / 10;
-      } else if (isCurrent) {
-        practiceScore = 88.0;
-        totalQuestions = Math.max(totalQuestions, 42);
-        totalCorrect = Math.max(totalCorrect, 35);
       }
 
       const accuracy =
-        totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 80;
+        totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+
+      const uniqueDays = new Set(
+        (st.attempts || []).map((d) => d.createdAt.toISOString().slice(0, 10)),
+      );
+      const streakDays = uniqueDays.size;
 
       // 3. Score determination based on type
       let score = 0;
@@ -177,30 +181,39 @@ export class LeaderboardService {
         score = practiceScore;
       } else {
         // Hybrid: 70% Assessments + 30% Adaptive Practice
-        score = Math.round((assessmentScore * 0.7 + practiceScore * 0.3) * 10) / 10;
+        if (subCount === 0 && st.skillMasteries.length === 0) {
+          score = 0;
+        } else if (subCount === 0) {
+          score = practiceScore;
+        } else if (st.skillMasteries.length === 0) {
+          score = assessmentScore;
+        } else {
+          score = Math.round((assessmentScore * 0.7 + practiceScore * 0.3) * 10) / 10;
+        }
       }
 
       const badges: string[] = [];
       if (score >= 90) badges.push('Top Scholar');
-      if (accuracy >= 85) badges.push('High Precision');
+      if (accuracy >= 85 && totalQuestions >= 10) badges.push('High Precision');
       if (totalQuestions >= 40) badges.push('Practice Titan');
+      if (streakDays >= 5) badges.push('Consistent Solver');
 
       allEntries.push({
         rank: 0,
         studentId: st.id,
         userId: st.userId,
-        name: auth?.name || (isCurrent ? (currentUser?.studentProfile?.authorizedStudent?.name || 'Rahul Patel') : 'Student Scholar'),
+        name: auth?.name || (isCurrent ? (studentRecord?.name || 'Student') : 'Student Scholar'),
         enrollmentNumber: enroll,
-        division: auth?.division || (isCurrent ? 'CE-A' : 'CE-B'),
+        division: auth?.division || (isCurrent ? (studentRecord?.division || 'CE-A') : 'CE-B'),
         avatarSeed: enroll,
         score,
         assessmentScore,
         practiceScore,
-        assessmentsCount: Math.max(subCount, isCurrent ? 3 : 1),
+        assessmentsCount: subCount,
         questionsCount: totalQuestions,
         accuracy,
-        streakDays: isCurrent ? 7 : 4,
-        trend: isCurrent ? 'UP' : 'SAME',
+        streakDays,
+        trend: 'SAME',
         badges,
         isCurrentUser: isCurrent,
       });
@@ -208,32 +221,23 @@ export class LeaderboardService {
 
     // Ensure the current student is always present even if DB is fresh
     if (!allEntries.some((e) => e.isCurrentUser)) {
-      const myAssessment = 85.0;
-      const myPractice = 88.0;
-      const myScore =
-        targetType === 'assessments'
-          ? myAssessment
-          : targetType === 'practice'
-          ? myPractice
-          : Math.round((myAssessment * 0.7 + myPractice * 0.3) * 10) / 10;
-
       allEntries.push({
         rank: 0,
-        studentId: 'student-current',
+        studentId: currentStudentProfileId || 'student-current',
         userId,
-        name: studentRecord?.name || 'Rahul Patel (You)',
+        name: studentRecord?.name || 'Student',
         enrollmentNumber: studentRecord?.enrollmentNumber || '24CS093',
         division: studentRecord?.division || 'CE-A',
-        avatarSeed: '24CS093',
-        score: myScore,
-        assessmentScore: myAssessment,
-        practiceScore: myPractice,
-        assessmentsCount: 3,
-        questionsCount: 46,
-        accuracy: 84,
-        streakDays: 7,
-        trend: 'UP',
-        badges: ['Active Practicer', 'Quiz Ace'],
+        avatarSeed: studentRecord?.enrollmentNumber || '24CS093',
+        score: 0,
+        assessmentScore: 0,
+        practiceScore: 0,
+        assessmentsCount: 0,
+        questionsCount: 0,
+        accuracy: 0,
+        streakDays: 0,
+        trend: 'SAME',
+        badges: [],
         isCurrentUser: true,
       });
       processedEnrollments.add(studentRecord?.enrollmentNumber || '24CS093');

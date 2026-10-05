@@ -224,14 +224,29 @@ export default function StudentLeaderboardPage() {
               <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
-                      <Crown className="w-3.5 h-3.5 fill-amber-300" />
-                      Your Standing: Rank #{standing.rank} of {standing.totalStudents}
-                    </span>
-                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Top {100 - standing.percentile < 1 ? '1%' : `${(100 - standing.percentile).toFixed(1)}%`} in Class
-                    </span>
+                    {standing.score === 0 && standing.questionsCount === 0 && standing.assessmentsCount === 0 ? (
+                      <>
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-slate-500/20 text-slate-300 border border-slate-400/40 flex items-center gap-1.5">
+                          <Crown className="w-3.5 h-3.5 fill-slate-300" />
+                          Your Standing: Rank #{standing.rank} of {standing.totalStudents}
+                        </span>
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          New Student &bull; Baseline Entry
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
+                          <Crown className="w-3.5 h-3.5 fill-amber-300" />
+                          Your Standing: Rank #{standing.rank} of {standing.totalStudents}
+                        </span>
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Top {100 - standing.percentile < 1 ? '1%' : `${(100 - standing.percentile).toFixed(1)}%`} in Class
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <h3 className="text-3xl font-black tracking-tight text-white flex items-baseline gap-3">
@@ -242,9 +257,13 @@ export default function StudentLeaderboardPage() {
                   </h3>
 
                   <p className="text-xs text-indigo-200/80 max-w-xl">
-                    {standing.gapToNext > 0
+                    {standing.score === 0 && standing.questionsCount === 0 && standing.assessmentsCount === 0
+                      ? 'Welcome! You haven’t completed any faculty assessments or adaptive practice sessions yet. Start practicing questions or take an exam to establish your official score and climb the class leaderboard.'
+                      : standing.rank === 1
+                      ? 'Outstanding achievement! You hold the top standing in your class cohort. Keep practicing to maintain your edge.'
+                      : standing.gapToNext > 0
                       ? `You are only ${standing.gapToNext} points away from overtaking Rank #${standing.rank - 1}! Solve adaptive practice sessions and excel in upcoming faculty quizzes to advance.`
-                      : 'Outstanding achievement! You hold the top standing in your class cohort. Keep practicing to maintain your edge.'}
+                      : 'Keep practicing to climb the leaderboard!'}
                   </p>
                 </div>
 
