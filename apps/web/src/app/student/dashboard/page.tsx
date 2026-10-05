@@ -195,7 +195,7 @@ export default function StudentDashboard() {
                   </p>
                 </div>
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  DSA CS301
+                  {summary?.questionsPracticed > 0 ? 'Day-Wise Calibration' : 'Baseline (0% Activity)'}
                 </span>
               </div>
 
