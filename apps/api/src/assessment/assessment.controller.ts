@@ -24,10 +24,14 @@ export class AssessmentController {
    * Student: List available assessments for a course or all enrolled courses
    */
   @Get('student')
-  @Roles(UserRole.STUDENT)
+  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
   async getStudentAssessments(@Req() req: any, @Query('courseId') courseId?: string) {
     const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
-    return this.assessmentService.getStudentAssessments(studentProfileId, courseId);
+    let targetCourseId = courseId;
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
+      targetCourseId = req.user.courseId;
+    }
+    return this.assessmentService.getStudentAssessments(studentProfileId, targetCourseId);
   }
 
   /**
@@ -71,6 +75,9 @@ export class AssessmentController {
   @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
   async createAssessment(@Req() req: any, @Body() dto: CreateAssessmentDto) {
     const facultyProfileId = req.user?.facultyProfile?.id || req.user?.id;
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
+      dto.courseId = req.user.courseId;
+    }
     return this.assessmentService.createAssessment(facultyProfileId, dto);
   }
 

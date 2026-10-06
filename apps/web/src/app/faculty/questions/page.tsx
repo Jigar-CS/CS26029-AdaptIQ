@@ -136,12 +136,14 @@ export default function FacultyQuestionBankPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [questions, setQuestions] = useState<QuestionItem[]>(SEED_QUESTIONS);
+  const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [topicFilter, setTopicFilter] = useState('ALL');
   const [difficultyFilter, setDifficultyFilter] = useState('ALL');
   const [bloomFilter, setBloomFilter] = useState('ALL');
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+
+  const [currentCourse, setCurrentCourse] = useState<any>(null);
 
   useEffect(() => {
     if (!authLoading && (!user || (user.role !== UserRole.FACULTY && user.role !== UserRole.SUPER_ADMIN))) {
@@ -151,12 +153,36 @@ export default function FacultyQuestionBankPage() {
 
     const loadQuestions = async () => {
       try {
-        const res: any = await api.get('/courses');
-        if (res && res.length > 0) {
-          // Could load dynamic course question bank
+        const courses: any = await api.get('/courses');
+        if (courses && courses.length > 0) {
+          const facultyCourseId = user?.courseId || user?.assignedCourse?.id;
+          const assignedCourse = (facultyCourseId && courses.find((c: any) => c.id === facultyCourseId)) || courses[0];
+          setCurrentCourse(assignedCourse);
+
+          const qList: any = await api.get(`/practice/sessions/questions?courseId=${assignedCourse.id}`);
+          if (Array.isArray(qList) && qList.length > 0) {
+            const mapped = qList.map((q: any) => ({
+              id: q.id,
+              questionText: q.questionText,
+              topic: q.topic?.name || 'Curriculum Topic',
+              courseCode: assignedCourse.code,
+              difficulty: (q.difficulty as any) || 'MEDIUM',
+              bloomLevel: 'APPLY' as const,
+              options: (q.options || []).map((opt: any) => ({
+                id: opt.id,
+                text: opt.optionText,
+                isCorrect: opt.isCorrect,
+                misconception: opt.misconception?.title,
+              })),
+              explanation: q.explanation || 'Verified curriculum item solution.',
+              discrimination: 1.45,
+              difficultyParam: 0.1,
+            }));
+            setQuestions(mapped);
+          }
         }
       } catch {
-        // baseline questions active
+        // Fallback gracefully
       }
     };
 
@@ -209,8 +235,10 @@ export default function FacultyQuestionBankPage() {
                 <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                   Item Bank Repository
                 </h2>
-                <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  CS301 Data Structures
+                <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>{currentCourse ? `${currentCourse.code} - ${currentCourse.name}` : 'Assigned Subject'}</span>
+                  <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">Fixed</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">

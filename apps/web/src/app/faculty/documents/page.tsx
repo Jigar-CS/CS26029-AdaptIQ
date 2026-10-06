@@ -80,8 +80,8 @@ export default function FacultyDocumentsPage() {
   const fetchDocuments = async () => {
     setLoading(true);
     try {
-      // In development or demo, course ID is known or fallback to sample
-      const res = await fetch('http://localhost:4000/api/v1/rag/courses/course-cs301/documents');
+      const courseId = user?.courseId || 'course-cs301';
+      const res = await fetch(`http://localhost:4000/api/v1/rag/courses/${courseId}/documents`);
       if (res.ok) {
         const data = await res.json();
         setDocuments(data);
@@ -273,8 +273,9 @@ export default function FacultyDocumentsPage() {
     e.preventDefault();
     if (!docTitle || !docContent) return;
     setIsIngesting(true);
+    const courseId = user?.courseId || 'course-cs301';
     try {
-      const res = await fetch('http://localhost:4000/api/v1/rag/courses/course-cs301/documents', {
+      const res = await fetch(`http://localhost:4000/api/v1/rag/courses/${courseId}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -346,9 +347,16 @@ export default function FacultyDocumentsPage() {
             <h1 className="text-3xl font-extrabold text-white tracking-tight">
               Document AI & Course RAG Studio
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              Semantic RAG Live
-            </span>
+            {user?.courseCode ? (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Assigned Subject: {user.courseCode} - {user.courseName} (Fixed)</span>
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                Semantic RAG Live
+              </span>
+            )}
           </div>
           <p className="text-slate-400 text-sm">
             Ingest course syllabi, lecture presentations, and reference material. Perform semantic retrieval and generate strictly grounded assessments with direct source citations.

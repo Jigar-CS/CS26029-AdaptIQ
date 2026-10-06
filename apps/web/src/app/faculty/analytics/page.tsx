@@ -39,61 +39,50 @@ export default function FacultyClassAnalyticsPage() {
 
   const [selectedCourse, setSelectedCourse] = useState('CS301');
   const [selectedDivision, setSelectedDivision] = useState('Division A');
-
-  const topicAnalytics: TopicAnalytics[] = [
-    {
-      name: 'Arrays & Two Pointers',
-      avgMastery: 88,
-      attemptCount: 320,
-      struggleRate: 12,
-      status: 'HEALTHY',
-      topMisconception: 'Off-by-one boundary index on sliding window shrink',
-    },
-    {
-      name: 'Stacks & Monotonic Queues',
-      avgMastery: 81,
-      attemptCount: 260,
-      struggleRate: 18,
-      status: 'HEALTHY',
-      topMisconception: 'Popping order inversion during prefix-to-postfix evaluation',
-    },
-    {
-      name: 'Binary Search Trees (BST)',
-      avgMastery: 72,
-      attemptCount: 290,
-      struggleRate: 28,
-      status: 'HEALTHY',
-      topMisconception: 'Confusing predecessor with minimum key in right subtree',
-    },
-    {
-      name: 'AVL Tree Self-Balancing Invariants',
-      avgMastery: 56,
-      attemptCount: 195,
-      struggleRate: 46,
-      status: 'NEEDS_REINFORCEMENT',
-      topMisconception: 'Applying single rotation when zig-zag imbalance requires double rotation',
-    },
-    {
-      name: 'Dynamic Programming (Memoization)',
-      avgMastery: 38,
-      attemptCount: 210,
-      struggleRate: 64,
-      status: 'CRITICAL_DEFICIENCY',
-      topMisconception: 'Failing to identify state recurrence overlapping subproblems',
-    },
-    {
-      name: 'Graph Traversal (BFS / DFS)',
-      avgMastery: 69,
-      attemptCount: 180,
-      struggleRate: 31,
-      status: 'HEALTHY',
-      topMisconception: 'Omitting cycle detection in directed graphs',
-    },
-  ];
+  const [topicAnalytics, setTopicAnalytics] = useState<TopicAnalytics[]>([]);
 
   useEffect(() => {
     if (!authLoading && (!user || (user.role !== UserRole.FACULTY && user.role !== UserRole.SUPER_ADMIN))) {
       router.push('/auth/login');
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const courses: any = await api.get('/courses');
+        if (courses && courses.length > 0) {
+          const facultyCourseId = user?.courseId || user?.assignedCourse?.id;
+          const activeCourse = (facultyCourseId && courses.find((c: any) => c.id === facultyCourseId)) || courses[0];
+          setSelectedCourse(`${activeCourse.code} - ${activeCourse.name}`);
+          const summary: any = await api.get(`/analytics/faculty/course/${activeCourse.id}/summary`);
+          if (summary && summary.topicAnalytics && summary.topicAnalytics.length > 0) {
+            setTopicAnalytics(
+              summary.topicAnalytics.map((t: any) => ({
+                name: t.topicName,
+                avgMastery: t.classAverageMastery,
+                attemptCount: t.totalAttempts,
+                struggleRate: Math.max(0, 100 - (t.accuracy || 70)),
+                status:
+                  t.classAverageMastery >= 70
+                    ? 'HEALTHY'
+                    : t.classAverageMastery >= 45
+                    ? 'NEEDS_REINFORCEMENT'
+                    : 'CRITICAL_DEFICIENCY',
+                topMisconception:
+                  t.classAverageMastery < 60
+                    ? 'Conceptual boundary condition challenges'
+                    : 'None detected',
+              })),
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error loading analytics:', e);
+      }
+    };
+
+    if (user) {
+      loadData();
     }
   }, [user, authLoading]);
 

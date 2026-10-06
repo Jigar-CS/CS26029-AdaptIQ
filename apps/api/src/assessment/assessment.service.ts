@@ -45,6 +45,40 @@ export class AssessmentService {
       throw new BadRequestException('At least one question must be selected for the assessment.');
     }
 
+    // Verify if faculty is restricted to their assigned subject
+    let targetCourseId = dto.courseId;
+    const faculty = await this.prisma.facultyProfile.findUnique({
+      where: { id: facultyProfileId },
+      include: { course: true },
+    });
+
+    if (faculty && faculty.courseId) {
+      if (dto.courseId && dto.courseId !== faculty.courseId) {
+        throw new ForbiddenException(
+          `Unauthorized: You are assigned to teaching "${faculty.course?.name || faculty.courseId}". You can only create assessments for this assigned subject.`,
+        );
+      }
+      targetCourseId = faculty.courseId;
+    }
+
+    if (!targetCourseId) {
+      throw new BadRequestException('Course ID is required.');
+    }
+
+    // Verify all selected questions belong to the subject
+    const validQuestionsCount = await this.prisma.question.count({
+      where: {
+        id: { in: dto.questionIds },
+        courseId: targetCourseId,
+      },
+    });
+
+    if (validQuestionsCount !== dto.questionIds.length) {
+      throw new BadRequestException(
+        'All selected questions must strictly belong to your assigned subject.',
+      );
+    }
+
     const totalQuestions = dto.questionIds.length;
     const totalMarks = dto.totalMarks || 100.0;
     const pointsPerQuestion = Number((totalMarks / totalQuestions).toFixed(2));
@@ -54,7 +88,7 @@ export class AssessmentService {
         title: dto.title,
         description: dto.description,
         code: dto.code,
-        courseId: dto.courseId,
+        courseId: targetCourseId,
         facultyId: facultyProfileId,
         type: dto.type || AssessmentType.QUIZ,
         status: AssessmentStatus.PUBLISHED,

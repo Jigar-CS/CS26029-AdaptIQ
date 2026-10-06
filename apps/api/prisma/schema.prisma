@@ -138,6 +138,7 @@ model Course {
   questions    Question[]
   practiceSessions PracticeSession[]
   assessments  Assessment[]
+  facultyProfiles FacultyProfile[]
   documents    CourseDocument[]
   courseOutcomes CourseOutcome[]
   codingProblems CodingProblem[]
@@ -223,6 +224,8 @@ model FacultyProfile {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   employeeCode String?      @unique
   departmentId String?
+  courseId     String?
+  course       Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
   assessments  Assessment[]
   reviewedDisputes QuestionDispute[]
   createdAt    DateTime     @default(now())

@@ -56,9 +56,16 @@ export default function FacultyAssessmentsPage() {
     try {
       const courseList = await api.get('/courses');
       setCourses(courseList);
-      if (courseList.length > 0) {
-        setSelectedCourseId(courseList[0].id);
-        await loadCourseAssessments(courseList[0].id);
+      
+      // If faculty user has an assigned course, lock to it
+      const facultyCourseId = user?.courseId || user?.assignedCourse?.id;
+      const targetCourseId = facultyCourseId && courseList.some((c: any) => c.id === facultyCourseId)
+        ? facultyCourseId
+        : (courseList.length > 0 ? courseList[0].id : '');
+
+      if (targetCourseId) {
+        setSelectedCourseId(targetCourseId);
+        await loadCourseAssessments(targetCourseId);
       }
     } catch (err) {
       console.error('Failed to load courses', err);
@@ -149,20 +156,30 @@ export default function FacultyAssessmentsPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <select
-                value={selectedCourseId}
-                onChange={(e) => {
-                  setSelectedCourseId(e.target.value);
-                  loadCourseAssessments(e.target.value);
-                }}
-                className="p-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-800"
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} - {c.name}
-                  </option>
-                ))}
-              </select>
+              {user?.courseId ? (
+                <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>
+                    Subject: {user.courseCode || courses.find((c) => c.id === selectedCourseId)?.code} - {user.courseName || courses.find((c) => c.id === selectedCourseId)?.name}
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-900 ml-1">Fixed</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedCourseId}
+                  onChange={(e) => {
+                    setSelectedCourseId(e.target.value);
+                    loadCourseAssessments(e.target.value);
+                  }}
+                  className="p-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-800"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code} - {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <button
                 type="button"
@@ -246,6 +263,18 @@ export default function FacultyAssessmentsPage() {
             </div>
 
             <form onSubmit={handleCreateAssessment} className="p-6 overflow-y-auto space-y-4">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Assigned Teaching Subject</span>
+                  <span className="font-bold text-emerald-950">
+                    {courses.find((c) => c.id === selectedCourseId)?.code} - {courses.find((c) => c.id === selectedCourseId)?.name}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-800">
+                  Fixed For Faculty
+                </span>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Assessment Title</label>

@@ -11,19 +11,21 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { LoginDto, RegisterStudentDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
-import { UserRole } from '@prisma/client';
+import { UserRole, UserStatus } from '@prisma/client';
+import { findBatchStudent, formatStudentName } from './data/cse-batch-students';
 
 interface OtpRecord {
   code: string;
   expiresAt: number;
   attemptsRemaining: number;
   lastRequestedAt: number;
+  role: UserRole;
+  displayName: string;
 }
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('AuthService');
-  private readonly allowedDomain = process.env.UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in';
   private otpStore = new Map<string, OtpRecord>();
 
   constructor(
@@ -32,22 +34,42 @@ export class AuthService {
     @Inject('EmailService') private emailService: EmailService,
   ) {}
 
-  private validateEmailDomain(email: string) {
-    const domain = email.split('@')[1]?.toLowerCase();
-    const envDomains = (process.env.UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in,charusat.ac.in')
-      .split(',')
-      .map((d) => d.trim().toLowerCase());
-    
-    if (!domain || !envDomains.includes(domain)) {
-      throw new BadRequestException(
-        `Registration requires an official university email ending in @${envDomains.join(' or @')}`,
-      );
+  /**
+   * Institutional Domain Validator:
+   * 1. STUDENT role: Domain MUST be strictly 'charusat.edu.in' only.
+   * 2. Non-STUDENT roles (Faculty, Counsellor, HOD, Head, Admin): Domain MUST be strictly 'charusat.ac.in'.
+   * If the domain does not match, OTP cannot be dispatched and registration is blocked.
+   */
+  private validateEmailDomain(email: string, role: UserRole = UserRole.STUDENT) {
+    const parts = email.split('@');
+    if (parts.length !== 2) {
+      throw new BadRequestException('Please provide a valid university email address format.');
+    }
+    const domain = parts[1].toLowerCase().trim();
+
+    if (role === UserRole.STUDENT) {
+      // REQUIREMENT: Student should be ONLY able to register through charusat.edu.in
+      if (domain !== 'charusat.edu.in') {
+        throw new BadRequestException(
+          `Student registration strictly requires an official @charusat.edu.in email address. Verification OTP cannot be sent to @${domain}.`,
+        );
+      }
+    } else {
+      // REQUIREMENT: For all roles except student panel, domain MUST be strictly charusat.ac.in
+      if (domain !== 'charusat.ac.in') {
+        throw new BadRequestException(
+          `Staff and Faculty registration requires an official @charusat.ac.in email address. Verification OTP cannot be sent to @${domain}.`,
+        );
+      }
     }
   }
 
   async requestOtp(dto: RequestOtpDto) {
     const email = dto.email.trim().toLowerCase();
-    this.validateEmailDomain(email);
+    const role = dto.role || UserRole.STUDENT;
+
+    // Strict domain validation: for non-students, domain MUST be charusat.ac.in!
+    this.validateEmailDomain(email, role);
 
     // 1. Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
@@ -57,35 +79,119 @@ export class AuthService {
       throw new BadRequestException('An active account already exists for this email. Please log in.');
     }
 
-    // 2. Check authorized students table (or auto-provision for Charusat students)
-    let authorized = await this.prisma.authorizedStudent.findUnique({
-      where: { email },
-    });
+    let recipientName = '';
 
-    if (!authorized) {
-      const prefix = email.split('@')[0];
-      const enrollmentNumber = prefix.toUpperCase();
-      const name = prefix.includes('.')
-        ? prefix
-            .split('.')
-            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-            .join(' ')
-        : `Student ${enrollmentNumber}`;
+    if (role === UserRole.STUDENT) {
+      // 2. Check preloaded CSE batch students list
+      const batchStudent = findBatchStudent(email);
 
-      authorized = await this.prisma.authorizedStudent.create({
-        data: {
-          enrollmentNumber,
-          name,
-          email,
-          institute: 'CSPIT',
-          department: 'Computer Engineering',
-          programName: 'B.Tech Computer Engineering',
-          semester: 4,
-          division: 'CE-A',
-          graduationYear: 2026,
-          activated: false,
-        },
+      let authorized = await this.prisma.authorizedStudent.findUnique({
+        where: { email },
       });
+
+      if (batchStudent) {
+        if (!authorized) {
+          // Check if record exists with this student's enrollmentNumber
+          authorized = await this.prisma.authorizedStudent.findUnique({
+            where: { enrollmentNumber: batchStudent.studentId },
+          });
+
+          if (authorized) {
+            authorized = await this.prisma.authorizedStudent.update({
+              where: { id: authorized.id },
+              data: {
+                email,
+                name: formatStudentName(batchStudent.name),
+                institute: batchStudent.institute,
+                department: 'Computer Science & Engineering',
+                programName: batchStudent.degree,
+                semester: batchStudent.semester,
+                division: 'CSE',
+                graduationYear: 2026,
+              },
+            });
+          } else {
+            authorized = await this.prisma.authorizedStudent.create({
+              data: {
+                enrollmentNumber: batchStudent.studentId,
+                name: formatStudentName(batchStudent.name),
+                email,
+                institute: batchStudent.institute,
+                department: 'Computer Science & Engineering',
+                programName: batchStudent.degree,
+                semester: batchStudent.semester,
+                division: 'CSE',
+                graduationYear: 2026,
+                activated: false,
+              },
+            });
+          }
+        } else {
+          // Upgrade existing authorized record with exact roster data
+          authorized = await this.prisma.authorizedStudent.update({
+            where: { id: authorized.id },
+            data: {
+              enrollmentNumber: batchStudent.studentId,
+              name: formatStudentName(batchStudent.name),
+              institute: batchStudent.institute,
+              department: 'Computer Science & Engineering',
+              programName: batchStudent.degree,
+              semester: batchStudent.semester,
+              division: 'CSE',
+            },
+          });
+        }
+      } else {
+        // Fallback auto-provision for new Charusat students not matching the CSE batch roster
+        if (!authorized) {
+          const prefix = email.split('@')[0];
+          const enrollmentNumber = prefix.toUpperCase();
+          const name = prefix.includes('.')
+            ? prefix
+                .split('.')
+                .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+                .join(' ')
+            : `Student ${enrollmentNumber}`;
+
+          const existingByEnrollment = await this.prisma.authorizedStudent.findUnique({
+            where: { enrollmentNumber },
+          });
+
+          if (existingByEnrollment) {
+            authorized = await this.prisma.authorizedStudent.update({
+              where: { id: existingByEnrollment.id },
+              data: { email },
+            });
+          } else {
+            authorized = await this.prisma.authorizedStudent.create({
+              data: {
+                enrollmentNumber,
+                name,
+                email,
+                institute: 'CSPIT',
+                department: 'Computer Engineering',
+                programName: 'B.Tech Computer Engineering',
+                semester: 4,
+                division: 'CE-A',
+                graduationYear: 2026,
+                activated: false,
+              },
+            });
+          }
+        }
+      }
+      recipientName = authorized.name;
+    } else {
+      // For Faculty / Institutional Staff: format recipient name from email
+      const prefix = email.split('@')[0];
+      const cleanPrefix = prefix.split('.')[0];
+      recipientName = cleanPrefix
+        .split('_')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+      if (role === UserRole.FACULTY) {
+        recipientName = `Prof. ${recipientName}`;
+      }
     }
 
     // 3. Rate limiting check (max 1 request every 30 seconds)
@@ -105,15 +211,20 @@ export class AuthService {
       expiresAt,
       attemptsRemaining: 3,
       lastRequestedAt: now,
+      role,
+      displayName: recipientName,
     });
 
-    // 5. Send OTP via email service
-    await this.emailService.sendOtp(email, otp, authorized.name);
+    this.logger.log(`🔑 Verification OTP for ${email}: ${otp}`);
+
+    // 5. Send OTP via email service (only dispatched when domain check succeeds!)
+    await this.emailService.sendOtp(email, otp, recipientName);
 
     return {
       success: true,
       message: `A verification code has been dispatched to ${email}.`,
       expiresInMinutes: 10,
+      role,
     };
   }
 
@@ -142,103 +253,292 @@ export class AuthService {
       );
     }
 
-    // Fetch authorized student details to display to student
-    const authorized = await this.prisma.authorizedStudent.findUnique({
-      where: { email },
-    });
+    const role = dto.role || record.role || UserRole.STUDENT;
 
-    if (!authorized) {
-      throw new NotFoundException('University student record not found.');
+    if (role === UserRole.STUDENT) {
+      // Fetch authorized student details to display to student
+      let authorized = await this.prisma.authorizedStudent.findUnique({
+        where: { email },
+      });
+
+      if (!authorized) {
+        const batchStudent = findBatchStudent(email);
+        if (batchStudent) {
+          authorized = await this.prisma.authorizedStudent.findUnique({
+            where: { enrollmentNumber: batchStudent.studentId },
+          });
+        }
+      }
+
+      if (!authorized) {
+        throw new NotFoundException('University student record not found.');
+      }
+
+      return {
+        success: true,
+        message: 'Code verified successfully.',
+        role,
+        student: {
+          enrollmentNumber: authorized.enrollmentNumber,
+          name: authorized.name,
+          email: authorized.email,
+          institute: authorized.institute,
+          department: authorized.department,
+          program: authorized.programName,
+          semester: authorized.semester,
+          division: authorized.division,
+        },
+      };
+    } else {
+      // Non-student role verified
+      return {
+        success: true,
+        message: 'Institutional verification code confirmed.',
+        role,
+        profile: {
+          name: record.displayName,
+          email,
+          role,
+          domain: 'charusat.ac.in',
+        },
+      };
     }
-
-    return {
-      success: true,
-      message: 'Code verified successfully.',
-      student: {
-        enrollmentNumber: authorized.enrollmentNumber,
-        name: authorized.name,
-        email: authorized.email,
-        institute: authorized.institute,
-        department: authorized.department,
-        program: authorized.programName,
-        semester: authorized.semester,
-        division: authorized.division,
-      },
-    };
   }
 
   async registerStudent(dto: RegisterStudentDto) {
     const email = dto.email.trim().toLowerCase();
-    
-    // Verify OTP one more time
-    const verifyResult = await this.verifyOtp({ email, otp: dto.otp });
-    const authorized = await this.prisma.authorizedStudent.findUnique({
-      where: { email },
-    });
+    const record = this.otpStore.get(email);
+    const role = dto.role || record?.role || UserRole.STUDENT;
 
-    if (!authorized) {
-      throw new NotFoundException('Authorized student record missing.');
-    }
+    // Re-verify strict domain requirements
+    this.validateEmailDomain(email, role);
+
+    // Verify OTP
+    await this.verifyOtp({ email, otp: dto.otp, role });
 
     // Hash password securely
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // Atomically create User and StudentProfile
-    const user = await this.prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          role: UserRole.STUDENT,
-          emailVerified: true,
-        },
+    if (role === UserRole.STUDENT) {
+      let authorized = await this.prisma.authorizedStudent.findUnique({
+        where: { email },
       });
 
-      const profile = await tx.studentProfile.create({
-        data: {
-          userId: newUser.id,
-          authorizedStudentId: authorized.id,
-        },
+      if (!authorized) {
+        const batchStudent = findBatchStudent(email);
+        if (batchStudent) {
+          authorized = await this.prisma.authorizedStudent.findUnique({
+            where: { enrollmentNumber: batchStudent.studentId },
+          });
+          if (authorized) {
+            authorized = await this.prisma.authorizedStudent.update({
+              where: { id: authorized.id },
+              data: { email },
+            });
+          }
+        }
+      }
+
+      if (!authorized) {
+        throw new NotFoundException('Authorized student record missing.');
+      }
+
+      // Atomically create User and StudentProfile
+      const user = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            role: UserRole.STUDENT,
+            emailVerified: true,
+            status: UserStatus.ACTIVE,
+          },
+        });
+
+        const profile = await tx.studentProfile.create({
+          data: {
+            userId: newUser.id,
+            authorizedStudentId: authorized.id,
+          },
+        });
+
+        await tx.authorizedStudent.update({
+          where: { id: authorized.id },
+          data: {
+            activated: true,
+            userId: newUser.id,
+          },
+        });
+
+        return {
+          ...newUser,
+          studentProfile: profile,
+        };
       });
 
-      await tx.authorizedStudent.update({
-        where: { id: authorized.id },
-        data: {
-          activated: true,
-          userId: newUser.id,
-        },
+      // Clear OTP after successful registration
+      this.otpStore.delete(email);
+
+      // Also sync user_profiles record for seamless profile syncing
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `
+          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+          ON DUPLICATE KEY UPDATE
+            fullName = VALUES(fullName),
+            department = VALUES(department),
+            designation = VALUES(designation),
+            specialization = VALUES(specialization)
+        `,
+          user.id,
+          authorized.name,
+          authorized.department,
+          'Student Scholar',
+          `${authorized.institute} Campus`,
+          authorized.programName,
+        );
+      } catch (e: any) {
+        this.logger.warn(`Could not sync user_profiles record for student: ${e.message}`);
+      }
+
+      // Send welcome onboarding email asynchronously
+      this.emailService.sendWelcome(email, authorized.name).catch((err) => {
+        this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
       });
+
+      // Generate JWT
+      const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
 
       return {
-        ...newUser,
-        studentProfile: profile,
+        success: true,
+        message: 'Account successfully registered and activated.',
+        accessToken: token,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: authorized.name,
+          enrollmentNumber: authorized.enrollmentNumber,
+          studentId: user.studentProfile.id,
+          studentDetails: authorized,
+        },
       };
-    });
+    } else {
+      // Non-student role registration: Faculty, Counsellor, HOD, Head, Admin
+      let department = await this.prisma.department.findFirst({
+        where: { code: 'CSE' },
+      });
+      if (!department) {
+        department = await this.prisma.department.findFirst();
+      }
 
-    // Clear OTP after successful registration
-    this.otpStore.delete(email);
+      // If registering as FACULTY, a teaching subject is strictly required
+      let assignedCourse: any = null;
+      if (role === UserRole.FACULTY) {
+        if (!dto.courseId) {
+          throw new BadRequestException(
+            'Teaching subject is mandatory. Please select which subject you teach to register as faculty.',
+          );
+        }
+        assignedCourse = await this.prisma.course.findUnique({
+          where: { id: dto.courseId },
+        });
+        if (!assignedCourse) {
+          throw new BadRequestException('Selected teaching subject does not exist in the curriculum.');
+        }
+      }
 
-    // Send welcome onboarding email asynchronously
-    this.emailService.sendWelcome(email, authorized.name).catch((err) => {
-      this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
-    });
+      const displayName = dto.fullName || record?.displayName || `Prof. ${email.split('@')[0]}`;
+      const employeeCode = dto.employeeCode || `EMP_${Date.now().toString().slice(-6)}`;
 
-    // Generate JWT
-    const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
+      const user = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            role,
+            emailVerified: true,
+            status: UserStatus.ACTIVE,
+          },
+        });
 
-    return {
-      success: true,
-      message: 'Account successfully registered and activated.',
-      accessToken: token,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        name: authorized.name,
-        enrollmentNumber: authorized.enrollmentNumber,
-        studentId: user.studentProfile.id,
-      },
-    };
+        let facultyProfile = null;
+        if (role === UserRole.FACULTY || role === UserRole.HOD) {
+          facultyProfile = await tx.facultyProfile.create({
+            data: {
+              userId: newUser.id,
+              employeeCode,
+              departmentId: department?.id,
+              courseId: assignedCourse ? assignedCourse.id : undefined,
+            },
+            include: {
+              course: true,
+            },
+          });
+        }
+
+        return {
+          ...newUser,
+          facultyProfile,
+        };
+      });
+
+      // Also create extended user_profiles record for seamless profile syncing
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `
+          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+          ON DUPLICATE KEY UPDATE
+            fullName = VALUES(fullName),
+            department = VALUES(department),
+            designation = VALUES(designation),
+            specialization = VALUES(specialization)
+        `,
+          user.id,
+          displayName,
+          department?.name || 'Computer Science and Engineering',
+          role === UserRole.FACULTY ? 'Assistant Professor' : role,
+          'CSPIT CSE Building',
+          assignedCourse ? `${assignedCourse.code} - ${assignedCourse.name}` : 'Computer Science',
+        );
+      } catch (e) {
+        this.logger.warn(`Could not sync user_profiles record: ${e.message}`);
+      }
+
+      this.otpStore.delete(email);
+
+      this.emailService.sendWelcome(email, displayName).catch((err) => {
+        this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
+      });
+
+      const token = this.generateToken(user.id, user.email, user.role, undefined, user.facultyProfile?.id);
+
+      return {
+        success: true,
+        message: `${role} account successfully registered and activated.`,
+        accessToken: token,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: displayName,
+          facultyId: user.facultyProfile?.id,
+          courseId: user.facultyProfile?.courseId,
+          courseCode: assignedCourse?.code,
+          courseName: assignedCourse?.name,
+          assignedCourse: assignedCourse
+            ? {
+                id: assignedCourse.id,
+                code: assignedCourse.code,
+                name: assignedCourse.name,
+                semester: assignedCourse.semester,
+              }
+            : null,
+        },
+      };
+    }
   }
 
   async login(dto: LoginDto) {
@@ -251,7 +551,11 @@ export class AuthService {
             authorizedStudent: true,
           },
         },
-        facultyProfile: true,
+        facultyProfile: {
+          include: {
+            course: true,
+          },
+        },
       },
     });
 
@@ -276,11 +580,24 @@ export class AuthService {
 
     const studentId = user.studentProfile?.id;
     const facultyId = user.facultyProfile?.id;
+    const assignedCourse = user.facultyProfile?.course;
     const token = this.generateToken(user.id, user.email, user.role, studentId, facultyId);
 
-    const displayName =
-      user.studentProfile?.authorizedStudent?.name ||
-      user.email.split('@')[0].toUpperCase();
+    let displayName = user.studentProfile?.authorizedStudent?.name;
+    if (!displayName) {
+      try {
+        const profileRows: any[] = await this.prisma.$queryRawUnsafe(
+          'SELECT fullName FROM user_profiles WHERE userId = ?',
+          user.id,
+        );
+        if (profileRows && profileRows.length > 0 && profileRows[0].fullName) {
+          displayName = profileRows[0].fullName;
+        }
+      } catch {}
+    }
+    if (!displayName) {
+      displayName = user.email.split('@')[0].toUpperCase();
+    }
 
     return {
       accessToken: token,
@@ -291,9 +608,38 @@ export class AuthService {
         name: displayName,
         studentId,
         facultyId,
+        courseId: user.facultyProfile?.courseId,
+        courseCode: assignedCourse?.code,
+        courseName: assignedCourse?.name,
+        assignedCourse: assignedCourse
+          ? {
+              id: assignedCourse.id,
+              code: assignedCourse.code,
+              name: assignedCourse.name,
+              semester: assignedCourse.semester,
+            }
+          : null,
         studentDetails: user.studentProfile?.authorizedStudent || null,
       },
     };
+  }
+
+  async getAvailableCourses() {
+    return this.prisma.course.findMany({
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        semester: true,
+        department: {
+          select: {
+            name: true,
+            code: true,
+          },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
   }
 
   private generateToken(

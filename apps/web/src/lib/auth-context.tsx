@@ -13,6 +13,15 @@ export interface UserSession {
   studentId?: string;
   facultyId?: string;
   studentDetails?: any;
+  courseId?: string;
+  courseCode?: string;
+  courseName?: string;
+  assignedCourse?: {
+    id: string;
+    code: string;
+    name: string;
+    semester: number;
+  };
 }
 
 interface AuthContextType {

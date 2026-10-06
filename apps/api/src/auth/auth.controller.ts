@@ -40,6 +40,11 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Get('courses')
+  async getCourses() {
+    return this.authService.getAvailableCourses();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@Request() req) {

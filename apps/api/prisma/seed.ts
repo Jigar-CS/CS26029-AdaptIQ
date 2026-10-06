@@ -615,10 +615,10 @@ async function main() {
     },
   });
 
-  // FACULTY
+  // FACULTY: Prof. Dhara Solanki
   const facultyUser = await prisma.user.create({
     data: {
-      email: 'faculty@charusat.edu.in',
+      email: 'dharasolanki.cse@charusat.ac.in',
       passwordHash,
       role: UserRole.FACULTY,
       status: UserStatus.ACTIVE,
@@ -1009,7 +1009,7 @@ async function main() {
       description: 'Departmental timed benchmark testing array manipulation, pointer semantics, recursion, and search tree invariants.',
       code: 'CS301-QUIZ-01',
       courseId: dsaCourse.id,
-      facultyId: facultyProfile?.id,
+      facultyId: null,
       type: AssessmentType.QUIZ,
       status: AssessmentStatus.PUBLISHED,
       durationMinutes: 20,

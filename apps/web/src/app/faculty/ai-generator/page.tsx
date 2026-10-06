@@ -68,13 +68,17 @@ export default function AiQuestionGeneratorPage() {
     try {
       const courseList = await api.get('/courses');
       setCourses(courseList);
-      if (courseList.length > 0) {
-        setSelectedCourseId(courseList[0].id);
-        if (courseList[0].topics?.length > 0) {
-          setSelectedTopicId(courseList[0].topics[0].id);
+
+      const facultyCourseId = user?.courseId || user?.assignedCourse?.id;
+      const activeCourse = (facultyCourseId && courseList.find((c: any) => c.id === facultyCourseId)) || (courseList.length > 0 ? courseList[0] : null);
+
+      if (activeCourse) {
+        setSelectedCourseId(activeCourse.id);
+        if (activeCourse.topics?.length > 0) {
+          setSelectedTopicId(activeCourse.topics[0].id);
         }
       }
-      const staged = await api.get('/ai-assessment/staged');
+      const staged = await api.get(`/ai-assessment/staged${activeCourse ? `?courseId=${activeCourse.id}` : ''}`);
       setStagedQuestions(staged || []);
     } catch (err) {
       console.error('Failed to load generator data', err);
@@ -180,11 +184,17 @@ export default function AiQuestionGeneratorPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Course */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Course
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>Course</span>
+                    {user?.courseId && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Assigned Subject (Fixed)
+                      </span>
+                    )}
                   </label>
                   <select
                     value={selectedCourseId}
+                    disabled={!!user?.courseId}
                     onChange={(e) => {
                       setSelectedCourseId(e.target.value);
                       const course = courses.find((c) => c.id === e.target.value);
@@ -192,7 +202,11 @@ export default function AiQuestionGeneratorPage() {
                         setSelectedTopicId(course.topics[0].id);
                       }
                     }}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium"
+                    className={`w-full p-2.5 text-xs border rounded-xl font-medium ${
+                      user?.courseId
+                        ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 cursor-not-allowed'
+                        : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
                   >
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>

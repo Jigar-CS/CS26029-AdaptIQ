@@ -29,7 +29,10 @@ export class AiAssessmentController {
    */
   @Post('generate')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
-  async generateQuestions(@Body() dto: GenerateStagedRequestDto) {
+  async generateQuestions(@Req() req: any, @Body() dto: GenerateStagedRequestDto) {
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
+      dto.courseId = req.user.courseId;
+    }
     return this.aiAssessmentService.generateStagedQuestions(dto);
   }
 
@@ -39,10 +42,15 @@ export class AiAssessmentController {
   @Get('staged')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getStagedQuestions(
+    @Req() req: any,
     @Query('topicId') topicId?: string,
     @Query('courseId') courseId?: string,
   ) {
-    return this.aiAssessmentService.getStagedQuestions(topicId, courseId);
+    let effectiveCourseId = courseId;
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
+      effectiveCourseId = req.user.courseId;
+    }
+    return this.aiAssessmentService.getStagedQuestions(topicId, effectiveCourseId);
   }
 
   /**

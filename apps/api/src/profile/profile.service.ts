@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CareerRoleType, UserRole } from '@prisma/client';
+import { findBatchStudent, formatStudentName } from '../auth/data/cse-batch-students';
 
 @Injectable()
 export class ProfileService implements OnModuleInit {
@@ -56,7 +57,11 @@ export class ProfileService implements OnModuleInit {
             placementProfile: true,
           },
         },
-        facultyProfile: true,
+        facultyProfile: {
+          include: {
+            course: true,
+          },
+        },
         authorizedRecord: true,
       },
     });
@@ -83,6 +88,41 @@ export class ProfileService implements OnModuleInit {
     const faculty = user.facultyProfile;
     const placement = user.studentProfile?.placementProfile;
 
+    // Check if student matches CSE batch roster
+    const batchStudent = user.role === UserRole.STUDENT ? findBatchStudent(user.email) : undefined;
+    if (batchStudent && authorized) {
+      if (
+        authorized.enrollmentNumber !== batchStudent.studentId ||
+        authorized.name !== formatStudentName(batchStudent.name) ||
+        authorized.semester !== batchStudent.semester ||
+        authorized.programName !== batchStudent.degree
+      ) {
+        try {
+          await this.prisma.authorizedStudent.update({
+            where: { id: authorized.id },
+            data: {
+              enrollmentNumber: batchStudent.studentId,
+              name: formatStudentName(batchStudent.name),
+              institute: batchStudent.institute,
+              department: 'Computer Science & Engineering',
+              programName: batchStudent.degree,
+              semester: batchStudent.semester,
+              division: 'CSE',
+            },
+          });
+          authorized.enrollmentNumber = batchStudent.studentId;
+          authorized.name = formatStudentName(batchStudent.name);
+          authorized.institute = batchStudent.institute;
+          authorized.department = 'Computer Science & Engineering';
+          authorized.programName = batchStudent.degree;
+          authorized.semester = batchStudent.semester;
+          authorized.division = 'CSE';
+        } catch (err: any) {
+          this.logger.warn(`Could not sync batch student to authorizedStudent: ${err.message}`);
+        }
+      }
+    }
+
     const defaultDesignation =
       user.role === UserRole.SUPER_ADMIN
         ? 'Lead System Administrator'
@@ -97,11 +137,13 @@ export class ProfileService implements OnModuleInit {
         : 'Student Scholar';
 
     const defaultDepartment =
+      (batchStudent ? 'Computer Science & Engineering' : null) ||
       authorized?.department ||
       faculty?.departmentId ||
       'Department of Computer Engineering';
 
     const defaultName =
+      (batchStudent ? formatStudentName(batchStudent.name) : null) ||
       authorized?.name ||
       user.email
         .split('@')[0]
@@ -193,6 +235,15 @@ export class ProfileService implements OnModuleInit {
         ? {
             employeeCode: faculty.employeeCode || 'FAC-' + user.id.slice(0, 6).toUpperCase(),
             departmentId: faculty.departmentId || 'DEP-CE',
+            courseId: faculty.courseId,
+            assignedCourse: faculty.course
+              ? {
+                  id: faculty.course.id,
+                  code: faculty.course.code,
+                  name: faculty.course.name,
+                  semester: faculty.course.semester,
+                }
+              : null,
           }
         : null,
     };

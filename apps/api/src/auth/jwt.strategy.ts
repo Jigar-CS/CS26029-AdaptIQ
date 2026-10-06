@@ -22,7 +22,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             authorizedStudent: true,
           },
         },
-        facultyProfile: true,
+        facultyProfile: {
+          include: {
+            course: true,
+          },
+        },
       },
     });
 
@@ -36,6 +40,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       studentId: user.studentProfile?.id,
       facultyId: user.facultyProfile?.id,
+      courseId: user.facultyProfile?.courseId,
+      assignedCourse: user.facultyProfile?.course,
       studentProfile: user.studentProfile,
       facultyProfile: user.facultyProfile,
     };

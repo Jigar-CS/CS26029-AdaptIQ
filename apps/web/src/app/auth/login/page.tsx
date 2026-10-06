@@ -151,7 +151,7 @@ export default function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => fillDemo('faculty@charusat.edu.in')}
+                onClick={() => fillDemo('dharasolanki.cse@charusat.ac.in')}
                 className="py-1.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 transition"
               >
                 Faculty
