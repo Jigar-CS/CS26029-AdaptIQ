@@ -18,8 +18,14 @@ import {
   AlertCircle,
   HelpCircle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Plus,
   BookOpen,
+  Info,
+  Layers,
+  Cpu,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface StagedQuestion {
@@ -52,6 +58,7 @@ export default function AiQuestionGeneratorPage() {
   const [generating, setGenerating] = useState(false);
   const [loadingStaged, setLoadingStaged] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -166,19 +173,83 @@ export default function AiQuestionGeneratorPage() {
         <main className="p-8 max-w-6xl w-full mx-auto space-y-8">
           {/* Top Generator Config Box */}
           <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
-                <Sparkles className="w-5 h-5 animate-pulse" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                    Curriculum-Grounded Question Generator
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Generate Bloom-taxonomy aligned assessment items. All items are held in staging for human instructor approval.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                  Curriculum-Grounded Question Generator
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Generate Bloom-taxonomy aligned assessment items. All items are held in staging for human instructor approval.
-                </p>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowGuide(!showGuide)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/70 text-indigo-700 text-xs font-semibold transition self-start sm:self-auto"
+              >
+                <HelpCircle className="w-4 h-4 text-indigo-600" />
+                <span>How Questions Are Generated</span>
+                {showGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
             </div>
+
+            {/* Architecture Explanation Box */}
+            {showGuide && (
+              <div className="bg-gradient-to-br from-indigo-50/80 via-white to-slate-50 rounded-2xl p-5 border border-indigo-100 space-y-4 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs uppercase tracking-wider">
+                  <Cpu className="w-4 h-4 text-indigo-600" />
+                  <span>The 4-Stage AI Question Generation & Quality Assurance Pipeline</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100/80 shadow-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-indigo-700 font-bold">
+                      <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">1</span>
+                      Pedagogical Calibration
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Faculty specifies the course topic, cognitive Bloom level (Remember $\to$ Create), difficulty tier, and curriculum syllabus notes.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100/80 shadow-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-indigo-700 font-bold">
+                      <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">2</span>
+                      Generative AI Engine
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Dispatches calibrated prompt to the AI microservice, synthesizing mathematically rigorous questions with step-by-step reasoning.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100/80 shadow-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-indigo-700 font-bold">
+                      <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">3</span>
+                      Misconception Distractors
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Generates 1 correct key and 3 plausible distractors tagged with common student errors to diagnose learning gaps.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100/80 shadow-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-indigo-700 font-bold">
+                      <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px]">4</span>
+                      Faculty Staging Review
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      Questions are held in Staging. Instructors review, edit text/options, and explicitly approve into the Question Bank.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleGenerate} className="space-y-6 pt-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -271,19 +342,59 @@ export default function AiQuestionGeneratorPage() {
                   </select>
                 </div>
 
-                {/* Count */}
+                {/* Number of Questions to Generate */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Number of Items ({count})
-                  </label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={5}
-                    value={count}
-                    onChange={(e) => setCount(Number(e.target.value))}
-                    className="w-full accent-indigo-600 mt-2"
-                  />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Questions to Generate
+                    </label>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                      {count} {count === 1 ? 'Question' : 'Questions'}
+                    </span>
+                  </div>
+
+                  {/* Preset Pills */}
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {[1, 3, 5, 10].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setCount(num)}
+                        className={`py-1 text-[11px] font-bold rounded-lg border transition ${
+                          count === num
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {num} {num === 1 ? 'Q' : 'Qs'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Dual Controls: Interactive Slider + Number Stepper */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={count}
+                      onChange={(e) => setCount(Number(e.target.value))}
+                      className="flex-1 accent-indigo-600 cursor-pointer"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={count}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!isNaN(val)) {
+                          setCount(Math.max(1, Math.min(10, val)));
+                        }
+                      }}
+                      className="w-12 p-1 text-xs text-center font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-800"
+                    />
+                  </div>
                 </div>
 
                 {/* Pedagogical notes / Syllabus context */}

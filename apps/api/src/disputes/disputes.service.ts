@@ -182,14 +182,47 @@ export class DisputesService {
       }
     }
 
-    // 3. Create persistent Notification for the student
+    // 3. Create persistent Notification for the student with rich, pedagogical clarity
+    const topicName = dispute.question.topic?.name || 'Curriculum Topic';
+    const courseCode = dispute.question.course?.code || 'Core';
+
     const notificationTitle = isApproved
-      ? '🎉 Question Dispute Approved!'
-      : 'ℹ️ Question Dispute Reviewed';
+      ? '🎉 Question Dispute Upheld: Credit Awarded'
+      : 'ℹ️ Question Dispute Reviewed: Official Solution Upheld';
 
     const notificationMessage = isApproved
-      ? `Your dispute on "${dispute.question.topic.name}" was approved by faculty. Your response was recognized as correct, and your topic mastery score has been adjusted!`
-      : `Faculty reviewed your dispute on "${dispute.question.topic.name}". Feedback: "${dto.facultyRemarks || 'The original question explanation has been verified as accurate.'}"`;
+      ? [
+          `Dispute Decision: APPROVED (Student Claim Upheld)`,
+          `Course: ${courseCode} • Topic: ${topicName}`,
+          ``,
+          `Review Summary:`,
+          `Faculty reviewed your dispute regarding the question in "${topicName}" and concluded that your reasoning and submitted interpretation are conceptually sound.`,
+          ``,
+          `Faculty Review Feedback:`,
+          `"${dto.facultyRemarks || 'Student claim verified and accepted. Your conceptual alternative is recognized as correct.'}"`,
+          ``,
+          `Adjustments Applied to Your Profile:`,
+          `• Mastery Recalibrated: +7.5% score credited to your ${topicName} knowledge curve.`,
+          `• Question Record: Your response was officially marked as Correct in continuous assessment analytics.`,
+          dto.quarantineQuestion
+            ? `• Item Quarantined: The question has been flagged for question bank revision so other students are not affected.`
+            : `• Status Synchronized: Record updated across your student learning profile.`,
+        ].join('\n')
+      : [
+          `Dispute Decision: REVIEWED (Original Solution Upheld)`,
+          `Course: ${courseCode} • Topic: ${topicName}`,
+          ``,
+          `Review Summary:`,
+          `Faculty carefully reviewed your challenge on the "${topicName}" question. Following algorithmic verification, the official solution and rationale were confirmed as theoretically accurate.`,
+          ``,
+          `Faculty Explanation & Rationale:`,
+          `"${dto.facultyRemarks || 'The original question explanation has been verified as accurate according to core course principles.'}"`,
+          dispute.question.explanation ? `\nCore Concept Explanation:\n"${dispute.question.explanation}"` : '',
+          ``,
+          `Learning Guidance & Next Steps:`,
+          `• Mastery Impact: No penalty has been applied to your mastery score beyond the standard practice attempt.`,
+          `• Recommended Action: Review key invariants in the ${topicName} study guide and solve 2–3 targeted practice problems to consolidate this pattern.`,
+        ].filter(Boolean).join('\n');
 
     await this.prisma.studentNotification.create({
       data: {
@@ -200,8 +233,12 @@ export class DisputesService {
         metadata: JSON.stringify({
           disputeId: dispute.id,
           questionId: dispute.questionId,
-          topicName: dispute.question.topic.name,
-          facultyRemarks: dto.facultyRemarks,
+          topicName,
+          courseCode,
+          verdict: isApproved ? 'APPROVED' : 'REJECTED',
+          facultyRemarks: dto.facultyRemarks || (isApproved ? 'Student claim verified and accepted.' : 'Original answer verified as theoretically accurate.'),
+          questionText: dispute.question.questionText,
+          explanation: dispute.question.explanation,
         }),
       },
     });

@@ -34,4 +34,20 @@ export class CoursesService {
       },
     });
   }
+
+  async getCourseQuestions(courseId: string) {
+    return this.prisma.question.findMany({
+      where: {
+        OR: [{ courseId }, { topic: { courseId } }],
+      },
+      include: {
+        topic: true,
+        options: {
+          include: { misconception: true },
+          orderBy: { order: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

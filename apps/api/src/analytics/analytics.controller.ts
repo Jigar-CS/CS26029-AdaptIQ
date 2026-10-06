@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
@@ -93,8 +94,25 @@ export class AnalyticsController {
 
   @Get('faculty/course/:courseId/summary')
   @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN)
-  async getFacultyCourseCohortAnalytics(@Param('courseId') courseId: string) {
-    return this.analyticsService.getFacultyCourseCohortAnalytics(courseId);
+  async getFacultyCourseCohortAnalytics(
+    @Param('courseId') courseId: string,
+    @Query('division') division?: string,
+  ) {
+    return this.analyticsService.getFacultyCourseCohortAnalytics(courseId, division);
+  }
+
+  @Post('faculty/dispatch-remediation-nudge')
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
+  async dispatchRemediationNudge(
+    @Request() req,
+    @Body() body: { courseId: string; topicId?: string; division?: string },
+  ) {
+    return this.analyticsService.dispatchRemediationNudge({
+      facultyUserId: req.user.sub,
+      courseId: body.courseId,
+      topicId: body.topicId,
+      division: body.division,
+    });
   }
 
   @Get('counsellor/mentees/summary')

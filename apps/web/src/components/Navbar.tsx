@@ -13,6 +13,7 @@ interface NotificationItem {
   message: string;
   type: string;
   read: boolean;
+  metadata?: string;
   createdAt: string;
 }
 
@@ -23,6 +24,183 @@ export interface NavbarProps {
   onLockedClick?: () => void;
 }
 
+function NotificationCardBody({ item }: { item: NotificationItem }) {
+  let meta: any = null;
+  try {
+    if (item.metadata) {
+      meta = typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const isRemediationNudge =
+    item.type === 'REMEDIATION_NUDGE' ||
+    item.title?.toLowerCase().includes('remediation');
+
+  if (isRemediationNudge) {
+    const topicName = meta?.topicName || 'Arrays';
+    const courseCode = meta?.courseCode || 'CS301';
+    const actionUrl = meta?.actionUrl || `/student/practice?topicId=${meta?.topicId || ''}&courseId=${meta?.courseId || ''}`;
+
+    return (
+      <div className="space-y-2 mt-1.5 text-xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            {courseCode} • {topicName}
+          </span>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+            🎯 Remediation Practice Assigned
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+          Prof. Dhara Solanki has dispatched an automated remediation practice session for <strong>{topicName}</strong> to reinforce core concepts and build mastery.
+        </p>
+
+        <div className="pt-1">
+          <Link
+            href={actionUrl}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg shadow-xs transition"
+          >
+            <span>Start Practice Session Now</span>
+            <span>→</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isApproved =
+    item.type === 'DISPUTE_APPROVED' ||
+    item.title?.toLowerCase().includes('approved') ||
+    item.title?.toLowerCase().includes('credit awarded');
+  const isRejected =
+    item.type === 'DISPUTE_REJECTED' ||
+    item.title?.toLowerCase().includes('reviewed') ||
+    item.title?.toLowerCase().includes('solution upheld');
+
+  if (isApproved || isRejected) {
+    const lines = (item.message || '').split('\n').map((l) => l.trim()).filter(Boolean);
+
+    // Extract sections from formatted string
+    const topicLine = lines.find((l) => l.startsWith('Topic:') || l.startsWith('Course:'));
+    const summaryLine = lines.find(
+      (l) =>
+        !l.startsWith('Dispute Decision:') &&
+        !l.startsWith('Course:') &&
+        !l.startsWith('Review Summary:') &&
+        !l.startsWith('Faculty') &&
+        !l.startsWith('Adjustments') &&
+        !l.startsWith('Learning Guidance') &&
+        !l.startsWith('•') &&
+        !l.startsWith('"'),
+    );
+
+    const facultyQuote =
+      lines.find((l) => l.startsWith('"') && l.endsWith('"')) ||
+      (meta?.facultyRemarks ? `"${meta.facultyRemarks}"` : null);
+
+    const actionPoints = lines.filter((l) => l.startsWith('•'));
+
+    const topicName =
+      meta?.topicName ||
+      (topicLine?.includes('Topic:') ? topicLine.split('Topic:')[1].trim() : 'Curriculum Question');
+    const courseCode =
+      meta?.courseCode ||
+      (topicLine?.includes('Course:') ? topicLine.split('Course:')[1].split('•')[0].trim() : 'CS301');
+
+    return (
+      <div className="space-y-2 mt-1.5 text-xs">
+        {/* Topic & Decision Badges */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            {courseCode ? `${courseCode} • ` : ''}{topicName}
+          </span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 ${
+              isApproved
+                ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                : 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+            }`}
+          >
+            {isApproved ? '✓ Dispute Upheld & Credited' : 'ℹ️ Official Answer Upheld'}
+          </span>
+        </div>
+
+        {/* Narrative Summary */}
+        <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+          {summaryLine ||
+            (isApproved
+              ? `Faculty reviewed your challenge on "${topicName}" and concluded that your reasoning is mathematically and conceptually sound.`
+              : `Faculty investigated your challenge on "${topicName}" and verified that the original question explanation is accurate.`)}
+        </p>
+
+        {/* Faculty Feedback Callout */}
+        {facultyQuote && (
+          <div
+            className={`p-2.5 rounded-xl border-l-[3px] text-[11px] leading-relaxed ${
+              isApproved
+                ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200'
+                : 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/30 text-slate-800 dark:text-slate-200'
+            }`}
+          >
+            <span className="not-italic font-bold text-[10px] uppercase tracking-wider block mb-1 text-slate-500 dark:text-slate-400">
+              💬 Faculty Review Feedback:
+            </span>
+            <span className="italic font-medium">{facultyQuote}</span>
+          </div>
+        )}
+
+        {/* Action Points / Profile Adjustments */}
+        {actionPoints.length > 0 && (
+          <div className="bg-slate-100/70 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+              {isApproved ? 'Applied Profile Adjustments:' : 'Learning Guidance & Next Steps:'}
+            </span>
+            <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+              {actionPoints.map((pt, idx) => {
+                const cleanPt = pt.replace(/^•\s*/, '');
+                const colonIdx = cleanPt.indexOf(':');
+                if (colonIdx !== -1) {
+                  const boldLabel = cleanPt.substring(0, colonIdx);
+                  const rest = cleanPt.substring(colonIdx + 1);
+                  return (
+                    <li key={idx} className="flex items-start gap-1.5 leading-snug">
+                      <span className={isApproved ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-blue-500 dark:text-blue-400 font-bold'}>
+                        {isApproved ? '✓' : '•'}
+                      </span>
+                      <span>
+                        <strong className="text-slate-900 dark:text-slate-100 font-semibold">{boldLabel}:</strong>
+                        {rest}
+                      </span>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={idx} className="flex items-start gap-1.5 leading-snug">
+                    <span className={isApproved ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-blue-500 dark:text-blue-400 font-bold'}>
+                      {isApproved ? '✓' : '•'}
+                    </span>
+                    <span>{cleanPt}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback for general system notifications
+  return (
+    <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line mt-1">
+      {item.message}
+    </p>
+  );
+}
+
 export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: NavbarProps) {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -30,8 +208,10 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (user && user.role === 'STUDENT') {
       loadNotifications();
     }
@@ -117,7 +297,7 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3">
+            <div className="absolute right-0 mt-2 w-80 sm:w-[460px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
@@ -137,7 +317,7 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
                 </button>
               </div>
 
-              <div className="max-h-80 overflow-y-auto space-y-2">
+              <div className="max-h-[420px] overflow-y-auto space-y-3 pr-1">
                 {notifications.length === 0 ? (
                   <p className="text-xs text-slate-500 text-center py-6">
                     No notifications yet. Dispute resolutions and faculty updates will appear here.
@@ -146,31 +326,32 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
                   notifications.map((item) => (
                     <div
                       key={item.id}
-                      className={`p-3 rounded-xl border text-xs space-y-1 transition ${
+                      className={`p-3.5 rounded-xl border text-xs space-y-2 transition ${
                         item.read
                           ? 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800/80 text-slate-600 dark:text-slate-400'
-                          : 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-200 dark:border-blue-500/30 text-slate-900 dark:text-white font-medium'
+                          : 'bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-500/30 text-slate-900 dark:text-white font-medium shadow-xs'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs flex items-center gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
                           {item.title}
                         </span>
                         {!item.read && (
                           <button
                             onClick={() => handleMarkRead(item.id)}
-                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 shrink-0"
                           >
                             <Check className="w-3 h-3" /> Mark read
                           </button>
                         )}
                       </div>
-                      <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                        {item.message}
-                      </p>
-                      <span className="text-[10px] text-slate-400 block pt-0.5">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </span>
+
+                      <NotificationCardBody item={item} />
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-800/60 text-[10px] text-slate-400">
+                        <span>{new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <span>{item.read ? 'Read' : 'Unread'}</span>
+                      </div>
                     </div>
                   ))
                 )}
@@ -182,7 +363,7 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
         <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
 
         {/* User Card */}
-        {user && (
+        {mounted && user && (
           <Link
             href={`/${user.role.toLowerCase()}/profile`}
             onClick={(e) => {

@@ -25,21 +25,37 @@ export class RagService {
     @Optional() private readonly aiClient?: AiClientService,
   ) {}
 
+  private async findCourse(courseIdOrCode: string) {
+    const clean = courseIdOrCode.replace(/^course-/, '');
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseIdOrCode },
+          { id: clean },
+          { code: courseIdOrCode },
+          { code: courseIdOrCode.toUpperCase() },
+          { code: clean.toUpperCase() },
+        ],
+      },
+    });
+    if (!course) {
+      throw new NotFoundException(`Course ${courseIdOrCode} not found.`);
+    }
+    return course;
+  }
+
   /**
    * Retrieves all documents associated with a specific course.
    */
   async getDocumentsByCourse(courseId: string) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found.`);
-    }
+    const course = await this.findCourse(courseId);
 
     return this.prisma.courseDocument.findMany({
-      where: { courseId },
+      where: { courseId: course.id },
       include: {
+        chunks: {
+          orderBy: { chunkIndex: 'asc' },
+        },
         _count: {
           select: { chunks: true },
         },
@@ -71,13 +87,7 @@ export class RagService {
    * Ingests a new course document, performs chunking and saves chunks.
    */
   async ingestDocument(courseId: string, dto: CreateDocumentDto) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found.`);
-    }
+    const course = await this.findCourse(courseId);
 
     // Auto-generate chunks if raw text provided without pre-chunked array
     let chunkPayload = dto.chunks || [];
@@ -96,7 +106,7 @@ export class RagService {
 
     const document = await this.prisma.courseDocument.create({
       data: {
-        courseId,
+        courseId: course.id,
         title: dto.title,
         fileName: dto.title.replace(/\s+/g, '_').toLowerCase() + '.pdf',
         fileType: 'PDF',
@@ -125,13 +135,7 @@ export class RagService {
    * Semantic search across course document chunks.
    */
   async queryCourseRag(courseId: string, query: string, topK: number = 3) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found.`);
-    }
+    const course = await this.findCourse(courseId);
 
     // Try FastAPI RAG bridge
     if (this.aiClient) {
@@ -149,7 +153,7 @@ export class RagService {
     // Native database retrieval fallback
     const allChunks = await this.prisma.documentChunk.findMany({
       where: {
-        document: { courseId },
+        document: { courseId: course.id },
       },
       include: {
         document: { select: { title: true, documentType: true } },
@@ -191,13 +195,7 @@ export class RagService {
    * Generates assessment questions grounded directly in course documents.
    */
   async generateGroundedQuiz(courseId: string, topic: string = 'General', count: number = 2) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found.`);
-    }
+    const course = await this.findCourse(courseId);
 
     if (this.aiClient) {
       const response = await this.aiClient.generateGroundedQuiz({

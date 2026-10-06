@@ -329,23 +329,87 @@ def generate_questions(req: GenerateQuestionsRequest):
         if k in topic_key:
             matched_questions.extend(q_list)
 
-    if not matched_questions:
-        # Grounded generative fallback
-        matched_questions = [
-            GeneratedQuestionModel(
-                question_text=f"Which of the following statements is mathematically sound regarding the time-space trade-offs in {req.topic} under {req.bloom_level} evaluation?",
-                options=[
-                    QuestionOptionModel(text=f"The operation executes within optimal asymptotic time by leveraging disciplined structural invariants.", is_correct=True),
-                    QuestionOptionModel(text=f"The memory consumption scales exponentially with input size N.", is_correct=False, misconception_tag="Over-estimating space complexity"),
-                    QuestionOptionModel(text=f"The execution time degrades to O(N!) in standard cases.", is_correct=False, misconception_tag="Confusing polynomial with factorial complexity"),
-                    QuestionOptionModel(text=f"No auxiliary space is required regardless of recursion depth.", is_correct=False, misconception_tag="Ignoring call-stack memory footprint"),
-                ],
-                explanation=f"When analyzing {req.topic}, proper invariant enforcement bounds time complexity while recursion stacks demand explicit O(H) auxiliary space.",
-                bloom_level=req.bloom_level,
-                difficulty=req.difficulty,
-                pedagogical_rationale=f"Evaluates analytical reasoning and formal asymptotic characterization in {req.topic}."
+    # Expand dynamically up to req.count if matched list is shorter
+    generative_stems = [
+        (
+            f"Which architectural invariant mathematically guarantees optimal runtime performance in {req.topic} under Bloom {req.bloom_level} analysis?",
+            "Strict structural invariants bound asymptotic execution time to optimal bounds.",
+            "Permitting unbounded index growth eliminates lookup overhead.",
+            "Unbounded index corruption hazard",
+            f"In {req.topic}, invariant preservation is essential for algorithmic correctness and asymptotic guarantees."
+        ),
+        (
+            f"When handling boundary edge cases in {req.topic}, which condition must be strictly prevented?",
+            "Overwriting reference pointers prior to securing descendant addresses.",
+            "Pre-allocating contiguous memory blocks with static capacity.",
+            "Confusing dynamic growth with memory safety",
+            f"Pointer reassignment ordering in {req.topic} prevents memory leaks and dangling node references."
+        ),
+        (
+            f"What is the primary memory-hierarchy advantage of contiguous layouts over linked structures in {req.topic}?",
+            "Enhanced spatial cache locality reducing CPU cache line misses.",
+            "Linked node representations maximize L1 cache prefetching automatically.",
+            "Assuming pointer indirection incurs zero cache latency",
+            f"Hardware caches favor contiguous sequential memory chunks in {req.topic} over fragmented heap nodes."
+        ),
+        (
+            f"Under {req.difficulty} difficulty constraints, what loop/recursion invariant must hold in {req.topic}?",
+            "The active partition strictly preserves valid topological and sorted sub-structure.",
+            "The recursion depth must strictly equal the total element count N.",
+            "Conflating tree depth with element cardinality",
+            f"Inductive correctness proofs for {req.topic} require invariants that hold throughout all state transitions."
+        ),
+        (
+            f"When refactoring {req.topic} algorithms from recursion to an iterative pattern, what component is essential?",
+            "An explicit auxiliary stack or queue to manage state without risking call-stack overflow.",
+            "A global singleton mutex locking all read channels.",
+            "Introducing unnecessary synchronization bottlenecks",
+            f"Iterative transformations in {req.topic} manage frames using heap-allocated stacks to prevent stack overflow."
+        ),
+        (
+            f"Under adversarial worst-case inputs, how can degenerate performance in {req.topic} be mitigated?",
+            "Employing randomized pivot selection or self-balancing tree rotations.",
+            "Disabling all bounds checking during high load.",
+            "Compromising safety for apparent throughput",
+            f"Randomization or automated balance factors prevent adversarial worst-case degradation in {req.topic}."
+        ),
+        (
+            f"Which property distinguishes amortized analysis from worst-case bounds in {req.topic}?",
+            "Average cost per operation across a sequence of operations is guaranteed despite occasional expensive steps.",
+            "Every individual operation is guaranteed to finish in strictly constant time O(1).",
+            "Confusing amortized bounds with worst-case step guarantees",
+            f"Amortization averages heavy reallocations across long sequences of cheap insertions in {req.topic}."
+        ),
+        (
+            f"In concurrent execution, what synchronization hazard arises during concurrent updates to {req.topic}?",
+            "Race conditions leading to torn reads or lost updates during resizing and rebalancing.",
+            "Automatic promotion of synchronous threads into background daemons.",
+            "Misinterpreting OS thread scheduling",
+            f"Structural mutations in {req.topic} necessitate atomic locks or lock-free CAS operations to avoid corruption."
+        ),
+    ]
+
+    idx = 0
+    while len(matched_questions) < req.count and idx < len(generative_stems):
+        stem, correct_ans, wrong_ans, distractor_tag, expl = generative_stems[idx]
+        # Avoid duplicate question stems
+        if not any(stem in q.question_text for q in matched_questions):
+            matched_questions.append(
+                GeneratedQuestionModel(
+                    question_text=stem,
+                    options=[
+                        QuestionOptionModel(text=correct_ans, is_correct=True),
+                        QuestionOptionModel(text=wrong_ans, is_correct=False, misconception_tag=distractor_tag),
+                        QuestionOptionModel(text=f"The time complexity scales exponentially to O(2^N) unconditionally.", is_correct=False, misconception_tag="Overestimating asymptotic complexity"),
+                        QuestionOptionModel(text=f"Auxiliary memory consumption is strictly zero regardless of recursion depth.", is_correct=False, misconception_tag="Ignoring call stack footprint"),
+                    ],
+                    explanation=expl,
+                    bloom_level=req.bloom_level,
+                    difficulty=req.difficulty,
+                    pedagogical_rationale=f"Assesses cognitive mastery at Bloom level {req.bloom_level} with misconception traps."
+                )
             )
-        ]
+        idx += 1
 
     return GenerateQuestionsResponse(
         topic=req.topic,

@@ -159,7 +159,7 @@ export default function FacultyQuestionBankPage() {
           const assignedCourse = (facultyCourseId && courses.find((c: any) => c.id === facultyCourseId)) || courses[0];
           setCurrentCourse(assignedCourse);
 
-          const qList: any = await api.get(`/practice/sessions/questions?courseId=${assignedCourse.id}`);
+          const qList: any = await api.get(`/courses/${assignedCourse.id}/questions`);
           if (Array.isArray(qList) && qList.length > 0) {
             const mapped = qList.map((q: any) => ({
               id: q.id,
@@ -167,7 +167,7 @@ export default function FacultyQuestionBankPage() {
               topic: q.topic?.name || 'Curriculum Topic',
               courseCode: assignedCourse.code,
               difficulty: (q.difficulty as any) || 'MEDIUM',
-              bloomLevel: 'APPLY' as const,
+              bloomLevel: q.bloomLevel || 'APPLY',
               options: (q.options || []).map((opt: any) => ({
                 id: opt.id,
                 text: opt.optionText,
@@ -175,8 +175,8 @@ export default function FacultyQuestionBankPage() {
                 misconception: opt.misconception?.title,
               })),
               explanation: q.explanation || 'Verified curriculum item solution.',
-              discrimination: 1.45,
-              difficultyParam: 0.1,
+              discrimination: q.discrimination || 1.45,
+              difficultyParam: q.difficultyParam || (q.difficulty === 'EASY' ? -0.45 : q.difficulty === 'HARD' ? 1.15 : 0.12),
             }));
             setQuestions(mapped);
           }
@@ -190,6 +190,13 @@ export default function FacultyQuestionBankPage() {
       loadQuestions();
     }
   }, [user, authLoading]);
+
+  const uniqueTopics = Array.from(new Set(questions.map((q) => q.topic).filter(Boolean)));
+  const avgDiscrimination =
+    questions.length > 0
+      ? (questions.reduce((acc, q) => acc + (q.discrimination || 0), 0) / questions.length).toFixed(2)
+      : '0.00';
+  const bloomLevelsCount = new Set(questions.map((q) => q.bloomLevel).filter(Boolean)).size;
 
   const filteredQuestions = questions.filter((q) => {
     const matchesSearch =
@@ -263,28 +270,28 @@ export default function FacultyQuestionBankPage() {
             <MetricCard
               title="Calibrated Questions"
               value={questions.length}
-              subtitle="Distributed Across 5 Topics"
+              subtitle={`Distributed Across ${uniqueTopics.length || 1} Topics`}
               icon={BookOpen}
               color="indigo"
             />
             <MetricCard
               title="Item Discrimination"
-              value="1.45 Avg"
+              value={`${avgDiscrimination} Avg`}
               subtitle="High Psychometric Precision"
               icon={BrainCircuit}
               color="emerald"
             />
             <MetricCard
               title="Bloom Alignment"
-              value="5 Levels"
+              value={`${bloomLevelsCount} Levels`}
               subtitle="Remember to Evaluate"
               icon={Layers}
               color="purple"
             />
             <MetricCard
               title="Target Course"
-              value="CS301"
-              subtitle="Data Structures & Algorithms"
+              value={currentCourse?.code || 'CS301'}
+              subtitle={currentCourse?.name || 'Data Structures & Algorithms'}
               icon={FileCheck}
               color="blue"
             />
@@ -305,18 +312,20 @@ export default function FacultyQuestionBankPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Topic Filter */}
+                {/* Dynamic Topic Filter */}
                 <select
                   value={topicFilter}
                   onChange={(e) => setTopicFilter(e.target.value)}
                   className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl focus:outline-none focus:border-blue-600 font-semibold"
                 >
                   <option value="ALL">All Topics</option>
-                  <option value="Trees & BST">Trees & BST</option>
-                  <option value="Stacks & Queues">Stacks & Queues</option>
-                  <option value="Dynamic Programming">Dynamic Programming</option>
-                  <option value="Graphs">Graphs</option>
+                  {uniqueTopics.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
                 </select>
+
 
                 {/* Difficulty Filter */}
                 <select
@@ -423,7 +432,7 @@ export default function FacultyQuestionBankPage() {
                   {/* Explanation Toggle */}
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
                     <span className="text-slate-500 dark:text-slate-400 italic">
-                      Grounded in CS301 Syllabus Unit 2
+                      Grounded in {q.courseCode || currentCourse?.code || 'CS301'} Curriculum — {q.topic}
                     </span>
                     <button
                       onClick={() => setExpandedQuestionId(expandedQuestionId === q.id ? null : q.id)}

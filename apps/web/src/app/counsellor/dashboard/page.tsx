@@ -79,45 +79,11 @@ export default function CounsellorDashboard() {
       if (Array.isArray(res)) {
         setAtRiskAlerts(res);
       } else {
-        fallbackAlerts();
+        setAtRiskAlerts([]);
       }
     } catch {
-      fallbackAlerts();
+      setAtRiskAlerts([]);
     }
-  };
-
-  const fallbackAlerts = () => {
-    setAtRiskAlerts([
-      {
-        id: 'alert-1',
-        studentId: 'student-1',
-        studentName: 'Rahul Patel',
-        enrollmentNumber: '24CS001',
-        semester: 4,
-        division: 'A',
-        email: '24cs001@charusat.edu.in',
-        severity: 'HIGH',
-        status: 'PENDING',
-        triggerReason: 'Critical mastery deficiency in Dynamic Programming (31% mastery) paired with 7 days of practice inactivity following 3 consecutive distractor traps on recursion invariants.',
-        suggestedIntervention: 'Prescribe Socratic interactive recursion walkthrough and schedule 1-on-1 counsellor academic advisory session.',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'alert-2',
-        studentId: 'student-1',
-        studentName: 'Rahul Patel',
-        enrollmentNumber: '24CS001',
-        semester: 4,
-        division: 'A',
-        email: '24cs001@charusat.edu.in',
-        severity: 'MEDIUM',
-        status: 'IN_PROGRESS',
-        triggerReason: 'Recurrent misconception detected in AVL Tree rotation invariants (Boundary Edge Case failure rate > 50%).',
-        suggestedIntervention: 'Direct student to Lecture 04 RAG slides and assign targeted balanced-tree remediation pack.',
-        actionNotes: 'Counsellor initiated notification; mentee reviewed Lecture 04 Slide Chunk 1.',
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-    ]);
   };
 
   const handleUpdateStatus = async (alertId: string, newStatus: 'IN_PROGRESS' | 'RESOLVED' | 'DISMISSED') => {
@@ -201,7 +167,7 @@ export default function CounsellorDashboard() {
               </p>
             </div>
             <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-900 text-indigo-300 border border-slate-800">
-              Assigned Mentee Batch: 2024-2028 (Division A)
+              {menteesSummary?.totalAssignedMentees ? `Assigned Mentees: ${menteesSummary.totalAssignedMentees} Students (DIV 1 & DIV 2)` : 'Assigned Mentee Batch (DIV 1 & DIV 2)'}
             </span>
           </div>
 
@@ -209,7 +175,7 @@ export default function CounsellorDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Assigned Mentees"
-              value="24"
+              value={(menteesSummary?.totalAssignedMentees ?? 0).toString()}
               subtitle="Direct Mentorship"
               icon={Users}
               color="indigo"
@@ -223,14 +189,23 @@ export default function CounsellorDashboard() {
             />
             <MetricCard
               title="Average Mastery"
-              value="69.2%"
+              value={`${menteesSummary?.cohortAverageMastery ?? 0}%`}
               subtitle="Knowledge Model Index"
               icon={TrendingUp}
               color="emerald"
             />
             <MetricCard
               title="Intervention Rate"
-              value="92%"
+              value={
+                atRiskAlerts.length > 0
+                  ? `${Math.round(
+                      (atRiskAlerts.filter((a) => a.status === 'RESOLVED' || a.status === 'IN_PROGRESS')
+                        .length /
+                        atRiskAlerts.length) *
+                        100,
+                    )}%`
+                  : '100%'
+              }
               subtitle="Mentorship SLA Met"
               icon={HeartPulse}
               color="blue"
@@ -378,20 +353,38 @@ export default function CounsellorDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 font-medium text-slate-300">
-                  <tr className="hover:bg-slate-800/50">
-                    <td className="p-3 font-mono font-bold text-white">24CS001</td>
-                    <td className="p-3 font-semibold text-white">Rahul Patel</td>
-                    <td className="p-3 text-slate-400 font-mono text-[11px]">student@charusat.edu.in</td>
-                    <td className="p-3">
-                      <span className="font-extrabold text-indigo-400">62.2%</span>
-                    </td>
-                    <td className="p-3">Dynamic Programming (31%)</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        Active Intervention
-                      </span>
-                    </td>
-                  </tr>
+                  {menteesSummary?.mentees && menteesSummary.mentees.length > 0 ? (
+                    menteesSummary.mentees.map((m: any) => (
+                      <tr key={m.studentId} className="hover:bg-slate-800/50">
+                        <td className="p-3 font-mono font-bold text-white">{m.enrollmentNumber}</td>
+                        <td className="p-3 font-semibold text-white">{m.name}</td>
+                        <td className="p-3 text-slate-400 font-mono text-[11px]">{m.email}</td>
+                        <td className="p-3">
+                          <span className="font-extrabold text-indigo-400">{m.averageMastery}%</span>
+                        </td>
+                        <td className="p-3">{m.primaryFocusTopic || 'Core Fundamentals'}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              m.riskLevel === 'CRITICAL'
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                : m.riskLevel === 'WARNING'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            }`}
+                          >
+                            {m.riskLevel === 'HEALTHY' ? 'Normal Progress' : m.riskLevel}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-slate-500 text-xs">
+                        No assigned mentees currently requiring intervention.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

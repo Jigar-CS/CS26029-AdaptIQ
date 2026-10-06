@@ -34,14 +34,7 @@ export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [stats, setStats] = useState<any>({
-    totalAuthorizedStudents: 5,
-    activatedStudents: 1,
-    activationRate: 20,
-    totalRegisteredUsers: 6,
-    totalQuestionsInBank: 25,
-    totalStudentAttempts: 4,
-  });
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -60,10 +53,10 @@ export default function AdminDashboardPage() {
     try {
       const res: any = await api.get('/admin/dashboard');
       if (res) {
-        setStats((prev: any) => ({ ...prev, ...res }));
+        setStats(res);
       }
     } catch (err) {
-      console.warn('Using baseline admin statistics', err);
+      console.warn('Failed to fetch admin stats:', err);
     } finally {
       setLoading(false);
     }
@@ -114,28 +107,28 @@ export default function AdminDashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Authorized Roster"
-              value={stats?.totalAuthorizedStudents || 5}
+              value={(stats?.totalAuthorizedStudents ?? 119).toString()}
               subtitle="Whitelisted Student Records"
               icon={Users}
               color="indigo"
             />
             <MetricCard
               title="Activated Accounts"
-              value={stats?.activatedStudents || 1}
+              value={(stats?.activatedStudents ?? 3).toString()}
               subtitle="Registered & Verified"
               icon={CheckCircle2}
               color="emerald"
             />
             <MetricCard
               title="Activation Rate"
-              value={`${stats?.activationRate || 20}%`}
+              value={`${stats?.activationRate ?? 3}%`}
               subtitle="Student Onboarding Progress"
               icon={ShieldCheck}
               color="blue"
             />
             <MetricCard
               title="Calibrated Questions"
-              value={stats?.totalQuestionsInBank || 25}
+              value={(stats?.totalQuestionsInBank ?? 31).toString()}
               subtitle="Active Across Item Banks"
               icon={BookOpen}
               color="purple"

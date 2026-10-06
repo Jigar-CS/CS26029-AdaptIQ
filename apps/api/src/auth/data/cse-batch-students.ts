@@ -182,3 +182,17 @@ export function findBatchStudent(emailOrId: string): PreloadedStudent | undefine
 
   return undefined;
 }
+
+/**
+ * Determines whether a student belongs to DIV 1 (24CS001 - 24CS065) or DIV 2 (24CS066 and remaining).
+ */
+export function getBatchStudentDivision(studentId: string): string {
+  if (!studentId) return 'DIV 1';
+  const upper = studentId.trim().toUpperCase();
+  const match = upper.match(/^24CS(\d+)$/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return num <= 65 ? 'DIV 1' : 'DIV 2';
+  }
+  return 'DIV 2';
+}

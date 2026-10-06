@@ -15,4 +15,9 @@ export class CoursesController {
   async getCourse(@Param('id') id: string) {
     return this.coursesService.getCourseById(id);
   }
+
+  @Get(':id/questions')
+  async getCourseQuestions(@Param('id') id: string) {
+    return this.coursesService.getCourseQuestions(id);
+  }
 }

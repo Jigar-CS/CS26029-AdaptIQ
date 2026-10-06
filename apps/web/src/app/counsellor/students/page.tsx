@@ -48,73 +48,8 @@ export default function CounsellorAssignedStudentsPage() {
   const [showAdvisoryModal, setShowAdvisoryModal] = useState(false);
   const [advisoryNote, setAdvisoryNote] = useState('');
 
-  const [students, setStudents] = useState<AssignedStudent[]>([
-    {
-      id: 'st-1',
-      name: 'Rahul Patel',
-      enrollmentNumber: '24CS001',
-      email: '24cs001@charusat.edu.in',
-      semester: 4,
-      division: 'A',
-      masteryScore: 62.2,
-      primaryWeakness: 'Dynamic Programming (31%)',
-      status: 'INTERVENTION_REQUIRED',
-      lastAdvisoryDate: '2026-09-28',
-      attendancePct: 88,
-    },
-    {
-      id: 'st-2',
-      name: 'Priya Sharma',
-      enrollmentNumber: '24CS014',
-      email: '24cs014@charusat.edu.in',
-      semester: 4,
-      division: 'A',
-      masteryScore: 78.5,
-      primaryWeakness: 'AVL Tree Invariants (54%)',
-      status: 'WATCHLIST',
-      lastAdvisoryDate: '2026-09-25',
-      attendancePct: 94,
-    },
-    {
-      id: 'st-3',
-      name: 'Aarav Mehta',
-      enrollmentNumber: '24CS032',
-      email: '24cs032@charusat.edu.in',
-      semester: 4,
-      division: 'A',
-      masteryScore: 89.0,
-      primaryWeakness: 'Graph Theory (72%)',
-      status: 'OPTIMAL',
-      lastAdvisoryDate: '2026-09-18',
-      attendancePct: 98,
-    },
-    {
-      id: 'st-4',
-      name: 'Ananya Joshi',
-      enrollmentNumber: '24CS045',
-      email: '24cs045@charusat.edu.in',
-      semester: 4,
-      division: 'B',
-      masteryScore: 54.0,
-      primaryWeakness: 'Recursion Invariants (38%)',
-      status: 'INTERVENTION_REQUIRED',
-      lastAdvisoryDate: '2026-10-01',
-      attendancePct: 82,
-    },
-    {
-      id: 'st-5',
-      name: 'Kavya Shah',
-      enrollmentNumber: '24CS058',
-      email: '24cs058@charusat.edu.in',
-      semester: 4,
-      division: 'B',
-      masteryScore: 84.6,
-      primaryWeakness: 'Heap Operations (68%)',
-      status: 'OPTIMAL',
-      lastAdvisoryDate: '2026-09-22',
-      attendancePct: 96,
-    },
-  ]);
+  const [students, setStudents] = useState<AssignedStudent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && (!user || (user.role !== UserRole.COUNSELLOR && user.role !== UserRole.SUPER_ADMIN))) {
@@ -123,13 +58,32 @@ export default function CounsellorAssignedStudentsPage() {
     }
 
     const loadMentees = async () => {
+      setLoading(true);
       try {
         const res: any = await api.get('/analytics/counsellor/mentees/summary');
-        if (res && res.mentees && Array.isArray(res.mentees)) {
-          // enrich with fetched records if available
+        if (res && Array.isArray(res.mentees)) {
+          const mapped: AssignedStudent[] = res.mentees.map((m: any) => ({
+            id: m.studentId || m.assignmentId,
+            name: m.name,
+            enrollmentNumber: m.enrollmentNumber,
+            email: m.email,
+            semester: m.semester || 4,
+            division: m.division || 'A',
+            masteryScore: Number(m.averageMastery || 0),
+            primaryWeakness: m.primaryFocusTopic || 'Foundations',
+            status: m.riskLevel === 'CRITICAL' ? 'INTERVENTION_REQUIRED' : m.riskLevel === 'WARNING' ? 'WATCHLIST' : 'OPTIMAL',
+            lastAdvisoryDate: m.assignedAt ? new Date(m.assignedAt).toISOString().split('T')[0] : 'None',
+            attendancePct: 100,
+          }));
+          setStudents(mapped);
+          if (mapped.length > 0) setSelectedStudent(mapped[0]);
+        } else {
+          setStudents([]);
         }
       } catch {
-        // baseline records active
+        setStudents([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -217,16 +171,23 @@ export default function CounsellorAssignedStudentsPage() {
             />
             <MetricCard
               title="Cohort Avg Mastery"
-              value="73.6%"
-              subtitle="Continuous EWMA Metric"
+              value={
+                students.length > 0
+                  ? (students.reduce((acc, s) => acc + s.masteryScore, 0) / students.length).toFixed(1) + '%'
+                  : '0.0%'
+              }
+              subtitle="Live Evaluated Mastery"
               icon={TrendingUp}
-              trend={{ value: 'Above 70% target', isPositive: true }}
+              trend={{
+                value: students.length > 0 ? 'Live Cohort Telemetry' : 'No Activity',
+                isPositive: students.length > 0,
+              }}
               color="emerald"
             />
             <MetricCard
-              title="Advisories Logged"
-              value="18"
-              subtitle="Current Semester"
+              title="Optimal Learners"
+              value={students.filter((s) => s.status === 'OPTIMAL').length}
+              subtitle="Satisfactory Trajectory"
               icon={CheckCircle2}
               color="blue"
             />
@@ -251,7 +212,7 @@ export default function CounsellorAssignedStudentsPage() {
                 <span>Division:</span>
               </div>
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
-                {['ALL', 'A', 'B'].map((div) => (
+                {['ALL', 'DIV 1', 'DIV 2'].map((div) => (
                   <button
                     key={div}
                     onClick={() => setDivisionFilter(div)}
@@ -261,7 +222,7 @@ export default function CounsellorAssignedStudentsPage() {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {div === 'ALL' ? 'All Divisions' : `Div ${div}`}
+                    {div === 'ALL' ? 'All Divisions' : div}
                   </button>
                 ))}
               </div>
@@ -311,7 +272,13 @@ export default function CounsellorAssignedStudentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium text-slate-700 dark:text-slate-300">
-                  {filteredStudents.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                        Loading authorized mentee roster...
+                      </td>
+                    </tr>
+                  ) : filteredStudents.length > 0 ? (
                     filteredStudents.map((student) => (
                       <tr key={student.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-850/50 transition">
                         <td className="p-4">
@@ -329,7 +296,7 @@ export default function CounsellorAssignedStudentsPage() {
                           <span className="font-semibold text-slate-700 dark:text-slate-300">
                             Sem {student.semester}
                           </span>
-                          <span className="text-slate-400 ml-1 font-normal">• Div {student.division}</span>
+                          <span className="text-slate-400 ml-1 font-normal">• {student.division}</span>
                         </td>
                         <td className="p-4">
                           <div className="space-y-1 max-w-[120px]">

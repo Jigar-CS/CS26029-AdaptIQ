@@ -84,102 +84,15 @@ export default function StudentLearningPath() {
         api.get('/adaptive/misconceptions').catch(() => []),
       ]);
 
-      if (graphData && graphData.nodes) {
+      if (graphData && Array.isArray(graphData.nodes) && graphData.nodes.length > 0) {
         setGraph(graphData);
-        if (graphData.nodes.length > 0) {
-          setSelectedNode(graphData.nodes[0]);
-        }
+        setSelectedNode(graphData.nodes[0]);
+      } else if (graphData && Array.isArray(graphData.nodes)) {
+        setGraph(graphData);
+        setSelectedNode(null);
       } else {
-        // Fallback default roadmap for student preview
-        const fallbackGraph: CourseKnowledgeGraph = {
-          courseCode: 'CS301',
-          courseName: 'Data Structures & Algorithms',
-          overallCurriculumReadiness: 68,
-          unlockedTopicsCount: 4,
-          blockedTopicsCount: 2,
-          edges: [
-            { from: 'arrays-dynamic-arrays', to: 'linked-lists-pointers', minRequiredMastery: 60 },
-            { from: 'linked-lists-pointers', to: 'stacks-queues', minRequiredMastery: 60 },
-            { from: 'stacks-queues', to: 'trees-binary-search-trees', minRequiredMastery: 65 },
-            { from: 'trees-binary-search-trees', to: 'dynamic-programming', minRequiredMastery: 70 },
-          ],
-          nodes: [
-            {
-              id: 'top-arr',
-              slug: 'arrays-dynamic-arrays',
-              name: 'Arrays & Dynamic Vectors',
-              courseCode: 'CS301',
-              rawMastery: 84,
-              decayedMastery: 82,
-              bktProbability: 0.91,
-              status: 'MASTERED',
-              isPrerequisiteSatisfied: true,
-              prerequisites: [],
-            },
-            {
-              id: 'top-ll',
-              slug: 'linked-lists-pointers',
-              name: 'Linked Lists & Pointer Manipulation',
-              courseCode: 'CS301',
-              rawMastery: 76,
-              decayedMastery: 74,
-              bktProbability: 0.83,
-              status: 'MASTERED',
-              isPrerequisiteSatisfied: true,
-              prerequisites: ['arrays-dynamic-arrays'],
-            },
-            {
-              id: 'top-sq',
-              slug: 'stacks-queues',
-              name: 'Stacks, Queues & Monotonic Deques',
-              courseCode: 'CS301',
-              rawMastery: 68,
-              decayedMastery: 65,
-              bktProbability: 0.72,
-              status: 'READY_FOR_PRACTICE',
-              isPrerequisiteSatisfied: true,
-              prerequisites: ['linked-lists-pointers'],
-            },
-            {
-              id: 'top-tree',
-              slug: 'trees-binary-search-trees',
-              name: 'Binary Trees & BST Invariant Traversal',
-              courseCode: 'CS301',
-              rawMastery: 52,
-              decayedMastery: 48,
-              bktProbability: 0.54,
-              status: 'READY_FOR_PRACTICE',
-              isPrerequisiteSatisfied: true,
-              prerequisites: ['stacks-queues'],
-            },
-            {
-              id: 'top-dp',
-              slug: 'dynamic-programming',
-              name: 'Dynamic Programming & Memoization',
-              courseCode: 'CS301',
-              rawMastery: 28,
-              decayedMastery: 25,
-              bktProbability: 0.28,
-              status: 'NEEDS_PREREQUISITE',
-              isPrerequisiteSatisfied: false,
-              prerequisites: ['trees-binary-search-trees'],
-            },
-            {
-              id: 'top-graph',
-              slug: 'graphs-shortest-path',
-              name: 'Graph Traversal & Dijkstra Shortest Path',
-              courseCode: 'CS301',
-              rawMastery: 15,
-              decayedMastery: 12,
-              bktProbability: 0.15,
-              status: 'BLOCKED',
-              isPrerequisiteSatisfied: false,
-              prerequisites: ['trees-binary-search-trees', 'stacks-queues'],
-            },
-          ],
-        };
-        setGraph(fallbackGraph);
-        setSelectedNode(fallbackGraph.nodes[2]);
+        setGraph(null);
+        setSelectedNode(null);
       }
 
       setSpacedQueue(Array.isArray(queueData) ? queueData : []);
@@ -339,7 +252,16 @@ export default function StudentLearningPath() {
                   </div>
 
                   <div className="space-y-3">
-                    {graph?.nodes.map((node, idx) => {
+                    {!graph || !graph.nodes || graph.nodes.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                        <GraduationCap className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                        <div className="font-semibold text-slate-700 dark:text-slate-300">No Learning Path Available Yet</div>
+                        <div className="text-xs text-slate-500 max-w-sm mx-auto">
+                          As you begin adaptive practice and assessments in CS301, the system dynamically discovers topics and plots your real-time prerequisite DAG.
+                        </div>
+                      </div>
+                    ) : (
+                      graph.nodes.map((node, idx) => {
                       const isSelected = selectedNode?.id === node.id;
                       return (
                         <div
@@ -412,7 +334,7 @@ export default function StudentLearningPath() {
                           </div>
                         </div>
                       );
-                    })}
+                    }))}
                   </div>
                 </div>
 

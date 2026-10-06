@@ -20,6 +20,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 
@@ -80,243 +81,85 @@ export default function FacultyDocumentsPage() {
   const fetchDocuments = async () => {
     setLoading(true);
     try {
-      const courseId = user?.courseId || 'course-cs301';
-      const res = await fetch(`http://localhost:4000/api/v1/rag/courses/${courseId}/documents`);
-      if (res.ok) {
-        const data = await res.json();
+      const courseId = user?.courseId || 'CS301';
+      const data: any = await api.get(`/rag/courses/${courseId}/documents`);
+      if (Array.isArray(data)) {
         setDocuments(data);
         if (data.length > 0) setSelectedDoc(data[0]);
+        else setSelectedDoc(null);
       } else {
-        fallbackDocs();
+        setDocuments([]);
+        setSelectedDoc(null);
       }
     } catch {
-      fallbackDocs();
+      setDocuments([]);
+      setSelectedDoc(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const fallbackDocs = () => {
-    const demoDocs: CourseDocument[] = [
-      {
-        id: 'doc-syl-1',
-        title: 'CS301 Master Syllabus & Academic Regulations',
-        fileName: 'cs301_master_syllabus.pdf',
-        documentType: 'SYLLABUS',
-        fileSizeKb: 1420,
-        status: 'INDEXED',
-        chunkCount: 3,
-        createdAt: new Date().toISOString(),
-        chunks: [
-          {
-            id: 'c1',
-            chunkIndex: 1,
-            tokenCount: 42,
-            topicKeywords: 'arrays, queues, complexity',
-            content: 'Unit 1: Linear Data Structures. Contiguous arrays feature O(1) random memory access through pointer arithmetic. Circular queues resolve array drift by wrapping indices modulo N via (rear + 1) % N == front.',
-          },
-          {
-            id: 'c2',
-            chunkIndex: 2,
-            tokenCount: 48,
-            topicKeywords: 'avl, tree, balance factor',
-            content: 'Unit 2: Trees & Self-Balancing Structures. AVL trees enforce the strict invariant that for every node v, |height(left) - height(right)| <= 1. Tree rebalancing restores this condition through single (LL/RR) or double (LR/RL) rotations.',
-          },
-          {
-            id: 'c3',
-            chunkIndex: 3,
-            tokenCount: 45,
-            topicKeywords: 'dynamic programming, graphs',
-            content: 'Unit 3: Dynamic Programming & Graphs. Optimal substructure and overlapping subproblems distinguish DP from Divide & Conquer. Dijkstra computes single-source shortest paths on non-negative weighted graphs.',
-          },
-        ],
-      },
-      {
-        id: 'doc-avl-1',
-        title: 'Lecture 04: AVL Tree Rotations & Invariants',
-        fileName: 'lecture_04_avl_rotations.pdf',
-        documentType: 'PRESENTATION_SLIDES',
-        fileSizeKb: 3840,
-        status: 'INDEXED',
-        chunkCount: 2,
-        createdAt: new Date().toISOString(),
-        chunks: [
-          {
-            id: 'c4',
-            chunkIndex: 1,
-            tokenCount: 38,
-            topicKeywords: 'avl, balance factor, node',
-            content: 'AVL Balancing Condition: Let BF(v) = height(left(v)) - height(right(v)). If an insertion or deletion results in BF(v) in {-2, +2}, node v is strictly unbalanced and must undergo immediate structural rotation.',
-          },
-          {
-            id: 'c5',
-            chunkIndex: 2,
-            tokenCount: 41,
-            topicKeywords: 'rotation, double rotation, pivot',
-            content: 'Rotational Taxonomy: When an insertion occurs in the left subtree of the right child (RL imbalance), a double rotation is mandatory: first rotate the child Right, then rotate the parent Left.',
-          },
-        ],
-      },
-    ];
-    setDocuments(demoDocs);
-    setSelectedDoc(demoDocs[0]);
-  };
-
   const handleRunRagQuery = async () => {
+    if (!ragQuery.trim()) return;
     setIsQuerying(true);
     try {
-      const res = await fetch('http://localhost:4000/api/v1/rag/courses/course-cs301/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: ragQuery, topK: 3 }),
+      const courseId = user?.courseId || 'CS301';
+      const data: any = await api.post(`/rag/courses/${courseId}/query`, {
+        query: ragQuery,
+        topK: 3,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setQueryResults(data);
-      } else {
-        fallbackQuery();
-      }
+      setQueryResults(data);
     } catch {
-      fallbackQuery();
+      setQueryResults({
+        query: ragQuery,
+        course_code: 'CS301',
+        grounded_answer: 'No matching excerpts or semantic context found for this query in the ingested syllabus.',
+        chunks: [],
+      });
     } finally {
       setIsQuerying(false);
     }
-  };
-
-  const fallbackQuery = () => {
-    setQueryResults({
-      query: ragQuery,
-      course_code: 'CS301',
-      grounded_answer:
-        'According to course reference [Lecture 04: AVL Tree Rotations & Invariants], AVL balancing enforces BF(v) = height(left(v)) - height(right(v)) in {-1, 0, 1}. When an RL imbalance occurs, a double rotation is required: rotate right child Right, then parent Left.',
-      chunks: [
-        {
-          chunk_id: 'c4',
-          doc_title: 'Lecture 04: AVL Tree Rotations & Invariants',
-          page_number: 4,
-          similarity: 0.94,
-          content:
-            'AVL Balancing Condition: Let BF(v) = height(left(v)) - height(right(v)). If an insertion or deletion results in BF(v) in {-2, +2}, node v is strictly unbalanced and must undergo immediate structural rotation.',
-        },
-        {
-          chunk_id: 'c2',
-          doc_title: 'CS301 Master Syllabus & Academic Regulations',
-          page_number: 2,
-          similarity: 0.88,
-          content:
-            'Unit 2: Trees & Self-Balancing Structures. AVL trees enforce the strict invariant that for every node v, |height(left) - height(right)| <= 1. Tree rebalancing restores this condition through single (LL/RR) or double (LR/RL) rotations.',
-        },
-      ],
-    });
   };
 
   const handleGenerateGroundedQuiz = async () => {
     setIsGeneratingQuiz(true);
     setApprovedQuestions([]);
     try {
-      const res = await fetch('http://localhost:4000/api/v1/rag/courses/course-cs301/grounded-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: quizTopic, count: quizCount }),
+      const courseId = user?.courseId || 'CS301';
+      const data: any = await api.post(`/rag/courses/${courseId}/grounded-quiz`, {
+        topic: quizTopic,
+        count: quizCount,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setGroundedQuestions(data.questions || []);
-      } else {
-        fallbackQuiz();
-      }
+      setGroundedQuestions(data.questions || []);
     } catch {
-      fallbackQuiz();
+      setGroundedQuestions([]);
     } finally {
       setIsGeneratingQuiz(false);
     }
-  };
-
-  const fallbackQuiz = () => {
-    setGroundedQuestions([
-      {
-        question_text:
-          'According to Unit 1 of the CS301 Syllabus, what exact arithmetic condition proves that a circular queue of capacity N is full?',
-        options: [
-          { text: '(rear + 1) % N == front', is_correct: true },
-          { text: 'rear == front', is_correct: false, misconception_tag: 'Empty vs full confusion' },
-          { text: 'rear == N - 1', is_correct: false, misconception_tag: 'Ignoring modular wrap-around' },
-          { text: '(front + 1) % N == rear', is_correct: false, misconception_tag: 'Inverted pointers' },
-        ],
-        explanation:
-          'In a circular queue with array length N, one slot is preserved to disambiguate full from empty state: (rear + 1) % N == front.',
-        source_doc: 'CS301 Master Syllabus & Academic Regulations',
-        citation: '[Doc: CS301 Master Syllabus, Unit 1, Page 1]',
-        bloom_level: 'ANALYZE',
-        difficulty: 'MEDIUM',
-      },
-      {
-        question_text:
-          'In Lecture 04, which rotation sequence is mandatory when an insertion occurs in the left subtree of the right child?',
-        options: [
-          { text: 'RL Double Rotation (Child Right, then Parent Left)', is_correct: true },
-          { text: 'Single Left Rotation (RR)', is_correct: false, misconception_tag: 'Single rotation fallacy' },
-          { text: 'Single Right Rotation (LL)', is_correct: false, misconception_tag: 'Opposite direction error' },
-          { text: 'LR Double Rotation', is_correct: false, misconception_tag: 'Inverted subcase confusion' },
-        ],
-        explanation:
-          'Lecture 04 explicitly specifies that an RL imbalance requires a double rotation: first right-rotate the right child, then left-rotate the parent.',
-        source_doc: 'Lecture 04: AVL Tree Rotations & Invariants',
-        citation: '[Doc: Lecture 04, Slide 7]',
-        bloom_level: 'APPLY',
-        difficulty: 'HARD',
-      },
-    ]);
   };
 
   const handleIngestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!docTitle || !docContent) return;
     setIsIngesting(true);
-    const courseId = user?.courseId || 'course-cs301';
+    const courseId = user?.courseId || 'CS301';
     try {
-      const res = await fetch(`http://localhost:4000/api/v1/rag/courses/${courseId}/documents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: docTitle,
-          docType: docType,
-          extractedText: docContent,
-        }),
-      });
-      if (res.ok) {
-        const newDoc = await res.json();
-        setDocuments([newDoc, ...documents]);
-        setSelectedDoc(newDoc);
-      }
-    } catch {
-      // Local addition
-      const mockDoc: CourseDocument = {
-        id: `doc-${Date.now()}`,
+      const newDoc: any = await api.post(`/rag/courses/${courseId}/documents`, {
         title: docTitle,
-        fileName: docTitle.replace(/\s+/g, '_').toLowerCase() + '.pdf',
-        documentType: docType,
-        fileSizeKb: Math.round(docContent.length / 10),
-        status: 'INDEXED',
-        chunkCount: 2,
-        createdAt: new Date().toISOString(),
-        chunks: [
-          {
-            id: `c-${Date.now()}-1`,
-            chunkIndex: 1,
-            tokenCount: Math.round(docContent.length / 4),
-            topicKeywords: docTitle.toLowerCase(),
-            content: docContent.slice(0, 300),
-          },
-        ],
-      };
-      setDocuments([mockDoc, ...documents]);
-      setSelectedDoc(mockDoc);
+        docType: docType,
+        extractedText: docContent,
+      });
+      if (newDoc && newDoc.id) {
+        setDocuments((prev) => [newDoc, ...prev]);
+        setSelectedDoc(newDoc);
+        setShowUploadModal(false);
+        setDocTitle('');
+        setDocContent('');
+      }
+    } catch (err) {
+      console.error('Failed to ingest document:', err);
     } finally {
       setIsIngesting(false);
-      setShowUploadModal(false);
-      setDocTitle('');
-      setDocContent('');
     }
   };
 
@@ -463,36 +306,50 @@ export default function FacultyDocumentsPage() {
           <div className="lg:col-span-5 space-y-4">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">Course Documents</h2>
             <div className="space-y-3">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  onClick={() => setSelectedDoc(doc)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                    selectedDoc?.id === doc.id
-                      ? 'bg-slate-800/90 border-cyan-500/50 shadow-md shadow-cyan-500/10'
-                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="font-semibold text-white text-sm leading-snug">{doc.title}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 whitespace-nowrap">
-                      {doc.documentType}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Layers className="w-3.5 h-3.5 text-slate-500" />
-                      {doc.chunkCount} chunks
-                    </span>
-                    <span>•</span>
-                    <span>{doc.fileSizeKb ? `${doc.fileSizeKb} KB` : 'Indexed'}</span>
-                    <span>•</span>
-                    <span className="text-emerald-400 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> {doc.status}
-                    </span>
+              {loading ? (
+                <div className="p-8 text-center text-slate-500 text-sm rounded-xl bg-slate-900/40 border border-slate-800">
+                  Loading course knowledge base documents...
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-sm rounded-xl bg-slate-900/40 border border-slate-800 space-y-2">
+                  <FileText className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                  <div className="font-semibold text-slate-400">No Documents Ingested Yet</div>
+                  <div className="text-xs text-slate-500">
+                    Click &quot;Ingest Course Document&quot; above to upload syllabi, notes, or lecture slides.
                   </div>
                 </div>
-              ))}
+              ) : (
+                documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    onClick={() => setSelectedDoc(doc)}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                      selectedDoc?.id === doc.id
+                        ? 'bg-slate-800/90 border-cyan-500/50 shadow-md shadow-cyan-500/10'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="font-semibold text-white text-sm leading-snug">{doc.title}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 whitespace-nowrap">
+                        {doc.documentType}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-slate-500" />
+                        {doc.chunkCount} chunks
+                      </span>
+                      <span>•</span>
+                      <span>{doc.fileSizeKb ? `${doc.fileSizeKb} KB` : 'Indexed'}</span>
+                      <span>•</span>
+                      <span className="text-emerald-400 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> {doc.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

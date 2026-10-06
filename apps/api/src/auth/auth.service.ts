@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { LoginDto, RegisterStudentDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
 import { UserRole, UserStatus } from '@prisma/client';
-import { findBatchStudent, formatStudentName } from './data/cse-batch-students';
+import { findBatchStudent, formatStudentName, getBatchStudentDivision } from './data/cse-batch-students';
 
 interface OtpRecord {
   code: string;
@@ -106,7 +106,7 @@ export class AuthService {
                 department: 'Computer Science & Engineering',
                 programName: batchStudent.degree,
                 semester: batchStudent.semester,
-                division: 'CSE',
+                division: getBatchStudentDivision(batchStudent.studentId),
                 graduationYear: 2026,
               },
             });
@@ -120,7 +120,7 @@ export class AuthService {
                 department: 'Computer Science & Engineering',
                 programName: batchStudent.degree,
                 semester: batchStudent.semester,
-                division: 'CSE',
+                division: getBatchStudentDivision(batchStudent.studentId),
                 graduationYear: 2026,
                 activated: false,
               },
@@ -137,7 +137,7 @@ export class AuthService {
               department: 'Computer Science & Engineering',
               programName: batchStudent.degree,
               semester: batchStudent.semester,
-              division: 'CSE',
+              division: getBatchStudentDivision(batchStudent.studentId),
             },
           });
         }

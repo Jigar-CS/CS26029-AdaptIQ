@@ -491,6 +491,7 @@ model Assessment {
   faculty            FacultyProfile?      @relation(fields: [facultyId], references: [id], onDelete: SetNull)
   type               AssessmentType       @default(QUIZ)
   status             AssessmentStatus     @default(PUBLISHED)
+  division           String?              @default("ALL")
   durationMinutes    Int                  @default(30)
   totalMarks         Float                @default(100.0)
   passingMarks       Float                @default(40.0)

@@ -46,73 +46,8 @@ export default function CounsellorAlertsPage() {
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
 
-  const [alerts, setAlerts] = useState<AtRiskAlert[]>([
-    {
-      id: 'alert-1',
-      studentId: 'student-1',
-      studentName: 'Rahul Patel',
-      enrollmentNumber: '24CS001',
-      semester: 4,
-      division: 'A',
-      email: '24cs001@charusat.edu.in',
-      severity: 'HIGH',
-      status: 'PENDING',
-      triggerReason:
-        'Critical mastery deficiency in Dynamic Programming (31% mastery) paired with 7 days of practice inactivity following 3 consecutive distractor traps on recursion invariants.',
-      suggestedIntervention:
-        'Prescribe Socratic interactive recursion walkthrough and schedule 1-on-1 counsellor academic advisory session.',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'alert-2',
-      studentId: 'student-2',
-      studentName: 'Ananya Joshi',
-      enrollmentNumber: '24CS045',
-      semester: 4,
-      division: 'B',
-      email: '24cs045@charusat.edu.in',
-      severity: 'CRITICAL',
-      status: 'PENDING',
-      triggerReason:
-        'Knowledge curve decayed by 22% in Binary Search Trees over 10 days. Assessment score fell below passing threshold (48%).',
-      suggestedIntervention:
-        'Initiate mandatory academic counseling. Assign foundational tree traversal practice module with AI remediation guidance.',
-      createdAt: new Date(Date.now() - 3600 * 1000 * 12).toISOString(),
-    },
-    {
-      id: 'alert-3',
-      studentId: 'student-3',
-      studentName: 'Priya Sharma',
-      enrollmentNumber: '24CS014',
-      semester: 4,
-      division: 'A',
-      email: '24cs014@charusat.edu.in',
-      severity: 'MEDIUM',
-      status: 'IN_PROGRESS',
-      triggerReason:
-        'Recurrent misconception detected in AVL Tree rotation invariants (Boundary Edge Case failure rate > 50%).',
-      suggestedIntervention:
-        'Direct student to Lecture 04 RAG slides and assign targeted balanced-tree remediation pack.',
-      actionNotes: 'Counsellor initiated advisory note; mentee reviewed Lecture 04 Slide Chunk 1.',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: 'alert-4',
-      studentId: 'student-4',
-      studentName: 'Kavya Shah',
-      enrollmentNumber: '24CS058',
-      semester: 4,
-      division: 'B',
-      email: '24cs058@charusat.edu.in',
-      severity: 'LOW',
-      status: 'RESOLVED',
-      triggerReason: 'Practice cadence dipped below 2 sessions/week.',
-      suggestedIntervention: 'Automated nudge dispatched; student resumed active daily practice sessions.',
-      actionNotes: 'Mentee completed 5 Graph questions with 80% accuracy. Resolved.',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      resolvedAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ]);
+  const [alerts, setAlerts] = useState<AtRiskAlert[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && (!user || (user.role !== UserRole.COUNSELLOR && user.role !== UserRole.SUPER_ADMIN))) {
@@ -121,13 +56,18 @@ export default function CounsellorAlertsPage() {
     }
 
     const loadAlerts = async () => {
+      setLoading(true);
       try {
         const res: any = await api.get('/analytics/counsellor/at-risk');
-        if (Array.isArray(res) && res.length > 0) {
+        if (Array.isArray(res)) {
           setAlerts(res);
+        } else {
+          setAlerts([]);
         }
       } catch {
-        // baseline active
+        setAlerts([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -305,7 +245,11 @@ export default function CounsellorAlertsPage() {
 
           {/* Alerts Cards List */}
           <div className="space-y-4">
-            {filteredAlerts.length > 0 ? (
+            {loading ? (
+              <div className="p-12 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+                Loading live diagnostic alerts...
+              </div>
+            ) : filteredAlerts.length > 0 ? (
               filteredAlerts.map((alert) => (
                 <div
                   key={alert.id}

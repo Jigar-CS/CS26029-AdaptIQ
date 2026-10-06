@@ -68,98 +68,19 @@ export default function HodDashboard() {
   const loadOBEAndCurriculumData = async () => {
     setFetching(true);
     try {
+      const coursesRes: any = await api.get('/courses').catch(() => []);
+      const activeCourseId = coursesRes?.[0]?.id || 'CS301';
       const [obeRes, healthRes]: any = await Promise.all([
-        api.get('/analytics/obe/courses/course-cs301/attainment'),
-        api.get('/analytics/hod/curriculum-health/dept-cse'),
+        api.get(`/analytics/obe/courses/${activeCourseId}/attainment`).catch(() => null),
+        api.get('/analytics/hod/curriculum-health/CSE').catch(() => null),
       ]);
       setObeData(obeRes);
       setCurriculumHealth(healthRes);
-    } catch {
-      fallbackOBE();
+    } catch (e) {
+      console.error('Failed to load HOD curriculum data:', e);
     } finally {
       setFetching(false);
     }
-  };
-
-  const fallbackOBE = () => {
-    setObeData({
-      courseId: 'c-cs301',
-      courseCode: 'CS301',
-      courseName: 'Data Structures & Algorithms',
-      department: 'Computer Science & Engineering',
-      overallCourseAttainment: 74,
-      nbaComplianceStatus: 'CRITERIA_3_COMPLIANT',
-      courseOutcomes: [
-        {
-          id: 'co1',
-          code: 'CO1',
-          description: 'Analyze asymptotic complexity and space bounds for linear and contiguous memory data structures.',
-          targetAttainment: 70,
-          actualAttainment: 78,
-          status: 'ATTAINED',
-          mappedQuestionsCount: 4,
-          programOutcomes: [
-            { poCode: 'PO1', nbaCategory: 'Engineering Knowledge', correlationLevel: 3 },
-            { poCode: 'PO2', nbaCategory: 'Problem Analysis', correlationLevel: 3 },
-          ],
-        },
-        {
-          id: 'co2',
-          code: 'CO2',
-          description: 'Implement and calibrate balanced search trees with strict rotational invariant preservation.',
-          targetAttainment: 70,
-          actualAttainment: 72,
-          status: 'ATTAINED',
-          mappedQuestionsCount: 4,
-          programOutcomes: [
-            { poCode: 'PO2', nbaCategory: 'Problem Analysis', correlationLevel: 2 },
-            { poCode: 'PO3', nbaCategory: 'Design/Development of Solutions', correlationLevel: 3 },
-          ],
-        },
-        {
-          id: 'co3',
-          code: 'CO3',
-          description: 'Formulate optimal dynamic programming and memoization state transitions for multi-stage decision problems.',
-          targetAttainment: 70,
-          actualAttainment: 54,
-          status: 'UNDER_OBSERVATION',
-          mappedQuestionsCount: 3,
-          programOutcomes: [
-            { poCode: 'PO1', nbaCategory: 'Engineering Knowledge', correlationLevel: 2 },
-            { poCode: 'PO2', nbaCategory: 'Problem Analysis', correlationLevel: 3 },
-            { poCode: 'PO3', nbaCategory: 'Design/Development of Solutions', correlationLevel: 3 },
-          ],
-        },
-        {
-          id: 'co4',
-          code: 'CO4',
-          description: 'Formulate graph traversal, topological sorting, and shortest-path models for connected systems.',
-          targetAttainment: 70,
-          actualAttainment: 66,
-          status: 'UNDER_OBSERVATION',
-          mappedQuestionsCount: 4,
-          programOutcomes: [
-            { poCode: 'PO2', nbaCategory: 'Problem Analysis', correlationLevel: 3 },
-            { poCode: 'PO4', nbaCategory: 'Conduct Investigations', correlationLevel: 2 },
-          ],
-        },
-      ],
-      programOutcomesMatrix: [
-        { code: 'PO1', nbaCategory: 'Engineering Knowledge', calculatedAttainment: 75, targetAttainment: 70, accreditationThresholdMet: true },
-        { code: 'PO2', nbaCategory: 'Problem Analysis', calculatedAttainment: 71, targetAttainment: 70, accreditationThresholdMet: true },
-        { code: 'PO3', nbaCategory: 'Design/Development of Solutions', calculatedAttainment: 68, targetAttainment: 70, accreditationThresholdMet: false },
-        { code: 'PO4', nbaCategory: 'Conduct Investigations', calculatedAttainment: 72, targetAttainment: 70, accreditationThresholdMet: true },
-      ],
-    });
-
-    setCurriculumHealth({
-      departmentName: 'Computer Science & Engineering',
-      divisionBenchmark: [
-        { division: 'A', enrolledStudents: 72, averageMastery: 78, riskCount: 1 },
-        { division: 'B', enrolledStudents: 68, averageMastery: 74, riskCount: 2 },
-        { division: 'C', enrolledStudents: 70, averageMastery: 71, riskCount: 4 },
-      ],
-    });
   };
 
   return (
@@ -199,30 +120,33 @@ export default function HodDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Department Students"
-              value="210"
-              subtitle="CSPIT CSE Roster"
+              value={curriculumHealth?.divisionBenchmark ? curriculumHealth.divisionBenchmark.reduce((acc: number, d: any) => acc + (d.enrolledStudents || 0), 0).toString() : '119'}
+              subtitle="CSPIT CSE Enrolled Roster"
               icon={Users}
               color="purple"
             />
             <MetricCard
               title="Core Courses"
-              value="5"
-              subtitle="DSA, OS, DBMS, CN, Aptitude"
+              value={(curriculumHealth?.coursesHealth?.length ?? 5).toString()}
+              subtitle={curriculumHealth?.coursesHealth?.map((c: any) => c.code).join(', ') || 'DSA, OS, DBMS, CN, Aptitude'}
               icon={BookOpen}
               color="indigo"
             />
             <MetricCard
               title="CO Attainment Rate"
-              value="74.2%"
+              value={obeData?.overallCourseAttainment ? `${obeData.overallCourseAttainment}%` : '0%'}
               subtitle="Target Threshold 70%"
               icon={TrendingUp}
-              trend={{ value: 'Above NBA Benchmark', isPositive: true }}
+              trend={{
+                value: (obeData?.overallCourseAttainment ?? 0) >= 65 ? 'Above NBA Benchmark' : 'Awaiting Student Assessments',
+                isPositive: (obeData?.overallCourseAttainment ?? 0) >= 65,
+              }}
               color="emerald"
             />
             <MetricCard
               title="At-Risk Cohort"
-              value="7"
-              subtitle="Across Divisions A, B, C"
+              value={curriculumHealth?.divisionBenchmark ? curriculumHealth.divisionBenchmark.reduce((acc: number, d: any) => acc + (d.riskCount || 0), 0).toString() : '0'}
+              subtitle={curriculumHealth?.divisionBenchmark ? `Across ${curriculumHealth.divisionBenchmark.map((d: any) => d.division).join(', ')}` : 'Active Division Roster'}
               icon={AlertTriangle}
               color="rose"
             />
@@ -398,7 +322,9 @@ export default function HodDashboard() {
                     className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-extrabold text-white">Division {div.division}</span>
+                      <span className="text-lg font-extrabold text-white">
+                        {div.division.startsWith('DIV') ? div.division : `Division ${div.division}`}
+                      </span>
                       <span className="px-2 py-0.5 rounded text-xs font-mono bg-slate-800 text-slate-300">
                         {div.enrolledStudents} Students
                       </span>

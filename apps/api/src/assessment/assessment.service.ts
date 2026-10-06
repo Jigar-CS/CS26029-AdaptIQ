@@ -24,6 +24,7 @@ export interface CreateAssessmentDto {
   allowedAttempts?: number;
   scheduledStartTime?: string;
   scheduledEndTime?: string;
+  division?: string;
   questionIds: string[];
 }
 
@@ -82,6 +83,7 @@ export class AssessmentService {
     const totalQuestions = dto.questionIds.length;
     const totalMarks = dto.totalMarks || 100.0;
     const pointsPerQuestion = Number((totalMarks / totalQuestions).toFixed(2));
+    const targetDivision = dto.division || 'ALL';
 
     const assessment = await this.prisma.assessment.create({
       data: {
@@ -92,6 +94,7 @@ export class AssessmentService {
         facultyId: facultyProfileId,
         type: dto.type || AssessmentType.QUIZ,
         status: AssessmentStatus.PUBLISHED,
+        division: targetDivision,
         durationMinutes: dto.durationMinutes || 30,
         totalMarks,
         passingMarks: dto.passingMarks || 40.0,
@@ -117,6 +120,38 @@ export class AssessmentService {
       },
     });
 
+    // Notify all targeted students in their respective accounts
+    try {
+      const divisionFilter = targetDivision === 'ALL'
+        ? {}
+        : { authorizedStudent: { division: targetDivision } };
+
+      const targetStudents = await this.prisma.studentProfile.findMany({
+        where: divisionFilter,
+        select: { id: true },
+      });
+
+      if (targetStudents.length > 0) {
+        const divisionLabel = targetDivision === 'DIV 1'
+          ? 'Division A (DIV 1)'
+          : targetDivision === 'DIV 2'
+          ? 'Division B (DIV 2)'
+          : 'Both Divisions';
+
+        await this.prisma.studentNotification.createMany({
+          data: targetStudents.map((s) => ({
+            studentId: s.id,
+            title: `New Assessment Assigned: ${assessment.title}`,
+            message: `A new ${assessment.type.toLowerCase()} (${assessment.code}) has been allocated to ${divisionLabel}. Duration: ${assessment.durationMinutes} mins.`,
+            type: 'ASSESSMENT_ASSIGNED',
+            metadata: JSON.stringify({ assessmentId: assessment.id, division: targetDivision }),
+          })),
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Failed to dispatch student notifications for assessment:', notifErr);
+    }
+
     return assessment;
   }
 
@@ -134,15 +169,45 @@ export class AssessmentService {
    * Student: Get available assessments with student attempt records
    */
   async getStudentAssessments(studentProfileId: string, courseId?: string) {
+    // Check if the requester is a student with an assigned division
+    let studentDivision: string | null = null;
+    let resolvedStudentProfileId: string = studentProfileId;
+    if (studentProfileId) {
+      const student = await this.prisma.studentProfile.findFirst({
+        where: {
+          OR: [
+            { id: studentProfileId },
+            { userId: studentProfileId },
+          ],
+        },
+        include: { authorizedStudent: true },
+      });
+      if (student) {
+        resolvedStudentProfileId = student.id;
+        if (student.authorizedStudent?.division) {
+          studentDivision = student.authorizedStudent.division;
+        }
+      }
+    }
+
     const assessments = await this.prisma.assessment.findMany({
       where: {
         status: { in: [AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE] },
         ...(courseId ? { courseId } : {}),
+        ...(studentDivision
+          ? {
+              OR: [
+                { division: 'ALL' },
+                { division: null },
+                { division: studentDivision },
+              ],
+            }
+          : {}),
       },
       include: {
         course: { select: { code: true, name: true } },
         submissions: {
-          where: { studentId: studentProfileId },
+          where: { studentId: resolvedStudentProfileId },
           orderBy: { attemptNumber: 'desc' },
         },
       },
@@ -159,6 +224,7 @@ export class AssessmentService {
         title: a.title,
         description: a.description,
         code: a.code,
+        division: a.division || 'ALL',
         courseCode: a.course.code,
         courseName: a.course.name,
         type: a.type,
@@ -210,9 +276,32 @@ export class AssessmentService {
       throw new BadRequestException('This assessment is not currently accepting attempts.');
     }
 
+    const student = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [
+          { id: studentProfileId },
+          { userId: studentProfileId },
+        ],
+      },
+      include: { authorizedStudent: true },
+    });
+    const effectiveProfileId = student ? student.id : studentProfileId;
+    const studentDiv = student?.authorizedStudent?.division;
+
+    // Verify division eligibility if restricted
+    if (assessment.division && assessment.division !== 'ALL') {
+      if (studentDiv && studentDiv !== assessment.division) {
+        const targetLabel = assessment.division === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
+        const currentLabel = studentDiv === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
+        throw new ForbiddenException(
+          `This assessment is restricted to ${targetLabel}. Your account is registered under ${currentLabel}.`,
+        );
+      }
+    }
+
     // Check existing submissions
     const existingSubmissions = await this.prisma.assessmentSubmission.findMany({
-      where: { assessmentId, studentId: studentProfileId },
+      where: { assessmentId, studentId: effectiveProfileId },
     });
 
     // If an in-progress attempt already exists, return it
@@ -231,7 +320,7 @@ export class AssessmentService {
     const newSubmission = await this.prisma.assessmentSubmission.create({
       data: {
         assessmentId,
-        studentId: studentProfileId,
+        studentId: effectiveProfileId,
         attemptNumber: existingSubmissions.length + 1,
         startedAt: new Date(),
         status: SubmissionStatus.IN_PROGRESS,

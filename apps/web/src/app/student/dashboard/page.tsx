@@ -46,6 +46,8 @@ export default function StudentDashboard() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [remediationNudge, setRemediationNudge] = useState<any>(null);
+  const [assignedAssessments, setAssignedAssessments] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -79,6 +81,32 @@ export default function StudentDashboard() {
     } catch {
       // Keep real zero state
     }
+
+    try {
+      const notifs: any = await api.get('/disputes/notifications');
+      const activeNudge =
+        notifs?.find((n: any) => n.type === 'REMEDIATION_NUDGE' && !n.read) ||
+        notifs?.find((n: any) => n.type === 'REMEDIATION_NUDGE');
+      if (activeNudge) {
+        let meta = {};
+        try {
+          meta = JSON.parse(activeNudge.metadata || '{}');
+        } catch {}
+        setRemediationNudge({ ...activeNudge, meta });
+      }
+    } catch {
+      // silent
+    }
+
+    try {
+      const assessData: any = await api.get('/assessments/student');
+      if (Array.isArray(assessData)) {
+        const pending = assessData.filter((a: any) => a.hasAvailableAttempts);
+        setAssignedAssessments(pending);
+      }
+    } catch {
+      // silent
+    }
   };
 
   return (
@@ -99,17 +127,23 @@ export default function StudentDashboard() {
             <div className="relative z-10 max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-xs font-extrabold mb-3">
                 <Sparkles className="w-3.5 h-3.5 text-blue-300" />
-                <span>Next Recommended Adaptive Session</span>
+                <span>
+                  {remediationNudge ? '🎯 Faculty-Assigned Remediation' : 'Next Recommended Adaptive Session'}
+                </span>
               </div>
               <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight text-white">
-                {summary?.weakTopics && summary.weakTopics.length > 0
+                {remediationNudge
+                  ? `Strengthen ${remediationNudge.meta?.topicName || 'Assigned Topic'}`
+                  : summary?.weakTopics && summary.weakTopics.length > 0
                   ? `Strengthen ${summary.weakTopics[0].topicName}`
                   : summary?.questionsPracticed > 0
                   ? 'Continue Adaptive Mastery'
                   : 'Begin Your Adaptive Learning Journey'}
               </h2>
               <p className="text-xs md:text-sm text-indigo-200 mt-2 leading-relaxed">
-                {summary?.weakTopics && summary.weakTopics.length > 0
+                {remediationNudge
+                  ? `Prof. Dhara Solanki has dispatched an automated remediation practice session for ${remediationNudge.meta?.topicName || 'this topic'} (${remediationNudge.meta?.courseCode || 'CS301'}). Complete this session to reinforce core invariants and elevate your mastery score.`
+                  : summary?.weakTopics && summary.weakTopics.length > 0
                   ? `Your current mastery in ${summary.weakTopics[0].topicName} is ${summary.weakTopics[0].masteryScore}%. Completing targeted practice questions will reinforce key concepts.`
                   : summary?.questionsPracticed > 0
                   ? `You have practiced ${summary.questionsPracticed} questions with ${summary.accuracy}% accuracy. Keep practicing to elevate topic proficiency.`
@@ -118,15 +152,57 @@ export default function StudentDashboard() {
             </div>
 
             <Link
-              href="/student/practice"
+              href={remediationNudge?.meta?.actionUrl || '/student/practice'}
               prefetch={false}
               className="relative z-10 inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-indigo-950 font-black text-xs shadow-xl hover:bg-blue-50 transition transform hover:-translate-y-0.5 shrink-0"
             >
               <BrainCircuit className="w-4 h-4 text-blue-600" />
-              <span>{summary?.questionsPracticed > 0 ? 'Continue Practice' : 'Start Adaptive Practice'}</span>
+              <span>
+                {remediationNudge
+                  ? 'Start Assigned Remediation Practice'
+                  : summary?.questionsPracticed > 0
+                  ? 'Continue Practice'
+                  : 'Start Adaptive Practice'}
+              </span>
               <ArrowRight className="w-4 h-4 text-blue-600" />
             </Link>
           </div>
+
+          {/* Assigned Course Assessments Alert */}
+          {assignedAssessments.length > 0 && (
+            <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/30">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Official Course Assessment Assigned ({assignedAssessments.length} Available)
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                        Active Evaluation
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Assigned for your division: <strong className="font-semibold text-slate-800 dark:text-slate-200">{assignedAssessments[0].title}</strong> ({assignedAssessments[0].courseCode}) • {assignedAssessments[0].durationMinutes}m • {assignedAssessments[0].totalQuestions} Questions
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/student/assessments"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition"
+                  >
+                    <span>View & Start Exam</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Key Metric Cards */}
           <div>

@@ -158,14 +158,34 @@ export default function PracticePage() {
     return () => clearInterval(interval);
   }, [currentQuestion, attemptResult, sessionCompleted]);
 
+  const [isRemediationMode, setIsRemediationMode] = useState<boolean>(false);
+
   const loadCourses = async () => {
     try {
       const data = await api.get('/courses');
       setCourses(data);
       if (data.length > 0) {
-        setSelectedCourseId(data[0].id);
-        if (data[0].topics?.length > 0) {
-          setSelectedTopicId(data[0].topics[0].id);
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const queryCourseId = params?.get('courseId');
+        const queryTopicId = params?.get('topicId');
+
+        const targetCourse =
+          (queryCourseId && data.find((c: any) => c.id === queryCourseId || c.code === queryCourseId)) || data[0];
+
+        setSelectedCourseId(targetCourse.id);
+
+        if (targetCourse.topics?.length > 0) {
+          const targetTopic =
+            (queryTopicId &&
+              targetCourse.topics.find(
+                (t: any) => t.id === queryTopicId || t.name.toLowerCase() === queryTopicId.toLowerCase(),
+              )) ||
+            targetCourse.topics[0];
+
+          setSelectedTopicId(targetTopic.id);
+          if (queryTopicId) {
+            setIsRemediationMode(true);
+          }
         }
       }
     } catch (err) {
@@ -471,6 +491,37 @@ export default function PracticePage() {
           {/* Practice Setup Header / Config Bar */}
           {!activeSession ? (
             <div className="bg-white dark:bg-slate-900/90 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+              {/* Faculty Remediation Nudge Active Banner */}
+              {isRemediationMode && (
+                <div className="p-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-300 dark:border-blue-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-base shadow-xs shrink-0">
+                      🎯
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-600 text-white uppercase tracking-wider">
+                          Faculty Assigned
+                        </span>
+                        <h4 className="text-xs font-bold text-blue-950 dark:text-blue-200">
+                          Targeted Remediation Practice Session
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Prof. Dhara Solanki dispatched this practice session to strengthen your conceptual grasp on {courses.find((c) => c.id === selectedCourseId)?.topics?.find((t: any) => t.id === selectedTopicId)?.name || 'this topic'}.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleStartSession()}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition shrink-0"
+                  >
+                    <span>Launch Session Now</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                   <BrainCircuit className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />

@@ -66,10 +66,10 @@ export default function FacultyInvigilationPage() {
         const mapped = res.map((s: any) => ({
           id: s.id,
           submissionId: s.submissionId,
-          studentName: s.student?.authorizedStudent?.name || 'Rahul Patel',
-          enrollmentNumber: s.student?.authorizedStudent?.enrollmentNumber || '24CS001',
-          assessmentTitle: s.submission?.assessment?.title || 'CS301 Mid-Semester Quiz',
-          assessmentCode: s.submission?.assessment?.code || 'CS301-QUIZ-01',
+          studentName: s.student?.authorizedStudent?.name || s.student?.email || 'Student',
+          enrollmentNumber: s.student?.authorizedStudent?.enrollmentNumber || 'N/A',
+          assessmentTitle: s.submission?.assessment?.title || 'Proctored Assessment',
+          assessmentCode: s.submission?.assessment?.code || 'ASSESSMENT',
           status: s.status,
           trustScore: s.trustScore,
           violationsCount: s.violationsCount,
@@ -81,95 +81,17 @@ export default function FacultyInvigilationPage() {
         }));
         setSessions(mapped);
         if (mapped.length > 0) setSelectedSession(mapped[0]);
+        else setSelectedSession(null);
       } else {
-        fallbackData();
+        setSessions([]);
+        setSelectedSession(null);
       }
     } catch {
-      fallbackData();
+      setSessions([]);
+      setSelectedSession(null);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fallbackData = () => {
-    const demoSessions: ProctoringSessionItem[] = [
-      {
-        id: 'proc-1',
-        submissionId: 'sub-1',
-        studentName: 'Rahul Patel',
-        enrollmentNumber: '24CS001',
-        assessmentTitle: 'CS301 Mid-Semester Quiz: Linear & Non-Linear Structures',
-        assessmentCode: 'CS301-QUIZ-01',
-        status: 'COMPLETED',
-        trustScore: 89.5,
-        violationsCount: 2,
-        faceEnrollmentVerified: true,
-        startedAt: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-        completedAt: new Date(Date.now() - 3600 * 1000 * 2 + 14 * 60 * 1000).toISOString(),
-        invigilatorNotes: 'Minor focus loss detected during Question 2; verified benign window readjustment.',
-        violations: [
-          {
-            id: 'v1',
-            type: 'TAB_SWITCH',
-            severity: 'MEDIUM',
-            confidence: 0.98,
-            timestamp: new Date(Date.now() - 3600 * 1000 * 2 + 4 * 60 * 1000).toISOString(),
-            details: 'Browser focus transferred to background window for 3.2 seconds during question 2.',
-          },
-          {
-            id: 'v2',
-            type: 'NO_FACE',
-            severity: 'LOW',
-            confidence: 0.92,
-            timestamp: new Date(Date.now() - 3600 * 1000 * 2 + 9 * 60 * 1000).toISOString(),
-            details: 'Webcam feed lost facial keypoints momentarily for 1.8 seconds (head tilt down).',
-          },
-        ],
-      },
-      {
-        id: 'proc-2',
-        submissionId: 'sub-2',
-        studentName: 'Priya Sharma',
-        enrollmentNumber: '24CS014',
-        assessmentTitle: 'CS301 Mid-Semester Quiz: Linear & Non-Linear Structures',
-        assessmentCode: 'CS301-QUIZ-01',
-        status: 'FLAGGED',
-        trustScore: 58.0,
-        violationsCount: 4,
-        faceEnrollmentVerified: true,
-        startedAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
-        completedAt: new Date(Date.now() - 3600 * 1000 * 3 + 18 * 60 * 1000).toISOString(),
-        invigilatorNotes: 'Persistent background window swaps and secondary individual detected in frame.',
-        violations: [
-          {
-            id: 'v3',
-            type: 'TAB_SWITCH',
-            severity: 'MEDIUM',
-            confidence: 0.99,
-            timestamp: new Date(Date.now() - 3600 * 1000 * 3 + 2 * 60 * 1000).toISOString(),
-            details: 'Browser focus lost for 12 seconds.',
-          },
-          {
-            id: 'v4',
-            type: 'MULTIPLE_FACES',
-            severity: 'HIGH',
-            confidence: 0.94,
-            timestamp: new Date(Date.now() - 3600 * 1000 * 3 + 7 * 60 * 1000).toISOString(),
-            details: 'Secondary face detected in camera viewport.',
-          },
-          {
-            id: 'v5',
-            type: 'FULLSCREEN_EXIT',
-            severity: 'MEDIUM',
-            confidence: 0.99,
-            timestamp: new Date(Date.now() - 3600 * 1000 * 3 + 11 * 60 * 1000).toISOString(),
-            details: 'Student exited locked full screen viewport.',
-          },
-        ],
-      },
-    ];
-    setSessions(demoSessions);
-    setSelectedSession(demoSessions[0]);
   };
 
   const handleReviewAction = async (decision: 'APPROVED' | 'FLAGGED' | 'INVALIDATED') => {
@@ -327,45 +249,59 @@ export default function FacultyInvigilationPage() {
           </div>
 
           <div className="space-y-3">
-            {filteredSessions.map((session) => (
-              <div
-                key={session.id}
-                onClick={() => setSelectedSession(session)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  selectedSession?.id === session.id
-                    ? 'bg-slate-800/90 border-amber-500/50 shadow-md shadow-amber-500/10'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div>
-                    <span className="font-bold text-white text-sm block">{session.studentName}</span>
-                    <span className="text-xs text-slate-400 font-mono">{session.enrollmentNumber}</span>
-                  </div>
-                  <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${getScoreColor(session.trustScore)}`}>
-                    {session.trustScore}% Trust
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-400 line-clamp-1 mb-2">
-                  {session.assessmentTitle}
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
-                  <span className="flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 text-amber-500" />
-                    {session.violationsCount} Anomaly Flags
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${
-                    session.status === 'FLAGGED'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                      : 'bg-slate-800 text-slate-300'
-                  }`}>
-                    {session.status}
-                  </span>
+            {loading ? (
+              <div className="p-8 text-center text-slate-500 text-sm rounded-xl bg-slate-900/40 border border-slate-800">
+                Loading live proctoring telemetry...
+              </div>
+            ) : filteredSessions.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm rounded-xl bg-slate-900/40 border border-slate-800 space-y-2">
+                <Camera className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                <div className="font-semibold text-slate-400">No Proctored Telemetry Sessions</div>
+                <div className="text-xs text-slate-500 max-w-xs mx-auto">
+                  No active or historical exam proctoring sessions match this filter. Live telemetry streams dynamically as students take proctored assessments.
                 </div>
               </div>
-            ))}
+            ) : (
+              filteredSessions.map((session) => (
+                <div
+                  key={session.id}
+                  onClick={() => setSelectedSession(session)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    selectedSession?.id === session.id
+                      ? 'bg-slate-800/90 border-amber-500/50 shadow-md shadow-amber-500/10'
+                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div>
+                      <span className="font-bold text-white text-sm block">{session.studentName}</span>
+                      <span className="text-xs text-slate-400 font-mono">{session.enrollmentNumber}</span>
+                    </div>
+                    <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${getScoreColor(session.trustScore)}`}>
+                      {session.trustScore}% Trust
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-400 line-clamp-1 mb-2">
+                    {session.assessmentTitle}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      {session.violationsCount} Anomaly Flags
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${
+                      session.status === 'FLAGGED'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'bg-slate-800 text-slate-300'
+                    }`}>
+                      {session.status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

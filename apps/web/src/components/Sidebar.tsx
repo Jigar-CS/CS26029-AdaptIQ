@@ -43,8 +43,13 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
   const { user, logout } = useAuth();
   const { isPinned, togglePin } = useSidebar();
   const [isHovered, setIsHovered] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!user) return null;
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !user) return null;
 
   // The sidebar is open either when pinned or when hovered over the short bar
   const isExpanded = isPinned || isHovered;

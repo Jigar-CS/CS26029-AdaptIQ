@@ -36,85 +36,17 @@ interface AuthorizedStudent {
   activated: boolean;
 }
 
-const SEED_STUDENTS: AuthorizedStudent[] = [
-  {
-    id: 's-1',
-    enrollmentNumber: '24CS001',
-    name: 'Rahul Patel',
-    email: 'student@charusat.edu.in',
-    institute: 'CSPIT',
-    department: 'CSE',
-    programName: 'B.Tech CSE',
-    semester: 5,
-    division: 'A',
-    graduationYear: 2028,
-    activated: true,
-  },
-  {
-    id: 's-2',
-    enrollmentNumber: '24CS002',
-    name: 'Priya Sharma',
-    email: 'priya@charusat.edu.in',
-    institute: 'CSPIT',
-    department: 'CSE',
-    programName: 'B.Tech CSE',
-    semester: 5,
-    division: 'A',
-    graduationYear: 2028,
-    activated: false,
-  },
-  {
-    id: 's-3',
-    enrollmentNumber: '24CS003',
-    name: 'Aarav Desai',
-    email: 'aarav@charusat.edu.in',
-    institute: 'CSPIT',
-    department: 'CSE',
-    programName: 'B.Tech CSE',
-    semester: 5,
-    division: 'B',
-    graduationYear: 2028,
-    activated: false,
-  },
-  {
-    id: 's-4',
-    enrollmentNumber: '24CS004',
-    name: 'Ananya Shah',
-    email: 'ananya@charusat.edu.in',
-    institute: 'CSPIT',
-    department: 'CSE',
-    programName: 'B.Tech CSE',
-    semester: 5,
-    division: 'B',
-    graduationYear: 2028,
-    activated: false,
-  },
-  {
-    id: 's-5',
-    enrollmentNumber: '24CS005',
-    name: 'Devansh Joshi',
-    email: 'devansh@charusat.edu.in',
-    institute: 'CSPIT',
-    department: 'CSE',
-    programName: 'B.Tech CSE',
-    semester: 5,
-    division: 'A',
-    graduationYear: 2028,
-    activated: false,
-  },
-];
-
 export default function AdminStudentsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [stats, setStats] = useState<any>({
-    totalAuthorizedStudents: 5,
-    activatedStudents: 1,
-    activationRate: 20,
-    totalQuestionsInBank: 25,
+    totalAuthorizedStudents: 0,
+    activatedStudents: 0,
+    activationRate: 0,
+    totalQuestionsInBank: 0,
   });
-  const [students, setStudents] = useState<AuthorizedStudent[]>(SEED_STUDENTS);
+  const [students, setStudents] = useState<AuthorizedStudent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVATED' | 'PENDING'>('ALL');
   const [divisionFilter, setDivisionFilter] = useState('ALL');
@@ -135,14 +67,17 @@ export default function AdminStudentsPage() {
     try {
       const [statsRes, studentsRes]: any = await Promise.all([
         api.get('/admin/dashboard').catch(() => null),
-        api.get('/admin/students?limit=50').catch(() => null),
+        api.get('/admin/students?limit=200').catch(() => null),
       ]);
       if (statsRes) setStats(statsRes);
-      if (studentsRes && Array.isArray(studentsRes.data) && studentsRes.data.length > 0) {
-        setStudents(studentsRes.data);
-      }
+      const list = Array.isArray(studentsRes)
+        ? studentsRes
+        : Array.isArray(studentsRes?.data)
+        ? studentsRes.data
+        : [];
+      setStudents(list);
     } catch {
-      // baseline active
+      setStudents([]);
     }
   };
 
