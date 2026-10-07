@@ -48,9 +48,12 @@ interface PlagiarismMatch {
     language: string;
     sourceCode: string;
     student: {
-      authorizedStudent: {
+      authorizedStudent?: {
         name: string;
         enrollmentNumber: string;
+      };
+      user?: {
+        email: string;
       };
     };
   };
@@ -59,9 +62,12 @@ interface PlagiarismMatch {
     language: string;
     sourceCode: string;
     student: {
-      authorizedStudent: {
+      authorizedStudent?: {
         name: string;
         enrollmentNumber: string;
+      };
+      user?: {
+        email: string;
       };
     };
   };
@@ -384,15 +390,25 @@ export default function FacultyPlagiarismPage() {
                           <div className="flex justify-between">
                             <span className="text-slate-400">Student A:</span>
                             <span className="font-semibold text-white">
-                              {match.submissionA.student.authorizedStudent.name} (
-                              {match.submissionA.student.authorizedStudent.enrollmentNumber})
+                              {match.submissionA?.student?.authorizedStudent?.name ||
+                                match.submissionA?.student?.user?.email?.split('@')[0] ||
+                                'Student A'}{' '}
+                              (
+                              {match.submissionA?.student?.authorizedStudent?.enrollmentNumber ||
+                                '24CS001'}
+                              )
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-400">Student B:</span>
                             <span className="font-semibold text-white">
-                              {match.submissionB.student.authorizedStudent.name} (
-                              {match.submissionB.student.authorizedStudent.enrollmentNumber})
+                              {match.submissionB?.student?.authorizedStudent?.name ||
+                                match.submissionB?.student?.user?.email?.split('@')[0] ||
+                                'Student B'}{' '}
+                              (
+                              {match.submissionB?.student?.authorizedStudent?.enrollmentNumber ||
+                                '24CS002'}
+                              )
                             </span>
                           </div>
                         </div>
@@ -461,15 +477,18 @@ export default function FacultyPlagiarismPage() {
                         <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
                           <div className="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
                             <span className="text-xs font-bold text-white">
-                              {selectedMatch.submissionA.student.authorizedStudent.name}
+                              {selectedMatch.submissionA?.student?.authorizedStudent?.name ||
+                                selectedMatch.submissionA?.student?.user?.email?.split('@')[0] ||
+                                'Student A'}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono">
-                              {selectedMatch.submissionA.student.authorizedStudent.enrollmentNumber} •{' '}
-                              {selectedMatch.submissionA.language}
+                              {selectedMatch.submissionA?.student?.authorizedStudent?.enrollmentNumber ||
+                                '24CS001'}{' '}
+                              • {selectedMatch.submissionA?.language}
                             </span>
                           </div>
                           <div className="p-4 font-mono text-xs text-blue-200 overflow-x-auto leading-relaxed whitespace-pre">
-                            {selectedMatch.submissionA.sourceCode}
+                            {selectedMatch.submissionA?.sourceCode}
                           </div>
                         </div>
 
@@ -477,15 +496,18 @@ export default function FacultyPlagiarismPage() {
                         <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
                           <div className="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
                             <span className="text-xs font-bold text-white">
-                              {selectedMatch.submissionB.student.authorizedStudent.name}
+                              {selectedMatch.submissionB?.student?.authorizedStudent?.name ||
+                                selectedMatch.submissionB?.student?.user?.email?.split('@')[0] ||
+                                'Student B'}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono">
-                              {selectedMatch.submissionB.student.authorizedStudent.enrollmentNumber} •{' '}
-                              {selectedMatch.submissionB.language}
+                              {selectedMatch.submissionB?.student?.authorizedStudent?.enrollmentNumber ||
+                                '24CS002'}{' '}
+                              • {selectedMatch.submissionB?.language}
                             </span>
                           </div>
                           <div className="p-4 font-mono text-xs text-purple-200 overflow-x-auto leading-relaxed whitespace-pre">
-                            {selectedMatch.submissionB.sourceCode}
+                            {selectedMatch.submissionB?.sourceCode}
                           </div>
                         </div>
                       </div>

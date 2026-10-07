@@ -18,6 +18,12 @@ import {
   Loader2,
   Check,
   Search,
+  Download,
+  BarChart2,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export default function FacultyAssessmentsPage() {
@@ -29,6 +35,13 @@ export default function FacultyAssessmentsPage() {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Cohort Analytics & Export State
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [activeAnalytics, setActiveAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [searchStudent, setSearchStudent] = useState('');
+  const [filterDiv, setFilterDiv] = useState<'ALL' | 'DIV 1' | 'DIV 2'>('ALL');
 
   // New assessment form state
   const [newTitle, setNewTitle] = useState('');
@@ -86,6 +99,86 @@ export default function FacultyAssessmentsPage() {
       setAssessments(data);
     } catch (err) {
       console.error('Failed to load assessments', err);
+    }
+  };
+
+  const openAnalyticsModal = async (assessmentId: string) => {
+    setAnalysisModalOpen(true);
+    setAnalyticsLoading(true);
+    setSearchStudent('');
+    setFilterDiv('ALL');
+    try {
+      const data = await api.get(`/assessments/${assessmentId}/analytics`);
+      setActiveAnalytics(data);
+    } catch (err) {
+      console.error('Failed to load assessment analytics', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const exportMarksCsv = (analyticsData?: any) => {
+    const target = analyticsData || activeAnalytics;
+    if (!target || !target.submissions || target.submissions.length === 0) {
+      alert('No student submissions found to export.');
+      return;
+    }
+
+    const headers = [
+      'Student Name',
+      'Enrollment Number',
+      'Email',
+      'Division',
+      'Assessment Code',
+      'Assessment Title',
+      'Status',
+      'Marks Obtained',
+      'Total Marks',
+      'Percentage (%)',
+      'Outcome',
+      'Proctoring Trust Score (%)',
+      'Proctoring Status',
+      'Integrity Violations',
+      'Submitted At',
+    ];
+
+    const rows = target.submissions.map((s: any) => [
+      `"${s.studentName || 'Student'}"`,
+      `"${s.enrollmentNumber || 'N/A'}"`,
+      `"${s.email || 'N/A'}"`,
+      `"${s.division || target.division || 'DIV 1'}"`,
+      `"${target.code}"`,
+      `"${target.title}"`,
+      `"${s.status}"`,
+      s.score,
+      s.totalMarks,
+      `${s.percentage}%`,
+      `"${s.passed ? 'PASSED' : 'RETAKE'}"`,
+      `${s.trustScore}%`,
+      `"${s.proctoringStatus}"`,
+      s.violationsCount,
+      `"${new Date(s.submittedAt).toLocaleString()}"`,
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e: any[]) => e.join(','))].join('\n');
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${target.code}_Student_Marks_Report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportDirectCsv = async (assessmentId: string) => {
+    try {
+      const data = await api.get(`/assessments/${assessmentId}/analytics`);
+      exportMarksCsv(data);
+    } catch (err) {
+      console.error('Failed to export marks CSV', err);
     }
   };
 
@@ -298,6 +391,27 @@ export default function FacultyAssessmentsPage() {
                       <span className="text-[10px] text-slate-400 block font-medium">Questions</span>
                       <strong className="text-white font-bold">{a.totalQuestions} items</strong>
                     </div>
+                  </div>
+
+                  {/* Assessment Card Action Buttons */}
+                  <div className="pt-2 flex items-center gap-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => openAnalyticsModal(a.id)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>Cohort Analytics & Marks</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportDirectCsv(a.id)}
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+                      title="Export Student Marks CSV"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Export</span>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -702,6 +816,272 @@ export default function FacultyAssessmentsPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Cohort Analytics & Student Marks Modal */}
+      {analysisModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#111827] border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20">
+                  <BarChart2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-white">Cohort Attempt Analytics & Marks</h3>
+                    {activeAnalytics && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
+                        {activeAnalytics.code}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {activeAnalytics ? activeAnalytics.title : 'Loading cohort performance metrics...'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {activeAnalytics && activeAnalytics.submissions?.length > 0 && (
+                  <button
+                    onClick={() => exportMarksCsv(activeAnalytics)}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export Marks (.CSV)</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setAnalysisModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {analyticsLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                  <p className="text-sm">Compiling student attempt reports & integrity logs...</p>
+                </div>
+              ) : !activeAnalytics ? (
+                <div className="py-16 text-center text-slate-400">
+                  <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-2 opacity-80" />
+                  <p className="font-semibold text-white">Analytics Unavailable</p>
+                  <p className="text-xs text-slate-400 mt-1">Unable to load analytics for this assessment.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                      <span className="text-xs text-slate-400 font-medium">Total Attempts</span>
+                      <p className="text-2xl font-black text-white mt-1">
+                        {activeAnalytics.totalSubmissions}
+                      </p>
+                      <span className="text-[11px] text-slate-400">Enrolled submissions</span>
+                    </div>
+
+                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                      <span className="text-xs text-slate-400 font-medium">Class Average</span>
+                      <p className="text-2xl font-black text-indigo-400 mt-1">
+                        {activeAnalytics.averageScore}{' '}
+                        <span className="text-xs font-normal text-slate-400">/ {activeAnalytics.totalMarks}</span>
+                      </p>
+                      <span className="text-[11px] text-slate-400">
+                        {activeAnalytics.totalMarks > 0
+                          ? Math.round((activeAnalytics.averageScore / activeAnalytics.totalMarks) * 100)
+                          : 0}
+                        % cohort score
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                      <span className="text-xs text-slate-400 font-medium">Pass Rate</span>
+                      <p className="text-2xl font-black text-emerald-400 mt-1">
+                        {activeAnalytics.passRate}%
+                      </p>
+                      <span className="text-[11px] text-slate-400">Benchmark: {activeAnalytics.passingMarks} marks</span>
+                    </div>
+
+                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                      <span className="text-xs text-slate-400 font-medium">Score Range</span>
+                      <p className="text-2xl font-black text-white mt-1">
+                        {activeAnalytics.highestScore}{' '}
+                        <span className="text-xs font-normal text-slate-400">high</span> •{' '}
+                        <span className="text-amber-400">{activeAnalytics.lowestScore}</span>{' '}
+                        <span className="text-xs font-normal text-slate-400">low</span>
+                      </p>
+                      <span className="text-[11px] text-slate-400">Max possible: {activeAnalytics.totalMarks}</span>
+                    </div>
+                  </div>
+
+                  {/* Filter & Search Bar */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="relative w-full sm:w-72">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          value={searchStudent}
+                          onChange={(e) => setSearchStudent(e.target.value)}
+                          placeholder="Search student, enrollment, email..."
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <select
+                        value={filterDiv}
+                        onChange={(e) => setFilterDiv(e.target.value as any)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="ALL">All Divisions</option>
+                        <option value="DIV 1">Division A (DIV 1)</option>
+                        <option value="DIV 2">Division B (DIV 2)</option>
+                      </select>
+                    </div>
+
+                    <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+                      Showing{' '}
+                      {(activeAnalytics.submissions || []).filter((s: any) => {
+                        const matchDiv = filterDiv === 'ALL' || (s.division || activeAnalytics.division) === filterDiv;
+                        const matchSearch =
+                          !searchStudent.trim() ||
+                          (s.studentName || '').toLowerCase().includes(searchStudent.toLowerCase()) ||
+                          (s.enrollmentNumber || '').toLowerCase().includes(searchStudent.toLowerCase()) ||
+                          (s.email || '').toLowerCase().includes(searchStudent.toLowerCase());
+                        return matchDiv && matchSearch;
+                      }).length}{' '}
+                      of {activeAnalytics.submissions?.length || 0} attempts
+                    </span>
+                  </div>
+
+                  {/* Students Attempt List Table */}
+                  <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-900/30">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-900/90 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                          <tr>
+                            <th className="px-4 py-3.5">Student Details</th>
+                            <th className="px-4 py-3.5">Division</th>
+                            <th className="px-4 py-3.5">Marks Obtained</th>
+                            <th className="px-4 py-3.5">Percentage</th>
+                            <th className="px-4 py-3.5">Status</th>
+                            <th className="px-4 py-3.5">AI Proctoring Trust</th>
+                            <th className="px-4 py-3.5 text-right">Attempt Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-medium">
+                          {(activeAnalytics.submissions || [])
+                            .filter((s: any) => {
+                              const matchDiv = filterDiv === 'ALL' || (s.division || activeAnalytics.division) === filterDiv;
+                              const matchSearch =
+                                !searchStudent.trim() ||
+                                (s.studentName || '').toLowerCase().includes(searchStudent.toLowerCase()) ||
+                                (s.enrollmentNumber || '').toLowerCase().includes(searchStudent.toLowerCase()) ||
+                                (s.email || '').toLowerCase().includes(searchStudent.toLowerCase());
+                              return matchDiv && matchSearch;
+                            })
+                            .map((sub: any) => (
+                              <tr key={sub.submissionId || sub.id} className="hover:bg-slate-800/40 transition">
+                                <td className="px-4 py-3.5">
+                                  <div className="flex flex-col">
+                                    <span className="text-white font-bold">{sub.studentName}</span>
+                                    <span className="text-[11px] text-slate-400 font-mono">
+                                      {sub.enrollmentNumber || sub.email}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 text-[11px] font-mono">
+                                    {sub.division || activeAnalytics.division || 'DIV 1'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <span className="text-white font-bold text-sm">
+                                    {sub.score}{' '}
+                                    <span className="text-slate-500 font-normal text-xs">
+                                      / {sub.totalMarks}
+                                    </span>
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                                      sub.percentage >= 60
+                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                        : sub.percentage >= 40
+                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                    }`}
+                                  >
+                                    {sub.percentage}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  {sub.passed ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      PASSED
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      RETAKE
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                        sub.trustScore >= 80
+                                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                          : sub.trustScore >= 50
+                                          ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                                          : 'bg-rose-950 text-rose-300 border border-rose-800'
+                                      }`}
+                                    >
+                                      {sub.trustScore}% Trust
+                                    </span>
+                                    {sub.violationsCount > 0 && (
+                                      <span className="text-[11px] text-rose-400 font-semibold">
+                                        ({sub.violationsCount} violations)
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3.5 text-right text-slate-400 font-mono text-[11px]">
+                                  {new Date(sub.submittedAt).toLocaleDateString()} •{' '}
+                                  {new Date(sub.submittedAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </td>
+                              </tr>
+                            ))}
+
+                          {(!activeAnalytics.submissions || activeAnalytics.submissions.length === 0) && (
+                            <tr>
+                              <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                                No students have completed or submitted this assessment yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

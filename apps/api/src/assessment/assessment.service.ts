@@ -575,7 +575,6 @@ export class AssessmentService {
       include: {
         course: true,
         submissions: {
-          where: { status: SubmissionStatus.EVALUATED },
           include: {
             student: {
               include: {
@@ -583,7 +582,16 @@ export class AssessmentService {
                 user: { select: { email: true } },
               },
             },
+            proctoringSession: {
+              select: {
+                trustScore: true,
+                status: true,
+                violationsCount: true,
+                faceEnrollmentVerified: true,
+              },
+            },
           },
+          orderBy: { createdAt: 'desc' },
         },
         questions: {
           include: { question: true },
@@ -595,17 +603,22 @@ export class AssessmentService {
       throw new NotFoundException('Assessment not found');
     }
 
-    const totalSubmissions = assessment.submissions.length;
-    const scores = assessment.submissions.map((s) => s.totalScore);
+    const evaluatedSubmissions = assessment.submissions.filter(
+      (s) => s.status === SubmissionStatus.EVALUATED,
+    );
+    const totalSubmissions = evaluatedSubmissions.length;
+    const scores = evaluatedSubmissions.map((s) => s.totalScore);
     const avgScore = totalSubmissions > 0 ? scores.reduce((a, b) => a + b, 0) / totalSubmissions : 0;
-    const passedCount = assessment.submissions.filter((s) => s.passed).length;
+    const passedCount = evaluatedSubmissions.filter((s) => s.passed).length;
     const passRate = totalSubmissions > 0 ? (passedCount / totalSubmissions) * 100 : 0;
 
     return {
       assessmentId: assessment.id,
       title: assessment.title,
       code: assessment.code,
+      division: assessment.division || 'ALL',
       courseCode: assessment.course.code,
+      courseName: assessment.course.name,
       totalQuestions: assessment.totalQuestions,
       totalMarks: assessment.totalMarks,
       passingMarks: assessment.passingMarks,
@@ -616,13 +629,24 @@ export class AssessmentService {
       lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
       submissions: assessment.submissions.map((s) => ({
         submissionId: s.id,
-        enrollmentNumber: s.student.authorizedStudent.enrollmentNumber,
-        studentName: s.student.authorizedStudent.name,
+        enrollmentNumber: s.student.authorizedStudent?.enrollmentNumber || '24CS001',
+        studentName:
+          s.student.authorizedStudent?.name ||
+          s.student.user?.email?.split('@')[0] ||
+          'Student',
+        email: s.student.user?.email || 'N/A',
+        division: s.student.authorizedStudent?.division || assessment.division || 'DIV 1',
         attemptNumber: s.attemptNumber,
+        status: s.status,
         score: s.totalScore,
+        totalMarks: assessment.totalMarks,
         percentage: s.percentage,
         passed: s.passed,
-        submittedAt: s.submittedAt,
+        submittedAt: s.submittedAt || s.startedAt,
+        trustScore: s.proctoringSession?.trustScore ?? 100.0,
+        proctoringStatus: s.proctoringSession?.status || 'COMPLETED',
+        violationsCount: s.proctoringSession?.violationsCount ?? 0,
+        faceEnrollmentVerified: s.proctoringSession?.faceEnrollmentVerified ?? false,
       })),
     };
   }

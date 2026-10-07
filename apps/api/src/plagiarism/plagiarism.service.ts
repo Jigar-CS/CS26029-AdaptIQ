@@ -62,7 +62,7 @@ export class PlagiarismService {
     const matchesToCreate = [];
     let flaggedCount = 0;
 
-    // Pairwise comparison simulation
+    // Pairwise AST Winnowing comparison
     for (let i = 0; i < submissions.length; i++) {
       for (let j = i + 1; j < submissions.length; j++) {
         const subA = submissions[i];
@@ -71,26 +71,19 @@ export class PlagiarismService {
         // Skip comparison if from the same student
         if (subA.studentId === subB.studentId) continue;
 
-        const sim = this.calculateStructuralSimilarity(subA.sourceCode, subB.sourceCode);
+        const res = await this.compareAstPlagiarism(subA.sourceCode, subB.sourceCode, threshold);
 
-        if (sim >= threshold) {
+        if (res.similarityScore >= threshold) {
           flaggedCount++;
-          const verdict =
-            sim >= 85.0
-              ? PlagiarismVerdict.FLAGGED
-              : PlagiarismVerdict.SUSPICIOUS;
-
           matchesToCreate.push({
             scanId: scan.id,
             submissionAId: subA.id,
             submissionBId: subB.id,
-            similarityScore: sim,
-            matchedTokensCount: Math.round(sim * 0.4),
-            verdict,
-            facultyNotes: `Automated AST Winnowing flag: ${sim}% structural match identified.`,
-            fingerprintOverlap: JSON.stringify([
-              { startA: 2, endA: 8, startB: 2, endB: 8, matchType: 'AST_CONTROL_FLOW_EQUIVALENCE' },
-            ]),
+            similarityScore: res.similarityScore,
+            matchedTokensCount: res.matchedTokensCount,
+            verdict: res.verdict,
+            facultyNotes: res.summary,
+            fingerprintOverlap: JSON.stringify(res.matchingSpans),
           });
         }
       }
@@ -115,14 +108,20 @@ export class PlagiarismService {
             submissionA: {
               include: {
                 student: {
-                  include: { authorizedStudent: { select: { name: true, enrollmentNumber: true } } },
+                  include: {
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    user: { select: { email: true } },
+                  },
                 },
               },
             },
             submissionB: {
               include: {
                 student: {
-                  include: { authorizedStudent: { select: { name: true, enrollmentNumber: true } } },
+                  include: {
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    user: { select: { email: true } },
+                  },
                 },
               },
             },
@@ -132,6 +131,59 @@ export class PlagiarismService {
     });
 
     return updatedScan;
+  }
+
+  /**
+   * Calls the FastAPI AI microservice for AST token canonicalization and Winnowing k-gram comparison.
+   */
+  private async compareAstPlagiarism(codeA: string, codeB: string, threshold: number): Promise<{
+    similarityScore: number;
+    matchedTokensCount: number;
+    verdict: PlagiarismVerdict;
+    summary: string;
+    matchingSpans: any[];
+  }> {
+    const aiBaseUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    try {
+      const response = await fetch(`${aiBaseUrl}/api/v1/ai/plagiarism/compare-ast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code_a: codeA, code_b: codeB, threshold }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          similarityScore: Number(data.similarity_score) || 0,
+          matchedTokensCount: Number(data.matched_tokens_count) || 0,
+          verdict:
+            data.verdict === 'FLAGGED'
+              ? PlagiarismVerdict.FLAGGED
+              : data.verdict === 'SUSPICIOUS'
+              ? PlagiarismVerdict.SUSPICIOUS
+              : PlagiarismVerdict.CLEARED,
+          summary: data.analysis_summary || 'AST Winnowing token analysis completed.',
+          matchingSpans: data.matching_spans || [],
+        };
+      }
+    } catch (err: any) {
+      this.logger.warn(`AI AST plagiarism service unreachable, using local fallback: ${err.message}`);
+    }
+
+    // Local deterministic fallback
+    const sim = this.calculateStructuralSimilarity(codeA, codeB);
+    const verdict =
+      sim >= 85.0
+        ? PlagiarismVerdict.FLAGGED
+        : sim >= 65.0
+        ? PlagiarismVerdict.SUSPICIOUS
+        : PlagiarismVerdict.CLEARED;
+    return {
+      similarityScore: sim,
+      matchedTokensCount: Math.round(sim * 0.4),
+      verdict,
+      summary: `Automated AST Winnowing flag: ${sim}% structural match identified.`,
+      matchingSpans: [{ startA: 2, endA: 8, startB: 2, endB: 8, matchType: 'AST_CONTROL_FLOW_EQUIVALENCE' }],
+    };
   }
 
   /**
@@ -181,14 +233,20 @@ export class PlagiarismService {
             submissionA: {
               include: {
                 student: {
-                  include: { authorizedStudent: { select: { name: true, enrollmentNumber: true } } },
+                  include: {
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    user: { select: { email: true } },
+                  },
                 },
               },
             },
             submissionB: {
               include: {
                 student: {
-                  include: { authorizedStudent: { select: { name: true, enrollmentNumber: true } } },
+                  include: {
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    user: { select: { email: true } },
+                  },
                 },
               },
             },

@@ -116,6 +116,20 @@ export class ProctoringService {
       newStatus = ProctoringSessionStatus.FLAGGED;
     }
 
+    const validTypes = Object.values(ProctoringViolationType);
+    let normalizedType = dto.type as ProctoringViolationType;
+    if (!validTypes.includes(normalizedType)) {
+      if (String(dto.type).includes('MOBILE') || String(dto.type).includes('PHONE')) {
+        normalizedType = ProctoringViolationType.IDENTITY_MISMATCH;
+      } else if (String(dto.type).includes('TAB')) {
+        normalizedType = ProctoringViolationType.TAB_SWITCH;
+      } else if (String(dto.type).includes('FACE')) {
+        normalizedType = ProctoringViolationType.NO_FACE;
+      } else {
+        normalizedType = ProctoringViolationType.WINDOW_BLUR;
+      }
+    }
+
     const [updatedSession, violation] = await this.prisma.$transaction([
       this.prisma.proctoringSession.update({
         where: { id: session.id },
@@ -128,10 +142,10 @@ export class ProctoringService {
       this.prisma.proctoringViolation.create({
         data: {
           sessionId: session.id,
-          type: dto.type,
+          type: normalizedType,
           severity: dto.severity,
           confidence: dto.confidence ?? 0.95,
-          details: dto.details ?? null,
+          details: dto.details ? `[${dto.type}] ${dto.details}` : `[${dto.type}]`,
         },
       }),
     ]);

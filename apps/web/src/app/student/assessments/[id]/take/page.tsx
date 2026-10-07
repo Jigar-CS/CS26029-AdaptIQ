@@ -27,6 +27,8 @@ import {
   Lock,
   RefreshCw,
   Eye,
+  EyeOff,
+  Smartphone,
 } from 'lucide-react';
 
 export default function TakeAssessmentPage() {
@@ -63,10 +65,31 @@ export default function TakeAssessmentPage() {
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
   const [facePresent, setFacePresent] = useState(true);
 
+  // ---------------------------------------------------------------------------
+  // Hardened Anti-Cheat & 3-Strike Face Absence States
+  // ---------------------------------------------------------------------------
+  const [faceStrikeCount, setFaceStrikeCount] = useState<number>(0);
+  const [faceAlertModal, setFaceAlertModal] = useState<{
+    show: boolean;
+    strike: number;
+    isFinal: boolean;
+    isTerminated: boolean;
+  } | null>(null);
+
+  const [tabSwitchTerminated, setTabSwitchTerminated] = useState(false);
+  const [mobileAlertModal, setMobileAlertModal] = useState(false);
+
   const preflightVideoRef = useRef<HTMLVideoElement>(null);
   const livePipVideoRef = useRef<HTMLVideoElement>(null);
   const offscreenCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastViolationTimeRef = useRef<Record<string, number>>({});
+
+  const consecutiveFaceAbsentRef = useRef<number>(0);
+  const faceModalActiveRef = useRef<boolean>(false);
+  const faceStrikeCountRef = useRef<number>(0);
+  const isAutoSubmittingRef = useRef<boolean>(false);
+  const visionModelRef = useRef<any>(null);
+  const isDetectingRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (assessmentId) {
@@ -206,21 +229,77 @@ export default function TakeAssessmentPage() {
   };
 
   // ---------------------------------------------------------------------------
+  // Pre-load TensorFlow.js and COCO-SSD for client-side object detection
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    let active = true;
+    const loadVisionDetector = async () => {
+      try {
+        if (typeof window === 'undefined') return;
+        if (!(window as any).tf) {
+          const s1 = document.createElement('script');
+          s1.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js';
+          s1.crossOrigin = 'anonymous';
+          document.head.appendChild(s1);
+          await new Promise((res, rej) => {
+            s1.onload = res;
+            s1.onerror = rej;
+          });
+        }
+        if (!(window as any).cocoSsd) {
+          const s2 = document.createElement('script');
+          s2.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
+          s2.crossOrigin = 'anonymous';
+          document.head.appendChild(s2);
+          await new Promise((res, rej) => {
+            s2.onload = res;
+            s2.onerror = rej;
+          });
+        }
+        if (active && (window as any).cocoSsd && !visionModelRef.current) {
+          const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
+          if (active) {
+            visionModelRef.current = m;
+            console.log('AI Proctoring Vision Model loaded successfully.');
+          }
+        }
+      } catch (err) {
+        console.warn('COCO-SSD model fallback active:', err);
+      }
+    };
+    loadVisionDetector();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Real-Time Browser Integrity Monitoring Listeners
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight) return;
 
-    // 1. Tab Switching Detection
+    // 1. Tab Switching Detection -> IMMEDIATE AUTO-SUBMIT
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        reportViolation('TAB_SWITCH', 'MEDIUM', 'Student switched browser tab during active assessment.');
+        if (!isAutoSubmittingRef.current && !result) {
+          isAutoSubmittingRef.current = true;
+          setTabSwitchTerminated(true);
+          reportViolation(
+            'TAB_SWITCH',
+            'SEVERE',
+            'Student switched browser tab. Exam auto-submitted immediately per integrity policy.'
+          );
+          submitExam();
+        }
       }
     };
 
     // 2. Window Blur (Switching Apps) Detection
     const handleWindowBlur = () => {
-      reportViolation('WINDOW_BLUR', 'MEDIUM', 'Student switched application or lost window focus.');
+      if (!isAutoSubmittingRef.current && !result) {
+        reportViolation('WINDOW_BLUR', 'MEDIUM', 'Student switched application or lost window focus.');
+      }
     };
 
     // 3. Fullscreen Exit Enforcement
@@ -233,78 +312,225 @@ export default function TakeAssessmentPage() {
       }
     };
 
-    // 4. Clipboard & Key Blocking
+    // 4. Strict Copy / Paste Blocking
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
-      setWarningMessage('INTEGRITY ALERT: Copying assessment question text is prohibited.');
+      reportViolation('WINDOW_BLUR', 'LOW', 'Unauthorized copy attempt prevented.');
+      setWarningMessage('INTEGRITY ALERT: Copying assessment question text is strictly disabled.');
+    };
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      setWarningMessage('INTEGRITY ALERT: Cut operation is disabled.');
     };
     const handlePaste = (e: ClipboardEvent) => {
       e.preventDefault();
-      setWarningMessage('INTEGRITY ALERT: Pasting external content is prohibited.');
+      reportViolation('WINDOW_BLUR', 'MEDIUM', 'Unauthorized paste attempt prevented.');
+      setWarningMessage('INTEGRITY ALERT: Pasting external content into assessment is strictly prohibited.');
     };
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      setWarningMessage('INTEGRITY ALERT: Context menu is disabled during the exam.');
+    };
+    const handleSelectStart = (e: Event) => {
+      e.preventDefault();
+    };
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+P, Ctrl+U, Ctrl+S
+      if (cmdOrCtrl && ['c', 'v', 'x', 'a', 'p', 'u', 's'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        e.stopPropagation();
+        setWarningMessage(`INTEGRITY ALERT: Keyboard shortcut Ctrl+${e.key.toUpperCase()} is disabled.`);
+        return;
+      }
+      // Block F12 and Devtools
+      if (
+        e.key === 'F12' ||
+        (cmdOrCtrl && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase()))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setWarningMessage('INTEGRITY ALERT: Developer inspection tools are disabled.');
+        return;
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('copy', handleCopy);
-    document.addEventListener('paste', handlePaste);
-    document.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('copy', handleCopy, true);
+    window.addEventListener('cut', handleCut, true);
+    window.addEventListener('paste', handlePaste, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+    window.addEventListener('selectstart', handleSelectStart, true);
+    window.addEventListener('dragstart', handleDragStart, true);
+    window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('copy', handleCopy);
-      document.removeEventListener('paste', handlePaste);
-      document.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopy, true);
+      window.removeEventListener('cut', handleCut, true);
+      window.removeEventListener('paste', handlePaste, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+      window.removeEventListener('selectstart', handleSelectStart, true);
+      window.removeEventListener('dragstart', handleDragStart, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Periodic Visual & Face Presence Telemetry (Every 8 seconds)
+  // Periodic Visual & Object Detection Telemetry (Every 1.5s)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || !mediaStream) return;
 
-    const interval = setInterval(() => {
-      if (!livePipVideoRef.current || !offscreenCanvasRef.current) return;
+    const interval = setInterval(async () => {
+      if (isDetectingRef.current || isAutoSubmittingRef.current) return;
       const video = livePipVideoRef.current;
       const canvas = offscreenCanvasRef.current;
+      if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
 
-      if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-      canvas.width = 64;
-      canvas.height = 48;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
+      isDetectingRef.current = true;
       try {
-        ctx.drawImage(video, 0, 0, 64, 48);
-        const frame = ctx.getImageData(0, 0, 64, 48);
-        const data = frame.data;
-        let totalBrightness = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        }
-        const avgBrightness = totalBrightness / (data.length / 4);
+        let isPersonFound = false;
 
-        // If average pixel brightness is near pitch black (< 10), webcam is covered
-        if (avgBrightness < 10) {
-          setFacePresent(false);
-          reportViolation('NO_FACE', 'HIGH', 'Camera view is obscured or pitch black. Face not visible.');
+        // A. Run TF / COCO-SSD object detection
+        if (visionModelRef.current) {
+          try {
+            const predictions = await visionModelRef.current.detect(video);
+
+            // 1. Mobile phone detection
+            const phone = predictions.find(
+              (p: any) =>
+                ['cell phone', 'remote', 'telephone'].includes(p.class) && p.score >= 0.38
+            );
+            if (phone) {
+              reportViolation(
+                'MOBILE_PHONE_DETECTED',
+                'SEVERE',
+                `Mobile phone detected in frame (${Math.round(phone.score * 100)}% confidence). Taking photos of question text is prohibited.`
+              );
+              setMobileAlertModal(true);
+            }
+
+            // 2. Person detection
+            const persons = predictions.filter(
+              (p: any) => p.class === 'person' && p.score >= 0.42
+            );
+            if (persons.length > 0) {
+              isPersonFound = true;
+            }
+            if (persons.length > 1) {
+              reportViolation(
+                'MULTIPLE_FACES',
+                'HIGH',
+                `Multiple persons (${persons.length}) detected in examination camera view.`
+              );
+            }
+          } catch (modelErr) {
+            console.warn('Vision detection cycle error:', modelErr);
+          }
+        }
+
+        // B. Canvas Luminance & Skin-tone heuristic
+        canvas.width = 64;
+        canvas.height = 48;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, 64, 48);
+          const frame = ctx.getImageData(0, 0, 64, 48);
+          const data = frame.data;
+          let totalBrightness = 0;
+          let skinCount = 0;
+          const totalPixels = data.length / 4;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            totalBrightness += (r + g + b) / 3;
+
+            // Skin tone color range
+            if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 10 && (r - b) > 15) {
+              skinCount++;
+            }
+          }
+
+          const avgBrightness = totalBrightness / totalPixels;
+          const skinRatio = skinCount / totalPixels;
+
+          // Camera covered or blacked out
+          if (avgBrightness < 12) {
+            isPersonFound = false;
+          } else if (!visionModelRef.current) {
+            // Fallback when model is not ready: check skin ratio
+            if (skinRatio >= 0.035) {
+              isPersonFound = true;
+            }
+          }
+        }
+
+        // C. Face Absence 3-Strike Enforcement
+        if (!isPersonFound) {
+          consecutiveFaceAbsentRef.current += 1;
+          // After 2 consecutive missing frames (~3 seconds)
+          if (consecutiveFaceAbsentRef.current >= 2) {
+            setFacePresent(false);
+
+            if (!faceModalActiveRef.current && !isAutoSubmittingRef.current) {
+              faceModalActiveRef.current = true;
+              const nextStrike = faceStrikeCountRef.current + 1;
+              faceStrikeCountRef.current = nextStrike;
+              setFaceStrikeCount(nextStrike);
+
+              if (nextStrike === 1) {
+                reportViolation('NO_FACE', 'LOW', 'Face not visible in camera frame (Warning 1/3).');
+                setFaceAlertModal({ show: true, strike: 1, isFinal: false, isTerminated: false });
+              } else if (nextStrike === 2) {
+                reportViolation('NO_FACE', 'MEDIUM', 'Face not visible in camera frame (Warning 2/3).');
+                setFaceAlertModal({ show: true, strike: 2, isFinal: false, isTerminated: false });
+              } else if (nextStrike === 3) {
+                reportViolation('NO_FACE', 'HIGH', 'Face not visible in camera frame (FINAL WARNING 3/3).');
+                setFaceAlertModal({ show: true, strike: 3, isFinal: true, isTerminated: false });
+              } else if (nextStrike >= 4) {
+                reportViolation('NO_FACE', 'SEVERE', 'Exam terminated: Maximum face absence limit exceeded.');
+                setFaceAlertModal({ show: true, strike: 4, isFinal: true, isTerminated: true });
+                isAutoSubmittingRef.current = true;
+                handleAutoSubmit('FACE_ABSENCE_EXCEEDED');
+              }
+            }
+          }
         } else {
+          consecutiveFaceAbsentRef.current = 0;
           setFacePresent(true);
         }
-      } catch {
-        // cross-origin canvas safety fallback
+      } catch (err) {
+        // catch canvas / detection safety
+      } finally {
+        isDetectingRef.current = false;
       }
-    }, 8000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [examData, result, showPreFlight, mediaStream]);
+
+  const acknowledgeFaceStrike = () => {
+    faceModalActiveRef.current = false;
+    consecutiveFaceAbsentRef.current = 0;
+    setFaceAlertModal(null);
+    setFacePresent(true);
+  };
+
+  const dismissMobileAlert = () => {
+    setMobileAlertModal(false);
+  };
 
   // ---------------------------------------------------------------------------
   // Timer countdown
@@ -334,7 +560,7 @@ export default function TakeAssessmentPage() {
     setFlagged((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
-  const handleAutoSubmit = async () => {
+  const handleAutoSubmit = async (reason?: string) => {
     if (submitting || result) return;
     await submitExam();
   };
@@ -678,9 +904,177 @@ export default function TakeAssessmentPage() {
   const answeredCount = Object.keys(answers).length;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200 select-none">
+    <div
+      className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200 select-none"
+      style={{
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none',
+      }}
+    >
       {/* Offscreen hidden canvas for luminance telemetry */}
       <canvas ref={offscreenCanvasRef} className="hidden" />
+
+      {/* 1. Tab Switching Auto-Submit Blocker Overlay */}
+      {tabSwitchTerminated && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-rose-600 rounded-3xl p-8 text-center space-y-6 shadow-2xl shadow-rose-950/80">
+            <div className="w-20 h-20 rounded-3xl bg-rose-500/20 text-rose-500 border border-rose-500/30 flex items-center justify-center mx-auto animate-pulse">
+              <ShieldAlert className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-3">
+              <span className="px-3 py-1 text-xs font-mono font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
+                Exam Automatically Terminated
+              </span>
+              <h2 className="text-2xl font-black text-white">Tab Switching Detected</h2>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                You navigated away from the exam tab. According to institutional examination rules, tab switching results in immediate automatic submission of your assessment.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 space-y-2">
+              <div className="flex items-center justify-between">
+                <span>Auto-submission Status:</span>
+                <span className="text-rose-400 font-bold flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting to Evaluation Server...
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Your submitted responses and proctoring audit telemetry have been transmitted to the Faculty Audit Console.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Face Absence 3-Strike Warning Overlay */}
+      {faceAlertModal?.show && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div
+            className={`max-w-lg w-full bg-slate-900 rounded-3xl p-8 text-center space-y-6 shadow-2xl border-2 ${
+              faceAlertModal.isTerminated
+                ? 'border-rose-600 shadow-rose-950/80'
+                : faceAlertModal.isFinal
+                ? 'border-rose-500 shadow-rose-950/80 ring-4 ring-rose-500/30 animate-pulse'
+                : 'border-amber-500/70 shadow-amber-950/50'
+            }`}
+          >
+            <div
+              className={`w-20 h-20 rounded-3xl mx-auto flex items-center justify-center ${
+                faceAlertModal.isTerminated || faceAlertModal.isFinal
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+              }`}
+            >
+              {faceAlertModal.isTerminated ? (
+                <XCircle className="w-10 h-10" />
+              ) : faceAlertModal.isFinal ? (
+                <ShieldAlert className="w-10 h-10" />
+              ) : (
+                <CameraOff className="w-10 h-10" />
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <span
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-full border uppercase tracking-wider ${
+                  faceAlertModal.isTerminated
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : faceAlertModal.isFinal
+                    ? 'bg-rose-500/30 text-rose-200 border-rose-500/50'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {faceAlertModal.isTerminated
+                  ? 'Auto-Submission Triggered'
+                  : faceAlertModal.isFinal
+                  ? 'FINAL WARNING: Strike 3 of 3'
+                  : `Warning: Strike ${faceAlertModal.strike} of 3`}
+              </span>
+
+              <h2 className="text-2xl font-black text-white">
+                {faceAlertModal.isTerminated
+                  ? 'Assessment Auto-Submitted'
+                  : faceAlertModal.isFinal
+                  ? 'Critical Warning: Face Missing!'
+                  : 'You Are Not Visible in Camera'}
+              </h2>
+
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {faceAlertModal.isTerminated ? (
+                  'You were absent from the camera frame 4 times despite 3 prior integrity alerts. In accordance with examination regulations, your assessment has been automatically submitted.'
+                ) : faceAlertModal.isFinal ? (
+                  <strong className="text-rose-300 block">
+                    You are not visible in the camera frame! THIS IS YOUR FINAL WARNING. If this is done again, your exam will be automatically submitted immediately!
+                  </strong>
+                ) : (
+                  `You are not visible in the camera frame. Please position yourself clearly in front of the webcam. (Warning ${faceAlertModal.strike} of 3).`
+                )}
+              </p>
+            </div>
+
+            {faceAlertModal.isTerminated ? (
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Finalizing assessment auto-submission...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={acknowledgeFaceStrike}
+                className={`w-full py-3.5 rounded-2xl text-white font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 ${
+                  faceAlertModal.isFinal
+                    ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30'
+                    : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                <span>
+                  {faceAlertModal.isFinal
+                    ? 'I Understand & Return to Exam'
+                    : 'I Am Back in Frame'}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Mobile Device / Phone Detected Modal */}
+      {mobileAlertModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-rose-500 rounded-3xl p-8 text-center space-y-6 shadow-2xl shadow-rose-950/80 animate-pulse">
+            <div className="w-20 h-20 rounded-3xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto">
+              <Smartphone className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-3">
+              <span className="px-3 py-1 text-xs font-mono font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
+                Integrity Violation Detected
+              </span>
+              <h2 className="text-2xl font-black text-white">Mobile Device Detected!</h2>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                The AI proctoring system detected a <strong className="text-rose-400">cell phone / mobile device</strong> in camera view. Taking photographs of exam questions, scanning screens, or using secondary devices is strictly prohibited.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-300 font-medium">
+              ⚠️ This incident has been logged with camera telemetry and timestamp in the Faculty Proctoring Audit Console (-35% Trust Score).
+            </div>
+
+            <button
+              type="button"
+              onClick={dismissMobileAlert}
+              className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>I Have Removed the Mobile Device</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen Exit Blocking Overlay */}
       {isFullscreenExited && (
