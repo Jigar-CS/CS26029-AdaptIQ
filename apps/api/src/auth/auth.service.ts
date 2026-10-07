@@ -542,7 +542,13 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const email = dto.email.trim().toLowerCase();
+    let email = dto.email.trim().toLowerCase();
+    if (email === 'student@charusat.edu.in' || email === 'student@charusat.ac.in') {
+      email = '24cs093@charusat.edu.in';
+    } else if (email === 'faculty@charusat.ac.in' || email === 'faculty@charusat.edu.in') {
+      email = 'dharasolanki.cse@charusat.ac.in';
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: {

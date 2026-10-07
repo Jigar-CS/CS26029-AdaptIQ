@@ -195,7 +195,8 @@ export default function TakeAssessmentPage() {
   const reportViolation = (
     type: string,
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'SEVERE',
-    details: string
+    details: string,
+    snapshot?: string
   ) => {
     if (!examData || result || showPreFlight) return;
 
@@ -217,13 +218,15 @@ export default function TakeAssessmentPage() {
     setViolationCount((prev) => prev + 1);
     setWarningMessage(`INTEGRITY ALERT [${type}]: ${details} (-${penalty}% Trust Score)`);
 
+    const detailPayload = snapshot ? `${details} [SNAPSHOT:${snapshot}]` : details;
+
     // Report to backend proctoring service
     if (examData.submissionId) {
       api.post(`/proctoring/sessions/${examData.submissionId}/violation`, {
         type,
         severity,
         confidence: 0.98,
-        details,
+        details: detailPayload,
       }).catch((e) => console.error('Violation reporting failed:', e));
     }
   };
@@ -405,33 +408,59 @@ export default function TakeAssessmentPage() {
         if (visionModelRef.current) {
           try {
             const predictions = await visionModelRef.current.detect(video);
+            const vWidth = video.videoWidth || 640;
+            const vHeight = video.videoHeight || 480;
 
-            // 1. Mobile phone detection
-            const phone = predictions.find(
-              (p: any) =>
-                ['cell phone', 'remote', 'telephone'].includes(p.class) && p.score >= 0.38
-            );
+            // 1. Mobile phone detection with visual snapshot capture
+            const phone = predictions.find((p: any) => {
+              if (!['cell phone', 'remote', 'telephone'].includes(p.class) || p.score < 0.38) return false;
+              // Spatial focus check: Phone must be within active student workspace (central 85% width)
+              const cx = (p.bbox[0] + p.bbox[2] / 2) / vWidth;
+              return cx >= 0.08 && cx <= 0.92;
+            });
+
             if (phone) {
+              // Capture 320x240 compressed JPEG visual evidence snapshot for faculty audit console
+              let snapshotUri = '';
+              try {
+                canvas.width = 320;
+                canvas.height = 240;
+                const snapCtx = canvas.getContext('2d');
+                if (snapCtx) {
+                  snapCtx.drawImage(video, 0, 0, 320, 240);
+                  snapshotUri = canvas.toDataURL('image/jpeg', 0.6);
+                }
+              } catch {}
+
               reportViolation(
                 'MOBILE_PHONE_DETECTED',
                 'SEVERE',
-                `Mobile phone detected in frame (${Math.round(phone.score * 100)}% confidence). Taking photos of question text is prohibited.`
+                `Mobile phone detected in workstation view (${Math.round(phone.score * 100)}% confidence).`,
+                snapshotUri
               );
               setMobileAlertModal(true);
             }
 
-            // 2. Person detection
-            const persons = predictions.filter(
-              (p: any) => p.class === 'person' && p.score >= 0.42
-            );
-            if (persons.length > 0) {
+            // 2. Person detection with Lab Spatial Neighbor Filter
+            // In computer labs, students sit in adjacent rows ~1m apart.
+            // Filter: Only count persons in the primary central workstation zone (cx: 8%-92%)
+            // and with significant bounding area (>= 6% of frame) to avoid background passersby.
+            const primaryPersons = predictions.filter((p: any) => {
+              if (p.class !== 'person' || p.score < 0.42) return false;
+              const [bx, by, bw, bh] = p.bbox;
+              const cx = (bx + bw / 2) / vWidth;
+              const areaRatio = (bw * bh) / (vWidth * vHeight);
+              return cx >= 0.08 && cx <= 0.92 && areaRatio >= 0.06;
+            });
+
+            if (primaryPersons.length > 0) {
               isPersonFound = true;
             }
-            if (persons.length > 1) {
+            if (primaryPersons.length > 1) {
               reportViolation(
                 'MULTIPLE_FACES',
                 'HIGH',
-                `Multiple persons (${persons.length}) detected in examination camera view.`
+                `Multiple individuals (${primaryPersons.length}) detected within primary examination workspace.`
               );
             }
           } catch (modelErr) {
@@ -562,7 +591,16 @@ export default function TakeAssessmentPage() {
 
   const handleAutoSubmit = async (reason?: string) => {
     if (submitting || result) return;
-    await submitExam();
+    // Lab concurrency jitter: Stagger simultaneous end-of-exam submissions across 0-2200ms
+    // Immediate violations (tab switch, face absence) submit with 0ms delay
+    const jitter =
+      reason === 'TAB_SWITCH' || reason === 'FACE_ABSENCE_EXCEEDED'
+        ? 0
+        : Math.floor(Math.random() * 2200);
+
+    setTimeout(() => {
+      submitExam();
+    }, jitter);
   };
 
   const submitExam = async () => {

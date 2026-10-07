@@ -50,8 +50,10 @@ export class ProctoringService {
       if (!resolvedStudentId) {
         throw new BadRequestException('Student ID is required to initialize proctoring session.');
       }
-      session = await this.prisma.proctoringSession.create({
-        data: {
+      session = await this.prisma.proctoringSession.upsert({
+        where: { submissionId },
+        update: {},
+        create: {
           submissionId,
           studentId: resolvedStudentId,
           status: ProctoringSessionStatus.IN_PROGRESS,

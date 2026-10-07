@@ -333,21 +333,17 @@ export class AssessmentService {
   }
 
   private async ensureProctoringSession(submissionId: string, studentId: string) {
-    let proc = await this.prisma.proctoringSession.findUnique({
+    return this.prisma.proctoringSession.upsert({
       where: { submissionId },
+      update: {},
+      create: {
+        submissionId,
+        studentId,
+        status: 'IN_PROGRESS' as any,
+        trustScore: 100.0,
+        violationsCount: 0,
+      },
     });
-    if (!proc) {
-      proc = await this.prisma.proctoringSession.create({
-        data: {
-          submissionId,
-          studentId,
-          status: 'IN_PROGRESS' as any,
-          trustScore: 100.0,
-          violationsCount: 0,
-        },
-      });
-    }
-    return proc;
   }
 
   private formatAttemptPayload(assessment: any, submission: any, proctoring?: any) {
@@ -420,7 +416,28 @@ export class AssessmentService {
       throw new ForbiddenException('Unauthorized submission access.');
     }
 
-    if (submission.status !== SubmissionStatus.IN_PROGRESS) {
+    // Atomic Lock: Only proceed if this submission is currently IN_PROGRESS
+    // If two requests land at the exact same millisecond, only the first can transition it!
+    const lockResult = await this.prisma.assessmentSubmission.updateMany({
+      where: {
+        id: submissionId,
+        studentId: studentProfileId,
+        status: SubmissionStatus.IN_PROGRESS,
+      },
+      data: {
+        status: SubmissionStatus.SUBMITTED,
+        submittedAt: new Date(),
+      },
+    });
+
+    if (lockResult.count === 0) {
+      // Check if already completed or evaluated by a concurrent request
+      const existing = await this.prisma.assessmentSubmission.findUnique({
+        where: { id: submissionId },
+      });
+      if (existing && existing.status !== SubmissionStatus.IN_PROGRESS) {
+        return existing; // Return existing evaluated submission idempotently without error
+      }
       throw new BadRequestException('This assessment attempt has already been submitted.');
     }
 
@@ -453,7 +470,10 @@ export class AssessmentService {
       });
     }
 
-    // Save individual answer records
+    // Clean up any partial answers and insert clean records atomically
+    await this.prisma.submissionAnswer.deleteMany({
+      where: { submissionId: submission.id },
+    });
     await this.prisma.submissionAnswer.createMany({
       data: answerRecords,
     });
@@ -465,7 +485,6 @@ export class AssessmentService {
       where: { id: submission.id },
       data: {
         status: SubmissionStatus.EVALUATED,
-        submittedAt: new Date(),
         totalScore,
         percentage,
         passed,
