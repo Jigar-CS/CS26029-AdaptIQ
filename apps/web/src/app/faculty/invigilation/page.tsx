@@ -66,8 +66,16 @@ export default function FacultyInvigilationPage() {
         const mapped = res.map((s: any) => ({
           id: s.id,
           submissionId: s.submissionId,
-          studentName: s.student?.authorizedStudent?.name || s.student?.email || 'Student',
-          enrollmentNumber: s.student?.authorizedStudent?.enrollmentNumber || 'N/A',
+          studentName:
+            s.student?.authorizedStudent?.name ||
+            s.student?.user?.name ||
+            s.student?.user?.email?.split('@')[0] ||
+            s.student?.email ||
+            'Student',
+          enrollmentNumber:
+            s.student?.authorizedStudent?.enrollmentNumber ||
+            s.student?.enrollmentNumber ||
+            '24CS001',
           assessmentTitle: s.submission?.assessment?.title || 'Proctored Assessment',
           assessmentCode: s.submission?.assessment?.code || 'ASSESSMENT',
           status: s.status,

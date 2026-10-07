@@ -30,17 +30,30 @@ export class ProctoringService {
   /**
    * Initializes or fetches a proctoring session for an active assessment submission.
    */
-  async startOrGetSession(submissionId: string, studentId: string) {
-    let session = await this.prisma.proctoringSession.findUnique({
-      where: { submissionId },
+  async startOrGetSession(submissionId: string, studentId?: string) {
+    let session = await this.prisma.proctoringSession.findFirst({
+      where: {
+        OR: [{ id: submissionId }, { submissionId }],
+      },
       include: { violations: true },
     });
 
     if (!session) {
+      let resolvedStudentId = studentId;
+      if (!resolvedStudentId) {
+        const sub = await this.prisma.assessmentSubmission.findUnique({
+          where: { id: submissionId },
+          select: { studentId: true },
+        });
+        resolvedStudentId = sub?.studentId;
+      }
+      if (!resolvedStudentId) {
+        throw new BadRequestException('Student ID is required to initialize proctoring session.');
+      }
       session = await this.prisma.proctoringSession.create({
         data: {
           submissionId,
-          studentId,
+          studentId: resolvedStudentId,
           status: ProctoringSessionStatus.IN_PROGRESS,
           trustScore: 100.0,
           violationsCount: 0,
@@ -56,8 +69,10 @@ export class ProctoringService {
    * Completes face enrollment verification at test start (Privacy by Design: no permanent raw biometric storage).
    */
   async verifyFaceEnrollment(sessionId: string) {
-    const session = await this.prisma.proctoringSession.findUnique({
-      where: { id: sessionId },
+    const session = await this.prisma.proctoringSession.findFirst({
+      where: {
+        OR: [{ id: sessionId }, { submissionId: sessionId }],
+      },
     });
 
     if (!session) {
@@ -65,11 +80,14 @@ export class ProctoringService {
     }
 
     return this.prisma.proctoringSession.update({
-      where: { id: sessionId },
+      where: { id: session.id },
       data: {
         faceEnrollmentVerified: true,
         enrolledAt: new Date(),
-        status: ProctoringSessionStatus.IN_PROGRESS,
+        status:
+          session.status === ProctoringSessionStatus.FLAGGED
+            ? ProctoringSessionStatus.FLAGGED
+            : ProctoringSessionStatus.IN_PROGRESS,
       },
     });
   }
@@ -78,8 +96,10 @@ export class ProctoringService {
    * Logs an integrity violation event, updates trust score and auto-flags if score drops below threshold.
    */
   async logViolation(sessionId: string, dto: LogViolationDto) {
-    const session = await this.prisma.proctoringSession.findUnique({
-      where: { id: sessionId },
+    const session = await this.prisma.proctoringSession.findFirst({
+      where: {
+        OR: [{ id: sessionId }, { submissionId: sessionId }],
+      },
     });
 
     if (!session) {
@@ -98,7 +118,7 @@ export class ProctoringService {
 
     const [updatedSession, violation] = await this.prisma.$transaction([
       this.prisma.proctoringSession.update({
-        where: { id: sessionId },
+        where: { id: session.id },
         data: {
           trustScore: newTrustScore,
           violationsCount: newCount,
@@ -107,7 +127,7 @@ export class ProctoringService {
       }),
       this.prisma.proctoringViolation.create({
         data: {
-          sessionId,
+          sessionId: session.id,
           type: dto.type,
           severity: dto.severity,
           confidence: dto.confidence ?? 0.95,
@@ -126,12 +146,17 @@ export class ProctoringService {
    * Retrieves full proctoring audit log with violations timeline.
    */
   async getSessionDetails(sessionId: string) {
-    const session = await this.prisma.proctoringSession.findUnique({
-      where: { id: sessionId },
+    const session = await this.prisma.proctoringSession.findFirst({
+      where: {
+        OR: [{ id: sessionId }, { submissionId: sessionId }],
+      },
       include: {
         violations: { orderBy: { timestamp: 'asc' } },
         student: {
-          include: { authorizedStudent: true },
+          include: {
+            authorizedStudent: true,
+            user: { select: { email: true } },
+          },
         },
         submission: {
           include: { assessment: { select: { title: true, code: true } } },
@@ -157,7 +182,10 @@ export class ProctoringService {
       include: {
         violations: true,
         student: {
-          include: { authorizedStudent: true },
+          include: {
+            authorizedStudent: true,
+            user: { select: { email: true } },
+          },
         },
         submission: {
           include: { assessment: { select: { title: true, code: true } } },

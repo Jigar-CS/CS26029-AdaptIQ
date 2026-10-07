@@ -307,7 +307,8 @@ export class AssessmentService {
     // If an in-progress attempt already exists, return it
     const active = existingSubmissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
     if (active) {
-      return this.formatAttemptPayload(assessment, active);
+      const proc = await this.ensureProctoringSession(active.id, effectiveProfileId);
+      return this.formatAttemptPayload(assessment, active, proc);
     }
 
     if (existingSubmissions.length >= assessment.allowedAttempts) {
@@ -327,10 +328,29 @@ export class AssessmentService {
       },
     });
 
-    return this.formatAttemptPayload(assessment, newSubmission);
+    const proc = await this.ensureProctoringSession(newSubmission.id, effectiveProfileId);
+    return this.formatAttemptPayload(assessment, newSubmission, proc);
   }
 
-  private formatAttemptPayload(assessment: any, submission: any) {
+  private async ensureProctoringSession(submissionId: string, studentId: string) {
+    let proc = await this.prisma.proctoringSession.findUnique({
+      where: { submissionId },
+    });
+    if (!proc) {
+      proc = await this.prisma.proctoringSession.create({
+        data: {
+          submissionId,
+          studentId,
+          status: 'IN_PROGRESS' as any,
+          trustScore: 100.0,
+          violationsCount: 0,
+        },
+      });
+    }
+    return proc;
+  }
+
+  private formatAttemptPayload(assessment: any, submission: any, proctoring?: any) {
     let questions = assessment.questions.map((aq: any) => ({
       id: aq.question.id,
       questionText: aq.question.questionText,
@@ -360,6 +380,9 @@ export class AssessmentService {
         totalQuestions: assessment.totalQuestions,
       },
       remainingSeconds,
+      proctoringSessionId: proctoring?.id || null,
+      trustScore: proctoring?.trustScore ?? 100,
+      faceEnrollmentVerified: proctoring?.faceEnrollmentVerified ?? false,
       questions,
     };
   }
@@ -448,6 +471,22 @@ export class AssessmentService {
         passed,
       },
     });
+
+    // Update linked proctoring session completion status
+    const existingProc = await this.prisma.proctoringSession.findUnique({
+      where: { submissionId: submission.id },
+    });
+    if (existingProc) {
+      const finalStatus =
+        existingProc.status === 'FLAGGED' ? 'FLAGGED' : 'COMPLETED';
+      await this.prisma.proctoringSession.update({
+        where: { id: existingProc.id },
+        data: {
+          status: finalStatus as any,
+          completedAt: new Date(),
+        },
+      });
+    }
 
     return {
       submissionId: evaluatedSubmission.id,
