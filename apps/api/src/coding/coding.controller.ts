@@ -12,6 +12,8 @@ import {
   CodingService,
   SubmitCodeDto,
   RunCodeDto,
+  GenerateAiProblemDto,
+  CreateCodingProblemDto,
 } from './coding.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -23,8 +25,26 @@ export class CodingController {
   constructor(private readonly codingService: CodingService) {}
 
   @Get('problems')
-  async getProblems(@Query('difficulty') difficulty?: QuestionDifficulty) {
-    return this.codingService.getProblems(difficulty);
+  async getProblems(
+    @Query('difficulty') difficulty?: QuestionDifficulty,
+    @Query('courseId') courseId?: string,
+  ) {
+    return this.codingService.getProblems(difficulty, courseId);
+  }
+
+  @Post('problems')
+  async createProblem(@Body() dto: CreateCodingProblemDto) {
+    return this.codingService.createProblem(dto);
+  }
+
+  @Post('problems/generate-ai')
+  async generateAiProblem(@Body() dto: GenerateAiProblemDto) {
+    return this.codingService.generateAiProblem(dto);
+  }
+
+  @Post('problems/seed-curated')
+  async seedCuratedProblems() {
+    return this.codingService.seedCuratedProblems();
   }
 
   @Get('problems/:slug')

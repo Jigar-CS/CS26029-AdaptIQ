@@ -26,8 +26,15 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
   const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
+  const isAiOrLongRunning =
+    endpoint.includes('/ai') ||
+    endpoint.includes('/generate') ||
+    endpoint.includes('/coding') ||
+    endpoint.includes('/submit');
+  const timeoutMs = (options as any)?.timeout || (isAiOrLongRunning ? 45000 : 20000);
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {

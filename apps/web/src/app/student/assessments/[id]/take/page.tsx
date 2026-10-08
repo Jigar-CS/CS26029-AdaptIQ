@@ -29,6 +29,15 @@ import {
   Eye,
   EyeOff,
   Smartphone,
+  Terminal,
+  Code,
+  Play,
+  RotateCcw,
+  Sparkles,
+  FileCode,
+  Check,
+  CheckSquare,
+  Layers,
 } from 'lucide-react';
 
 export default function TakeAssessmentPage() {
@@ -46,6 +55,15 @@ export default function TakeAssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+
+  // ---------------------------------------------------------------------------
+  // In-Browser Code Judge Workspace State
+  // ---------------------------------------------------------------------------
+  const [codingAnswers, setCodingAnswers] = useState<Record<string, { sourceCode: string; language: string }>>({});
+  const [codingActiveTab, setCodingActiveTab] = useState<'problem' | 'testcases'>('problem');
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [runOutput, setRunOutput] = useState<any | null>(null);
+  const [activeTestCaseIdx, setActiveTestCaseIdx] = useState<number>(0);
 
   // ---------------------------------------------------------------------------
   // Phase 9: AI Proctoring & Multi-Modal Telemetry State
@@ -129,6 +147,24 @@ export default function TakeAssessmentPage() {
       }
       if (data.faceEnrollmentVerified) {
         setFaceEnrolled(true);
+      }
+      // Initialize default starter codes for any coding questions
+      if (data.questions && data.questions.length > 0) {
+        const initialCoding: Record<string, { sourceCode: string; language: string }> = {};
+        data.questions.forEach((q: any) => {
+          if (q.type === 'CODING' || q.codingProblem) {
+            const prob = q.codingProblem;
+            const defLang = 'PYTHON';
+            const starter = prob?.starterCodes?.[defLang] ||
+              prob?.starterCodes?.['JAVASCRIPT'] ||
+              'def solution(*args):\n    # Write your algorithmic solution here\n    pass\n';
+            initialCoding[q.id] = {
+              sourceCode: starter,
+              language: defLang,
+            };
+          }
+        });
+        setCodingAnswers(initialCoding);
       }
       // Initialize devices right away
       requestDevicePermissions();
@@ -603,6 +639,71 @@ export default function TakeAssessmentPage() {
     }, jitter);
   };
 
+  const handleCodeChange = (qId: string, val: string) => {
+    setCodingAnswers((prev) => ({
+      ...prev,
+      [qId]: {
+        sourceCode: val,
+        language: prev[qId]?.language || 'PYTHON',
+      },
+    }));
+  };
+
+  const handleLanguageChange = (qId: string, newLang: string) => {
+    const prob = examData?.questions?.find((q: any) => q.id === qId)?.codingProblem;
+    const starter = prob?.starterCodes?.[newLang] || '';
+    setCodingAnswers((prev) => ({
+      ...prev,
+      [qId]: {
+        language: newLang,
+        sourceCode: prev[qId]?.sourceCode && prev[qId]?.sourceCode !== prob?.starterCodes?.[prev[qId]?.language]
+          ? prev[qId].sourceCode
+          : (starter || prev[qId]?.sourceCode || ''),
+      },
+    }));
+  };
+
+  const handleResetCode = (qId: string) => {
+    const prob = examData?.questions?.find((q: any) => q.id === qId)?.codingProblem;
+    const curLang = codingAnswers[qId]?.language || 'PYTHON';
+    const starter = prob?.starterCodes?.[curLang] || '';
+    if (confirm('Reset your code to the default template? Any unsaved edits will be lost.')) {
+      setCodingAnswers((prev) => ({
+        ...prev,
+        [qId]: {
+          language: curLang,
+          sourceCode: starter,
+        },
+      }));
+      setRunOutput(null);
+    }
+  };
+
+  const handleRunSampleCases = async (q: any) => {
+    setIsRunningCode(true);
+    setRunOutput(null);
+    try {
+      const cur = codingAnswers[q.id] || {
+        sourceCode: q.codingProblem?.starterCodes?.PYTHON || '',
+        language: 'PYTHON',
+      };
+      const probTarget = q.codingProblem?.slug || q.codingProblem?.id || 'adhoc';
+      const res = await api.post(`/coding/problems/${probTarget}/run`, {
+        language: cur.language,
+        sourceCode: cur.sourceCode,
+        sampleTestCases: q.codingProblem?.sampleTestCases,
+      });
+      setRunOutput(res);
+    } catch (err: any) {
+      setRunOutput({
+        status: 'ERROR',
+        errorMessage: err.message || 'Execution error encountered',
+      });
+    } finally {
+      setIsRunningCode(false);
+    }
+  };
+
   const submitExam = async () => {
     if (!examData) return;
     setSubmitting(true);
@@ -615,6 +716,9 @@ export default function TakeAssessmentPage() {
     const answerPayload = examData.questions.map((q: any) => ({
       questionId: q.id,
       selectedOptionId: answers[q.id] || null,
+      sourceCode: codingAnswers[q.id]?.sourceCode || undefined,
+      code: codingAnswers[q.id]?.sourceCode || undefined,
+      language: codingAnswers[q.id]?.language || 'PYTHON',
       timeSpentSeconds: 30,
     }));
 
@@ -1286,11 +1390,34 @@ export default function TakeAssessmentPage() {
         {/* Left: Question area */}
         <div className="lg:col-span-3 space-y-6">
           {currentQ && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xs dark:shadow-xl space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Question {currentIdx + 1} of {qList.length} • {currentQ.points} Points
-                </span>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs dark:shadow-xl space-y-6">
+              {/* Top Meta Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                    Question {currentIdx + 1} of {qList.length} • {currentQ.points} Points
+                  </span>
+                  {(currentQ.type === 'CODING' || currentQ.codingProblem) && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                      <Terminal className="w-3 h-3 text-cyan-400" />
+                      Practical Coding Exam
+                    </span>
+                  )}
+                  {currentQ.difficulty && (
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                        currentQ.difficulty === 'EASY'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : currentQ.difficulty === 'HARD'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      }`}
+                    >
+                      {currentQ.difficulty}
+                    </span>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={() => handleToggleFlag(currentIdx)}
@@ -1304,48 +1431,335 @@ export default function TakeAssessmentPage() {
                 </button>
               </div>
 
+              {/* Title */}
               <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed">
-                {currentQ.questionText}
+                {currentQ.codingProblem?.title || currentQ.questionText}
               </h3>
 
-              {/* Options */}
-              <div className="space-y-3 pt-2">
-                {currentQ.options?.map((opt: any, oIdx: number) => {
-                  const isSelected = answers[currentQ.id] === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleSelectOption(currentQ.id, opt.id)}
-                      className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-medium transition flex items-center justify-between ${
-                        isSelected
-                          ? 'bg-amber-50 dark:bg-amber-600/20 border-amber-500 text-amber-950 dark:text-white ring-2 ring-amber-500/30'
-                          : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold ${
-                            isSelected
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          {String.fromCharCode(65 + oIdx)}
-                        </span>
-                        <span>{opt.optionText}</span>
+              {/* Conditional: CODING QUESTION WORKSPACE */}
+              {(currentQ.type === 'CODING' || currentQ.codingProblem) ? (
+                <div className="space-y-5">
+                  {/* Problem Details & Sample Test Cases Tabs */}
+                  <div className="rounded-2xl border border-slate-700/80 bg-[#0F172A] overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-[#1E293B] border-b border-slate-700 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setCodingActiveTab('problem')}
+                        className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
+                          codingActiveTab === 'problem'
+                            ? 'bg-cyan-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <FileCode className="w-3.5 h-3.5" />
+                        <span>Problem Statement</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCodingActiveTab('testcases')}
+                        className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
+                          codingActiveTab === 'testcases'
+                            ? 'bg-cyan-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Sample Test Cases ({currentQ.codingProblem?.sampleTestCases?.length || 0})</span>
+                      </button>
+                    </div>
+
+                    <div className="p-5 text-xs sm:text-sm text-slate-200">
+                      {codingActiveTab === 'problem' ? (
+                        <div className="space-y-4">
+                          {/* Full Problem Description */}
+                          <div className="whitespace-pre-wrap font-sans text-slate-200 leading-relaxed">
+                            {currentQ.codingProblem?.description || currentQ.questionText}
+                          </div>
+
+                          {/* Constraints */}
+                          {currentQ.codingProblem?.constraints && (
+                            <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-1">
+                              <span className="text-[11px] font-bold text-amber-400 block uppercase tracking-wider">
+                                Constraints
+                              </span>
+                              <div className="whitespace-pre-wrap font-mono text-[11px] text-slate-300">
+                                {currentQ.codingProblem.constraints}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Hints */}
+                          {currentQ.codingProblem?.hints && (Array.isArray(currentQ.codingProblem.hints) ? currentQ.codingProblem.hints.length > 0 : !!currentQ.codingProblem.hints) && (
+                            <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-1">
+                              <span className="text-[11px] font-bold text-indigo-300 block uppercase tracking-wider flex items-center gap-1">
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                                Algorithmic Guidance & Hint
+                              </span>
+                              <div className="text-[11px] text-slate-300">
+                                {Array.isArray(currentQ.codingProblem.hints)
+                                  ? currentQ.codingProblem.hints.join(' • ')
+                                  : currentQ.codingProblem.hints}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-[11px] text-slate-400 mb-2">
+                            These sample test cases are executed when you click <strong className="text-cyan-300">Run Sample Cases</strong>. (Evaluation check test cases will remain hidden and run upon final exam submission).
+                          </p>
+                          {(!currentQ.codingProblem?.sampleTestCases || currentQ.codingProblem.sampleTestCases.length === 0) ? (
+                            <div className="p-6 text-center text-slate-500">
+                              No sample test cases specified for this problem.
+                            </div>
+                          ) : (
+                            currentQ.codingProblem.sampleTestCases.map((stc: any, sIdx: number) => (
+                              <div
+                                key={sIdx}
+                                className="p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 space-y-2 font-mono text-xs"
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-400">
+                                  <span>Sample Case {sIdx + 1}</span>
+                                  {stc.explanation && (
+                                    <span className="text-slate-400 font-normal font-sans text-[10px]">
+                                      {stc.explanation}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800">
+                                    <span className="text-[10px] text-slate-500 font-sans block mb-0.5">Sample Input:</span>
+                                    <span className="text-emerald-300">{stc.input}</span>
+                                  </div>
+                                  <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800">
+                                    <span className="text-[10px] text-slate-500 font-sans block mb-0.5">Sample Expected Output:</span>
+                                    <span className="text-white font-bold">{stc.expectedOutput}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* In-Browser Code Judge IDE Panel */}
+                  <div className="rounded-2xl border border-cyan-500/30 bg-[#0B0F19] overflow-hidden shadow-2xl space-y-0">
+                    {/* IDE Toolbar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-[#111827] border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="w-4 h-4 text-cyan-400" />
+                        <span className="text-xs font-bold text-white">Code Solution</span>
+                        <div className="flex items-center gap-1 bg-[#1E293B] p-1 rounded-xl border border-slate-700 ml-2">
+                          {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'].map((langKey) => {
+                            const isCur = (codingAnswers[currentQ.id]?.language || 'PYTHON') === langKey;
+                            const langLabel = langKey === 'PYTHON' ? 'Python 3' : langKey === 'JAVASCRIPT' ? 'JavaScript' : langKey === 'CPP' ? 'C++' : 'Java';
+                            return (
+                              <button
+                                key={langKey}
+                                type="button"
+                                onClick={() => handleLanguageChange(currentQ.id, langKey)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                                  isCur
+                                    ? 'bg-cyan-600 text-white shadow-xs'
+                                    : 'text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {langLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleResetCode(currentQ.id)}
+                          className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition flex items-center gap-1"
+                          title="Reset to starter template"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Reset</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRunSampleCases(currentQ)}
+                          disabled={isRunningCode}
+                          className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isRunningCode ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Judging...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Run Sample Cases</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Interactive Code Editor Area */}
+                    <div className="relative">
+                      <textarea
+                        rows={12}
+                        value={codingAnswers[currentQ.id]?.sourceCode ?? (currentQ.codingProblem?.starterCodes?.[codingAnswers[currentQ.id]?.language || 'PYTHON'] || '')}
+                        onChange={(e) => handleCodeChange(currentQ.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const target = e.currentTarget;
+                            const start = target.selectionStart;
+                            const end = target.selectionEnd;
+                            const val = target.value;
+                            const updated = val.substring(0, start) + '    ' + val.substring(end);
+                            handleCodeChange(currentQ.id, updated);
+                            setTimeout(() => {
+                              target.selectionStart = target.selectionEnd = start + 4;
+                            }, 0);
+                          }
+                        }}
+                        spellCheck={false}
+                        autoCapitalize="none"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        placeholder="Write your algorithmic solution here..."
+                        className="w-full p-4 bg-[#0A0E17] text-cyan-200 placeholder-slate-600 font-mono text-xs sm:text-sm leading-relaxed focus:outline-none resize-y border-none"
+                        style={{ tabSize: 4 }}
+                      />
+                    </div>
+
+                    {/* Code Runner Execution Console */}
+                    {runOutput && (
+                      <div className="p-4 bg-[#111827] border-t border-slate-800 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                runOutput.status === 'ACCEPTED'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              }`}
+                            >
+                              {runOutput.status === 'ACCEPTED' ? '✓ Sample Cases Passed' : `✕ ${runOutput.status || 'FAILED'}`}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              Passed {runOutput.testCasesPassed || 0} / {runOutput.totalTestCases || 0} cases
+                            </span>
+                          </div>
+
+                          {runOutput.executionTimeMs !== undefined && (
+                            <span className="text-[11px] font-mono text-slate-400">
+                              Time: {runOutput.executionTimeMs}ms • Mem: {runOutput.memoryKb || 128}KB
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Error Message if Compilation / Runtime Error */}
+                        {runOutput.errorMessage && (
+                          <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 font-mono text-xs whitespace-pre-wrap">
+                            {runOutput.errorMessage}
+                          </div>
+                        )}
+
+                        {/* Detailed Test Results Breakdown */}
+                        {runOutput.testResults && runOutput.testResults.length > 0 && (
+                          <div className="space-y-2 pt-1">
+                            {runOutput.testResults.map((tr: any, trIdx: number) => (
+                              <div
+                                key={trIdx}
+                                className={`p-3 rounded-xl border text-xs font-mono space-y-1.5 ${
+                                  tr.passed
+                                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                                    : 'bg-rose-950/20 border-rose-500/30 text-rose-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold">
+                                  <span className="flex items-center gap-1.5">
+                                    {tr.passed ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                    ) : (
+                                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                                    )}
+                                    Sample Case {trIdx + 1}: {tr.passed ? 'PASSED' : 'FAILED'}
+                                  </span>
+                                  {tr.executionTimeMs !== undefined && (
+                                    <span className="text-slate-400 text-[10px]">{tr.executionTimeMs}ms</span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                                  <div>
+                                    <span className="text-slate-500 block text-[10px]">Input:</span>
+                                    <span className="text-white">{tr.input}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block text-[10px]">Expected:</span>
+                                    <span className="text-emerald-300">{tr.expectedOutput}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block text-[10px]">Your Output:</span>
+                                    <span className={tr.passed ? 'text-emerald-300' : 'text-rose-300'}>
+                                      {tr.actualOutput !== undefined ? String(tr.actualOutput) : 'None'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* MCQ Question Options */
+                <div className="space-y-3 pt-2">
+                  {currentQ.options?.map((opt: any, oIdx: number) => {
+                    const isSelected = answers[currentQ.id] === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleSelectOption(currentQ.id, opt.id)}
+                        className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-medium transition flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-amber-50 dark:bg-amber-600/20 border-amber-500 text-amber-950 dark:text-white ring-2 ring-amber-500/30'
+                            : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold ${
+                              isSelected
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + oIdx)}
+                          </span>
+                          <span>{opt.optionText}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Pagination controls */}
               <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <button
                   type="button"
                   disabled={currentIdx === 0}
-                  onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+                  onClick={() => {
+                    setCurrentIdx((prev) => Math.max(0, prev - 1));
+                    setRunOutput(null);
+                  }}
                   className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1355,7 +1769,10 @@ export default function TakeAssessmentPage() {
                 <button
                   type="button"
                   disabled={currentIdx === qList.length - 1}
-                  onClick={() => setCurrentIdx((prev) => Math.min(qList.length - 1, prev + 1))}
+                  onClick={() => {
+                    setCurrentIdx((prev) => Math.min(qList.length - 1, prev + 1));
+                    setRunOutput(null);
+                  }}
                   className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <span>Next</span>
@@ -1372,7 +1789,9 @@ export default function TakeAssessmentPage() {
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">Question Palette</h4>
             <div className="grid grid-cols-5 gap-2">
               {qList.map((q: any, idx: number) => {
-                const isAnswered = !!answers[q.id];
+                const isAnswered = (q.type === 'CODING' || q.codingProblem)
+                  ? !!codingAnswers[q.id]?.sourceCode?.trim()
+                  : !!answers[q.id];
                 const isCurrent = idx === currentIdx;
                 const isFlag = !!flagged[idx];
 
@@ -1385,7 +1804,10 @@ export default function TakeAssessmentPage() {
                   <button
                     key={q.id}
                     type="button"
-                    onClick={() => setCurrentIdx(idx)}
+                    onClick={() => {
+                      setCurrentIdx(idx);
+                      setRunOutput(null);
+                    }}
                     className={`h-10 rounded-xl border text-xs font-semibold flex items-center justify-center transition ${btnClass}`}
                   >
                     {idx + 1}

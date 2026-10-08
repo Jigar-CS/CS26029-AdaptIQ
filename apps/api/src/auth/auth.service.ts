@@ -543,13 +543,11 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     let email = dto.email.trim().toLowerCase();
-    if (email === 'student@charusat.edu.in' || email === 'student@charusat.ac.in') {
-      email = '24cs093@charusat.edu.in';
-    } else if (email === 'faculty@charusat.ac.in' || email === 'faculty@charusat.edu.in') {
+    if (email === 'faculty@charusat.ac.in' || email === 'faculty@charusat.edu.in') {
       email = 'dharasolanki.cse@charusat.ac.in';
     }
 
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { email },
       include: {
         studentProfile: {
@@ -564,6 +562,42 @@ export class AuthService {
         },
       },
     });
+
+    if (!user && (email === '24cs093@charusat.edu.in' || email === 'student@charusat.ac.in')) {
+      user = await this.prisma.user.findUnique({
+        where: { email: 'student@charusat.edu.in' },
+        include: {
+          studentProfile: {
+            include: {
+              authorizedStudent: true,
+            },
+          },
+          facultyProfile: {
+            include: {
+              course: true,
+            },
+          },
+        },
+      });
+    }
+
+    if (!user && email === 'student@charusat.edu.in') {
+      user = await this.prisma.user.findUnique({
+        where: { email: '24cs093@charusat.edu.in' },
+        include: {
+          studentProfile: {
+            include: {
+              authorizedStudent: true,
+            },
+          },
+          facultyProfile: {
+            include: {
+              course: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password.');

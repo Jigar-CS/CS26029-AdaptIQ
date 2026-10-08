@@ -3,12 +3,17 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CodingService, CreateCodingProblemDto } from '../coding/coding.service';
+import { CodeRunnerService } from '../coding/code-runner.service';
 import {
   AssessmentStatus,
   AssessmentType,
   SubmissionStatus,
+  QuestionType,
+  ProgrammingLanguage,
 } from '@prisma/client';
 
 export interface CreateAssessmentDto {
@@ -25,27 +30,35 @@ export interface CreateAssessmentDto {
   scheduledStartTime?: string;
   scheduledEndTime?: string;
   division?: string;
-  questionIds: string[];
+  questionIds?: string[];
+  codingProblems?: CreateCodingProblemDto[];
+  codingProblemIds?: string[];
+  examMode?: 'OBJECTIVE' | 'CODING' | 'HYBRID';
 }
 
 export interface SubmitAnswerDto {
   questionId: string;
-  selectedOptionId: string;
+  selectedOptionId?: string;
+  sourceCode?: string;
+  code?: string;
+  language?: ProgrammingLanguage;
   timeSpentSeconds?: number;
 }
 
 @Injectable()
 export class AssessmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger('AssessmentService');
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly codingService: CodingService,
+    private readonly codeRunner: CodeRunnerService,
+  ) {}
 
   /**
-   * Faculty: Create a new course assessment with assigned questions
+   * Faculty: Create a new course assessment with assigned questions and/or coding problems
    */
   async createAssessment(facultyProfileId: string, dto: CreateAssessmentDto) {
-    if (!dto.questionIds || dto.questionIds.length === 0) {
-      throw new BadRequestException('At least one question must be selected for the assessment.');
-    }
-
     // Verify if faculty is restricted to their assigned subject
     let targetCourseId = dto.courseId;
     const faculty = await this.prisma.facultyProfile.findUnique({
@@ -66,29 +79,106 @@ export class AssessmentService {
       throw new BadRequestException('Course ID is required.');
     }
 
+    // Resolve combined question IDs from both question bank and authored/selected coding problems
+    let combinedQuestionIds: string[] = [...(dto.questionIds || [])];
+
+    // 1. Process custom-authored coding problems with full problem statement, sample test cases, and hidden check cases
+    if (dto.codingProblems && dto.codingProblems.length > 0) {
+      for (const cp of dto.codingProblems) {
+        const created = await this.codingService.createProblem(cp, targetCourseId);
+        if (created.linkedQuestionId) {
+          combinedQuestionIds.push(created.linkedQuestionId);
+        }
+      }
+    }
+
+    // 2. Process selected existing coding problems from CLIAS problem bank
+    if (dto.codingProblemIds && dto.codingProblemIds.length > 0) {
+      for (const cpid of dto.codingProblemIds) {
+        const existingProb = await this.prisma.codingProblem.findUnique({
+          where: { id: cpid },
+          include: { testCases: true },
+        });
+
+        if (existingProb) {
+          let existingQ = await this.prisma.question.findFirst({
+            where: {
+              courseId: targetCourseId,
+              type: QuestionType.CODING,
+              explanation: { contains: existingProb.id },
+            },
+          });
+
+          if (!existingQ) {
+            const topic = await this.prisma.topic.findFirst({
+              where: { courseId: targetCourseId },
+            });
+            if (topic) {
+              existingQ = await this.prisma.question.create({
+                data: {
+                  courseId: targetCourseId,
+                  topicId: topic.id,
+                  type: QuestionType.CODING,
+                  difficulty: existingProb.difficulty,
+                  questionText: existingProb.title,
+                  explanation: JSON.stringify({
+                    codingProblemId: existingProb.id,
+                    slug: existingProb.slug,
+                    description: existingProb.description,
+                    constraints: existingProb.constraints,
+                    hints: existingProb.hints,
+                    starterCodes: existingProb.starterCodes,
+                    sampleTestCases: existingProb.testCases.filter((c) => !c.isHidden),
+                    testCasesToCheck: existingProb.testCases.filter((c) => c.isHidden),
+                  }),
+                  sourceType: 'CODING_BANK',
+                  status: 'APPROVED',
+                },
+              });
+            }
+          }
+
+          if (existingQ) {
+            combinedQuestionIds.push(existingQ.id);
+          }
+        }
+      }
+    }
+
+    // Deduplicate question IDs
+    combinedQuestionIds = Array.from(new Set(combinedQuestionIds));
+
+    if (combinedQuestionIds.length === 0) {
+      throw new BadRequestException('At least one question or coding problem must be selected for the assessment.');
+    }
+
     // Verify all selected questions belong to the subject
     const validQuestionsCount = await this.prisma.question.count({
       where: {
-        id: { in: dto.questionIds },
+        id: { in: combinedQuestionIds },
         courseId: targetCourseId,
       },
     });
 
-    if (validQuestionsCount !== dto.questionIds.length) {
+    if (validQuestionsCount !== combinedQuestionIds.length) {
       throw new BadRequestException(
         'All selected questions must strictly belong to your assigned subject.',
       );
     }
 
-    const totalQuestions = dto.questionIds.length;
+    const totalQuestions = combinedQuestionIds.length;
     const totalMarks = dto.totalMarks || 100.0;
     const pointsPerQuestion = Number((totalMarks / totalQuestions).toFixed(2));
     const targetDivision = dto.division || 'ALL';
 
+    const finalTitle = dto.examMode === 'CODING' && !dto.title.includes('Coding') && !dto.title.includes('💻')
+      ? `💻 ${dto.title} [CODING]`
+      : dto.title;
+
     const assessment = await this.prisma.assessment.create({
       data: {
-        title: dto.title,
-        description: dto.description,
+        title: finalTitle,
+        description: dto.description || (dto.examMode === 'CODING' ? 'Automated In-Browser Coding Assessment' : null),
         code: dto.code,
         courseId: targetCourseId,
         facultyId: facultyProfileId,
@@ -99,12 +189,12 @@ export class AssessmentService {
         totalMarks,
         passingMarks: dto.passingMarks || 40.0,
         totalQuestions,
-        randomizeQuestions: dto.randomizeQuestions ?? true,
+        randomizeQuestions: dto.randomizeQuestions ?? false,
         allowedAttempts: dto.allowedAttempts || 2,
         scheduledStartTime: dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null,
         scheduledEndTime: dto.scheduledEndTime ? new Date(dto.scheduledEndTime) : null,
         questions: {
-          create: dto.questionIds.map((qId, idx) => ({
+          create: combinedQuestionIds.map((qId, idx) => ({
             questionId: qId,
             points: pointsPerQuestion,
             order: idx + 1,
@@ -206,6 +296,11 @@ export class AssessmentService {
       },
       include: {
         course: { select: { code: true, name: true } },
+        questions: {
+          include: {
+            question: { select: { type: true } },
+          },
+        },
         submissions: {
           where: { studentId: resolvedStudentProfileId },
           orderBy: { attemptNumber: 'desc' },
@@ -218,6 +313,10 @@ export class AssessmentService {
       const attemptsCount = a.submissions.length;
       const bestSubmission = [...a.submissions].sort((x, y) => y.totalScore - x.totalScore)[0];
       const activeSubmission = a.submissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
+      const isCodingExam =
+        a.title.includes('[CODING]') ||
+        (a.description?.toLowerCase().includes('coding') ?? false) ||
+        a.questions.some((q) => q.question.type === QuestionType.CODING);
 
       return {
         id: a.id,
@@ -238,6 +337,7 @@ export class AssessmentService {
         hasAvailableAttempts: attemptsCount < a.allowedAttempts,
         activeSubmissionId: activeSubmission?.id || null,
         bestScore: bestSubmission ? bestSubmission.totalScore : null,
+        isCodingExam,
         bestPercentage: bestSubmission ? bestSubmission.percentage : null,
         passed: bestSubmission ? bestSubmission.passed : false,
       };
@@ -308,7 +408,7 @@ export class AssessmentService {
     const active = existingSubmissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
     if (active) {
       const proc = await this.ensureProctoringSession(active.id, effectiveProfileId);
-      return this.formatAttemptPayload(assessment, active, proc);
+      return await this.formatAttemptPayload(assessment, active, proc);
     }
 
     if (existingSubmissions.length >= assessment.allowedAttempts) {
@@ -329,7 +429,7 @@ export class AssessmentService {
     });
 
     const proc = await this.ensureProctoringSession(newSubmission.id, effectiveProfileId);
-    return this.formatAttemptPayload(assessment, newSubmission, proc);
+    return await this.formatAttemptPayload(assessment, newSubmission, proc);
   }
 
   private async ensureProctoringSession(submissionId: string, studentId: string) {
@@ -346,15 +446,106 @@ export class AssessmentService {
     });
   }
 
-  private formatAttemptPayload(assessment: any, submission: any, proctoring?: any) {
-    let questions = assessment.questions.map((aq: any) => ({
-      id: aq.question.id,
-      questionText: aq.question.questionText,
-      points: aq.points,
-      topicName: aq.question.topic?.name,
-      difficulty: aq.question.difficulty,
-      options: aq.question.options,
-    }));
+  private async formatAttemptPayload(assessment: any, submission: any, proctoring?: any) {
+    let questions = await Promise.all(
+      assessment.questions.map(async (aq: any) => {
+        const isCoding = aq.question.type === QuestionType.CODING;
+        let codingProblem: any = null;
+
+        if (isCoding) {
+          let meta: any = null;
+          try {
+            meta = JSON.parse(aq.question.explanation);
+          } catch (_) {}
+
+          let problem = meta?.codingProblemId
+            ? await this.prisma.codingProblem.findUnique({
+                where: { id: meta.codingProblemId },
+                include: {
+                  testCases: {
+                    where: { isHidden: false },
+                    orderBy: { order: 'asc' },
+                  },
+                },
+              })
+            : null;
+
+          if (!problem && meta?.slug) {
+            problem = await this.prisma.codingProblem.findUnique({
+              where: { slug: meta.slug },
+              include: {
+                testCases: {
+                  where: { isHidden: false },
+                  orderBy: { order: 'asc' },
+                },
+              },
+            });
+          }
+
+          if (problem) {
+            let starterCodes: any = {
+              PYTHON: 'def solution(*args):\n    # Write your algorithmic solution here\n    pass\n',
+              JAVASCRIPT: 'function solution(...args) {\n    // Write your algorithmic solution here\n}\n',
+              CPP: '#include <iostream>\nint solution() {\n    return 0;\n}\n',
+              JAVA: 'class Solution {\n    public int solution() {\n        return 0;\n    }\n}\n',
+            };
+            try {
+              if (problem.starterCodes) {
+                starterCodes = typeof problem.starterCodes === 'string'
+                  ? JSON.parse(problem.starterCodes)
+                  : problem.starterCodes;
+              }
+            } catch (_) {}
+
+            let hints: any[] = [];
+            try {
+              if (problem.hints) {
+                hints = typeof problem.hints === 'string'
+                  ? JSON.parse(problem.hints)
+                  : problem.hints;
+              }
+            } catch (_) {}
+
+            codingProblem = {
+              id: problem.id,
+              slug: problem.slug,
+              title: problem.title,
+              description: problem.description,
+              difficulty: problem.difficulty,
+              tags: problem.tags,
+              constraints: problem.constraints,
+              hints,
+              starterCodes,
+              sampleTestCases: problem.testCases.map((tc: any) => ({
+                input: tc.input,
+                expectedOutput: tc.expectedOutput,
+                explanation: tc.explanation || 'Sample test case',
+              })),
+            };
+          } else if (meta) {
+            codingProblem = {
+              title: aq.question.questionText,
+              description: meta.description || aq.question.questionText,
+              constraints: meta.constraints || '',
+              hints: meta.hints || [],
+              starterCodes: meta.starterCodes || {},
+              sampleTestCases: meta.sampleTestCases || [],
+            };
+          }
+        }
+
+        return {
+          id: aq.question.id,
+          type: aq.question.type,
+          questionText: aq.question.questionText,
+          points: aq.points,
+          topicName: aq.question.topic?.name,
+          difficulty: aq.question.difficulty,
+          options: aq.question.options,
+          codingProblem,
+        };
+      }),
+    );
 
     if (assessment.randomizeQuestions) {
       questions = questions.sort(() => Math.random() - 0.5);
@@ -417,7 +608,6 @@ export class AssessmentService {
     }
 
     // Atomic Lock: Only proceed if this submission is currently IN_PROGRESS
-    // If two requests land at the exact same millisecond, only the first can transition it!
     const lockResult = await this.prisma.assessmentSubmission.updateMany({
       where: {
         id: submissionId,
@@ -431,32 +621,111 @@ export class AssessmentService {
     });
 
     if (lockResult.count === 0) {
-      // Check if already completed or evaluated by a concurrent request
       const existing = await this.prisma.assessmentSubmission.findUnique({
         where: { id: submissionId },
       });
       if (existing && existing.status !== SubmissionStatus.IN_PROGRESS) {
-        return existing; // Return existing evaluated submission idempotently without error
+        return existing;
       }
       throw new BadRequestException('This assessment attempt has already been submitted.');
     }
 
     const questionPointsMap = new Map<string, number>();
     const questionOptionsMap = new Map<string, any[]>();
+    const questionMap = new Map<string, any>();
 
     for (const aq of submission.assessment.questions) {
       questionPointsMap.set(aq.questionId, aq.points);
       questionOptionsMap.set(aq.questionId, aq.question.options);
+      questionMap.set(aq.questionId, aq.question);
     }
 
     let totalScore = 0.0;
     const answerRecords: any[] = [];
 
     for (const ans of answers) {
+      const question = questionMap.get(ans.questionId);
+      const pointsForQ = questionPointsMap.get(ans.questionId) || 0.0;
+
+      // Handle CODING Question Type
+      if (question?.type === QuestionType.CODING) {
+        const sourceCode = (ans.sourceCode || ans.code || '').trim();
+        const language = ans.language || ProgrammingLanguage.PYTHON;
+        let isCorrect = false;
+        let pointsAwarded = 0.0;
+
+        if (sourceCode) {
+          let meta: any = null;
+          try {
+            meta = JSON.parse(question.explanation);
+          } catch (_) {}
+
+          const probId = meta?.codingProblemId;
+          const prob = probId
+            ? await this.prisma.codingProblem.findUnique({
+                where: { id: probId },
+                include: { testCases: { orderBy: { order: 'asc' } } },
+              })
+            : null;
+
+          if (prob && prob.testCases.length > 0) {
+            try {
+              const verdict = await this.codeRunner.execute(
+                language,
+                sourceCode,
+                prob.testCases.map((tc) => ({
+                  input: tc.input,
+                  expectedOutput: tc.expectedOutput,
+                  isHidden: tc.isHidden,
+                })),
+              );
+
+              const passedRatio = verdict.totalTestCases > 0
+                ? (verdict.testCasesPassed / verdict.totalTestCases)
+                : 0;
+              pointsAwarded = Number((passedRatio * pointsForQ).toFixed(2));
+              isCorrect = verdict.status === 'ACCEPTED';
+
+              // Persist CodeSubmission record for AST plagiarism and audit
+              try {
+                await this.prisma.codeSubmission.create({
+                  data: {
+                    studentId: studentProfileId,
+                    problemId: prob.id,
+                    language,
+                    sourceCode,
+                    status: verdict.status as any,
+                    executionTimeMs: verdict.executionTimeMs,
+                    memoryUsedKb: verdict.memoryKb,
+                    testCasesPassed: verdict.testCasesPassed,
+                    totalTestCases: verdict.totalTestCases,
+                    judgeDetails: JSON.stringify(verdict.testResults),
+                  },
+                });
+              } catch (_) {}
+            } catch (runnerErr: any) {
+              this.logger.warn(`Automated exam code evaluation error: ${runnerErr.message}`);
+            }
+          }
+        }
+
+        totalScore += pointsAwarded;
+        answerRecords.push({
+          submissionId: submission.id,
+          questionId: ans.questionId,
+          selectedOptionId: null,
+          isCorrect,
+          pointsAwarded,
+          timeSpentSeconds: ans.timeSpentSeconds || 0,
+        });
+        continue;
+      }
+
+      // Handle Standard Objective / Multiple Choice Question
       const options = questionOptionsMap.get(ans.questionId) || [];
       const selectedOpt = options.find((o: any) => o.id === ans.selectedOptionId);
       const isCorrect = selectedOpt ? selectedOpt.isCorrect : false;
-      const points = isCorrect ? questionPointsMap.get(ans.questionId) || 0.0 : 0.0;
+      const points = isCorrect ? pointsForQ : 0.0;
 
       totalScore += points;
 
@@ -550,17 +819,27 @@ export class AssessmentService {
     }
 
     const itemizedAnswers = submission.answers.map((a) => {
+      const isCoding = a.question.type === QuestionType.CODING;
       const correctOpt = a.question.options.find((o) => o.isCorrect);
+      let explanation = a.question.explanation;
+      try {
+        if (isCoding && explanation) {
+          const parsed = JSON.parse(explanation);
+          explanation = parsed.description || explanation;
+        }
+      } catch (_) {}
+
       return {
         questionId: a.question.id,
+        type: a.question.type,
         questionText: a.question.questionText,
         topicName: a.question.topic?.name,
         difficulty: a.question.difficulty,
         pointsAwarded: a.pointsAwarded,
         isCorrect: a.isCorrect,
-        explanation: a.question.explanation,
-        selectedOptionText: a.selectedOption?.optionText || 'Unanswered',
-        correctOptionText: correctOpt?.optionText || '',
+        explanation,
+        selectedOptionText: a.selectedOption?.optionText || (isCoding ? 'Automated Code Submission' : 'Unanswered'),
+        correctOptionText: correctOpt?.optionText || (isCoding ? 'Automated Code Evaluation (Sample & Check Cases)' : ''),
         options: a.question.options.map((opt) => ({
           id: opt.id,
           text: opt.optionText,
