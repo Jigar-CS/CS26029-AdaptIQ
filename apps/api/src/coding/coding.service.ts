@@ -323,6 +323,20 @@ export class CodingService {
         expectedOutput: tc.expectedOutput,
         isHidden: false,
       }));
+
+      // Fallback if no visible test cases are tagged
+      if (testCasesToRun.length === 0) {
+        const anyCases = await this.prisma.testCase.findMany({
+          where: { problemId: problem.id },
+          take: 2,
+          orderBy: { order: 'asc' },
+        });
+        testCasesToRun = anyCases.map((tc) => ({
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          isHidden: false,
+        }));
+      }
     }
 
     // Execute candidate code against visible sample test cases
@@ -341,8 +355,10 @@ export class CodingService {
   async submitCode(rawStudentId: string, problemId: string, dto: SubmitCodeDto) {
     const studentProfileId = await this.resolveStudentProfileId(rawStudentId);
 
-    const problem = await this.prisma.codingProblem.findUnique({
-      where: { id: problemId },
+    const problem = await this.prisma.codingProblem.findFirst({
+      where: {
+        OR: [{ id: problemId }, { slug: problemId }],
+      },
       include: {
         testCases: {
           orderBy: { order: 'asc' },
@@ -378,13 +394,19 @@ export class CodingService {
 
     const judgeDetails = result.testResults.map((tr, idx) => {
       const tc = problem.testCases[idx];
+      const isHidden = tc && tc.isHidden;
       return {
         testCase: tr.testCaseNumber,
+        testCaseNumber: tr.testCaseNumber,
         status: tr.status,
-        input: tc && tc.isHidden ? '[Hidden Testcase]' : tr.input,
-        expected: tc && tc.isHidden ? '[Hidden]' : tr.expectedOutput,
-        actual: tc && tc.isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
+        input: isHidden ? '[Hidden Testcase]' : tr.input,
+        expected: isHidden ? '[Hidden]' : tr.expectedOutput,
+        expectedOutput: isHidden ? '[Hidden]' : tr.expectedOutput,
+        actual: isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
+        actualOutput: isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
         timeMs: tr.executionTimeMs,
+        executionTimeMs: tr.executionTimeMs,
+        consoleOutput: isHidden ? undefined : tr.consoleOutput,
       };
     });
 

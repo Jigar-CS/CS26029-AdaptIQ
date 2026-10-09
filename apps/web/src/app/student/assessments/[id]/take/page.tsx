@@ -109,17 +109,28 @@ export default function TakeAssessmentPage() {
   const visionModelRef = useRef<any>(null);
   const isDetectingRef = useRef<boolean>(false);
 
+  // Advanced Acoustic & Mobile Heuristic Telemetry Refs
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const consecutiveAudioAlertRef = useRef<number>(0);
+  const consecutiveMobileHeuristicRef = useRef<number>(0);
+
   useEffect(() => {
     if (assessmentId) {
       startAssessment();
     }
   }, [assessmentId]);
 
-  // Clean up media streams on unmount
+  // Clean up media streams and audio context on unmount
   useEffect(() => {
     return () => {
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop());
+      }
+      if (audioCtxRef.current) {
+        try {
+          audioCtxRef.current.close();
+        } catch {}
       }
     };
   }, [mediaStream]);
@@ -185,6 +196,25 @@ export default function TakeAssessmentPage() {
       setMediaStream(stream);
       setCameraPermission('granted');
       setMicPermission('granted');
+
+      // Initialize Web Audio API Analyser for ambient conversation / voice anomaly telemetry
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const actx = new AudioCtx();
+          if (actx.state === 'suspended') {
+            actx.resume().catch(() => {});
+          }
+          const src = actx.createMediaStreamSource(stream);
+          const analyser = actx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          audioCtxRef.current = actx;
+          analyserRef.current = analyser;
+        }
+      } catch (audioErr) {
+        console.warn('Acoustic monitoring initialization bypassed:', audioErr);
+      }
 
       // Detect if camera is detached mid-exam
       const videoTrack = stream.getVideoTracks()[0];
@@ -268,33 +298,54 @@ export default function TakeAssessmentPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // Pre-load TensorFlow.js and COCO-SSD for client-side object detection
+  // Pre-load TensorFlow.js and COCO-SSD with Resilient Multi-CDN Fallback
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let active = true;
+
+    const loadScriptWithFallback = (urls: string[]): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        let index = 0;
+        const tryNext = () => {
+          if (!active) return;
+          if (index >= urls.length) {
+            reject(new Error('All CDN sources failed to load'));
+            return;
+          }
+          const s = document.createElement('script');
+          s.src = urls[index++];
+          s.crossOrigin = 'anonymous';
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => {
+            s.remove();
+            tryNext();
+          };
+          document.head.appendChild(s);
+        };
+        tryNext();
+      });
+    };
+
     const loadVisionDetector = async () => {
       try {
         if (typeof window === 'undefined') return;
+
         if (!(window as any).tf) {
-          const s1 = document.createElement('script');
-          s1.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js';
-          s1.crossOrigin = 'anonymous';
-          document.head.appendChild(s1);
-          await new Promise((res, rej) => {
-            s1.onload = res;
-            s1.onerror = rej;
-          });
+          await loadScriptWithFallback([
+            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+            'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
+          ]);
         }
+
         if (!(window as any).cocoSsd) {
-          const s2 = document.createElement('script');
-          s2.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
-          s2.crossOrigin = 'anonymous';
-          document.head.appendChild(s2);
-          await new Promise((res, rej) => {
-            s2.onload = res;
-            s2.onerror = rej;
-          });
+          await loadScriptWithFallback([
+            'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+            'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+          ]);
         }
+
         if (active && (window as any).cocoSsd && !visionModelRef.current) {
           const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
           if (active) {
@@ -303,9 +354,10 @@ export default function TakeAssessmentPage() {
           }
         }
       } catch (err) {
-        console.warn('COCO-SSD model fallback active:', err);
+        console.warn('COCO-SSD model fallback active (local computer vision heuristic will operate):', err);
       }
     };
+
     loadVisionDetector();
     return () => {
       active = false;
@@ -425,7 +477,7 @@ export default function TakeAssessmentPage() {
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Periodic Visual & Object Detection Telemetry (Every 1.5s)
+  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Every 1.0s)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || !mediaStream) return;
@@ -439,64 +491,53 @@ export default function TakeAssessmentPage() {
       isDetectingRef.current = true;
       try {
         let isPersonFound = false;
+        let isMobileDetected = false;
+        let mobileConfidence = 0;
+        let detectionDetails = '';
 
-        // A. Run TF / COCO-SSD object detection
+        // -------------------------------------------------------------
+        // A. Primary Object & Phone Detection via COCO-SSD
+        // -------------------------------------------------------------
         if (visionModelRef.current) {
           try {
             const predictions = await visionModelRef.current.detect(video);
-            const vWidth = video.videoWidth || 640;
-            const vHeight = video.videoHeight || 480;
 
-            // 1. Mobile phone detection with visual snapshot capture
+            // 1. Mobile phone / unauthorized secondary electronic device detection
+            const phoneClasses = [
+              'cell phone',
+              'remote',
+              'telephone',
+              'book',
+              'laptop',
+              'tablet',
+              'electronic device',
+            ];
+
             const phone = predictions.find((p: any) => {
-              if (!['cell phone', 'remote', 'telephone'].includes(p.class) || p.score < 0.38) return false;
-              // Spatial focus check: Phone must be within active student workspace (central 85% width)
-              const cx = (p.bbox[0] + p.bbox[2] / 2) / vWidth;
-              return cx >= 0.08 && cx <= 0.92;
+              const c = (p.class || '').toLowerCase();
+              return phoneClasses.includes(c) && p.score >= 0.20;
             });
 
             if (phone) {
-              // Capture 320x240 compressed JPEG visual evidence snapshot for faculty audit console
-              let snapshotUri = '';
-              try {
-                canvas.width = 320;
-                canvas.height = 240;
-                const snapCtx = canvas.getContext('2d');
-                if (snapCtx) {
-                  snapCtx.drawImage(video, 0, 0, 320, 240);
-                  snapshotUri = canvas.toDataURL('image/jpeg', 0.6);
-                }
-              } catch {}
-
-              reportViolation(
-                'MOBILE_PHONE_DETECTED',
-                'SEVERE',
-                `Mobile phone detected in workstation view (${Math.round(phone.score * 100)}% confidence).`,
-                snapshotUri
-              );
-              setMobileAlertModal(true);
+              isMobileDetected = true;
+              mobileConfidence = Math.round(phone.score * 100);
+              detectionDetails = `AI Vision: ${phone.class} detected (${mobileConfidence}% confidence).`;
             }
 
-            // 2. Person detection with Lab Spatial Neighbor Filter
-            // In computer labs, students sit in adjacent rows ~1m apart.
-            // Filter: Only count persons in the primary central workstation zone (cx: 8%-92%)
-            // and with significant bounding area (>= 6% of frame) to avoid background passersby.
-            const primaryPersons = predictions.filter((p: any) => {
-              if (p.class !== 'person' || p.score < 0.42) return false;
-              const [bx, by, bw, bh] = p.bbox;
-              const cx = (bx + bw / 2) / vWidth;
-              const areaRatio = (bw * bh) / (vWidth * vHeight);
-              return cx >= 0.08 && cx <= 0.92 && areaRatio >= 0.06;
+            // 2. Person & Multiple Faces Detection
+            const persons = predictions.filter((p: any) => {
+              return (p.class || '').toLowerCase() === 'person' && p.score >= 0.35;
             });
 
-            if (primaryPersons.length > 0) {
+            if (persons.length > 0) {
               isPersonFound = true;
             }
-            if (primaryPersons.length > 1) {
+
+            if (persons.length > 1) {
               reportViolation(
                 'MULTIPLE_FACES',
                 'HIGH',
-                `Multiple individuals (${primaryPersons.length}) detected within primary examination workspace.`
+                `Multiple individuals (${persons.length}) detected within primary examination workspace.`
               );
             }
           } catch (modelErr) {
@@ -504,48 +545,129 @@ export default function TakeAssessmentPage() {
           }
         }
 
-        // B. Canvas Luminance & Skin-tone heuristic
-        canvas.width = 64;
-        canvas.height = 48;
+        // -------------------------------------------------------------
+        // B. Canvas Computer Vision Heuristic (Edge, Screen Luminescence, Skin Tone)
+        // Runs on every frame regardless of external AI model status
+        // -------------------------------------------------------------
+        canvas.width = 128;
+        canvas.height = 96;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.drawImage(video, 0, 0, 64, 48);
-          const frame = ctx.getImageData(0, 0, 64, 48);
+          ctx.drawImage(video, 0, 0, 128, 96);
+          const frame = ctx.getImageData(0, 0, 128, 96);
           const data = frame.data;
           let totalBrightness = 0;
           let skinCount = 0;
+          let highLuminanceClusterCount = 0;
           const totalPixels = data.length / 4;
 
           for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
-            totalBrightness += (r + g + b) / 3;
+            const pxBrightness = (r + g + b) / 3;
+            totalBrightness += pxBrightness;
 
             // Skin tone color range
             if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 10 && (r - b) > 15) {
               skinCount++;
             }
+
+            // High-luminance screen reflection / lit mobile phone screen pixels
+            // Mobile screens typically emit intense bluish/white light (brightness > 215, b >= g - 10)
+            if (pxBrightness > 215 && b >= g - 10) {
+              highLuminanceClusterCount++;
+            }
           }
 
           const avgBrightness = totalBrightness / totalPixels;
           const skinRatio = skinCount / totalPixels;
+          const screenGlowRatio = highLuminanceClusterCount / totalPixels;
 
           // Camera covered or blacked out
           if (avgBrightness < 12) {
             isPersonFound = false;
           } else if (!visionModelRef.current) {
-            // Fallback when model is not ready: check skin ratio
+            // Fallback face presence when AI model is loading
             if (skinRatio >= 0.035) {
               isPersonFound = true;
             }
           }
+
+          // Heuristic Mobile Screen Glow Detection:
+          // A concentrated bright rectangular patch (0.8% - 20% of frame) in typical device zones
+          if (screenGlowRatio >= 0.008 && screenGlowRatio <= 0.20 && avgBrightness < 195) {
+            consecutiveMobileHeuristicRef.current += 1;
+            if (consecutiveMobileHeuristicRef.current >= 2) {
+              isMobileDetected = true;
+              if (!detectionDetails) {
+                mobileConfidence = 85;
+                detectionDetails = 'Visual Heuristic: Illuminated handheld mobile device detected in frame.';
+              }
+            }
+          } else {
+            consecutiveMobileHeuristicRef.current = Math.max(0, consecutiveMobileHeuristicRef.current - 1);
+          }
         }
 
-        // C. Face Absence 3-Strike Enforcement
+        // -------------------------------------------------------------
+        // C. Trigger Mobile Violation & Modal if Detected
+        // -------------------------------------------------------------
+        if (isMobileDetected) {
+          let snapshotUri = '';
+          try {
+            canvas.width = 320;
+            canvas.height = 240;
+            const snapCtx = canvas.getContext('2d');
+            if (snapCtx) {
+              snapCtx.drawImage(video, 0, 0, 320, 240);
+              snapshotUri = canvas.toDataURL('image/jpeg', 0.6);
+            }
+          } catch {}
+
+          reportViolation(
+            'MOBILE_PHONE_DETECTED',
+            'SEVERE',
+            detectionDetails || `Mobile phone detected in workstation view (${mobileConfidence}% confidence).`,
+            snapshotUri
+          );
+          setMobileAlertModal(true);
+        }
+
+        // -------------------------------------------------------------
+        // D. Audio Telemetry Analysis (Acoustic Monitoring)
+        // -------------------------------------------------------------
+        if (analyserRef.current) {
+          try {
+            const bufferLen = analyserRef.current.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLen);
+            analyserRef.current.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLen; i++) {
+              sum += dataArray[i];
+            }
+            const avgAudioVolume = sum / bufferLen;
+            if (avgAudioVolume > 65) {
+              consecutiveAudioAlertRef.current += 1;
+              if (consecutiveAudioAlertRef.current >= 2) {
+                reportViolation(
+                  'AUDIO_ANOMALY',
+                  'MEDIUM',
+                  `Conversational voice or acoustic anomalies detected in examination room (Level: ${Math.round(avgAudioVolume)} dB).`
+                );
+                consecutiveAudioAlertRef.current = 0;
+              }
+            } else {
+              consecutiveAudioAlertRef.current = 0;
+            }
+          } catch {}
+        }
+
+        // -------------------------------------------------------------
+        // E. Face Absence 3-Strike Policy Enforcement
+        // -------------------------------------------------------------
         if (!isPersonFound) {
           consecutiveFaceAbsentRef.current += 1;
-          // After 2 consecutive missing frames (~3 seconds)
           if (consecutiveFaceAbsentRef.current >= 2) {
             setFacePresent(false);
 
@@ -581,7 +703,7 @@ export default function TakeAssessmentPage() {
       } finally {
         isDetectingRef.current = false;
       }
-    }, 1500);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [examData, result, showPreFlight, mediaStream]);
@@ -1277,21 +1399,32 @@ export default function TakeAssessmentPage() {
         </div>
 
         {!pipMinimized && (
-          <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800">
-            <video
-              ref={livePipVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover mirror"
-              style={{ transform: 'scaleX(-1)' }}
-            />
-            {!facePresent && (
-              <div className="absolute inset-0 bg-rose-950/80 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
-                ⚠️ Face Not In Frame
-              </div>
-            )}
-          </div>
+          <>
+            <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800">
+              <video
+                ref={livePipVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover mirror"
+                style={{ transform: 'scaleX(-1)' }}
+              />
+              {!facePresent && (
+                <div className="absolute inset-0 bg-rose-950/80 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
+                  ⚠️ Face Not In Frame
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[9px] text-slate-400 px-1 pt-0.5">
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <span>AI Proctor: Active</span>
+              </span>
+              <span className="text-cyan-400 font-mono text-[8px] uppercase tracking-wider font-bold">
+                📱 Device Scan: ON
+              </span>
+            </div>
+          </>
         )}
       </div>
 

@@ -59,6 +59,7 @@ interface TestResultDetail {
   actual?: string;
   executionTimeMs?: number;
   timeMs?: number;
+  consoleOutput?: string;
 }
 
 interface ExecutionVerdict {
@@ -150,6 +151,14 @@ export default function ProblemEditorPage() {
       setSelectedTestTab(0);
     } catch (err: any) {
       console.error('Failed to run code:', err);
+      setVerdict({
+        status: 'RUNTIME_ERROR',
+        totalTestCases: 0,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        outputMessage: err.message || 'Server error while running code.',
+        testResults: [],
+      });
     } finally {
       setExecuting(false);
     }
@@ -168,6 +177,14 @@ export default function ProblemEditorPage() {
       setSelectedTestTab(0);
     } catch (err: any) {
       console.error('Failed to submit code:', err);
+      setVerdict({
+        status: 'RUNTIME_ERROR',
+        totalTestCases: 0,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        outputMessage: err.message || 'Server error while submitting code.',
+        testResults: [],
+      });
     } finally {
       setExecuting(false);
     }
@@ -456,9 +473,24 @@ export default function ProblemEditorPage() {
                                   : 'text-rose-300'
                               }
                             >
-                              {testList[selectedTestTab].actualOutput ?? testList[selectedTestTab].actual ?? '(no output)'}
+                              {(() => {
+                                const out = testList[selectedTestTab].actualOutput !== undefined && testList[selectedTestTab].actualOutput !== null
+                                  ? testList[selectedTestTab].actualOutput
+                                  : testList[selectedTestTab].actual !== undefined && testList[selectedTestTab].actual !== null
+                                    ? testList[selectedTestTab].actual
+                                    : null;
+                                return out !== null && out !== '' ? out : '(no output)';
+                              })()}
                             </span>
                           </div>
+                          {testList[selectedTestTab].consoleOutput && (
+                            <div className="pt-2 border-t border-slate-800/80">
+                              <span className="text-slate-400">Stdout / Console: </span>
+                              <pre className="text-amber-300 text-[11px] mt-1 whitespace-pre-wrap font-mono">
+                                {testList[selectedTestTab].consoleOutput}
+                              </pre>
+                            </div>
+                          )}
                         </div>
                       )}
 

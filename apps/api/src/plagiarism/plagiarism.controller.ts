@@ -24,6 +24,12 @@ import { UserRole } from '@prisma/client';
 export class PlagiarismController {
   constructor(private readonly plagiarismService: PlagiarismService) {}
 
+  @Get('assessments')
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async getAssessments() {
+    return this.plagiarismService.getCodingAssessments();
+  }
+
   @Post('scan')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
   async startScan(@Request() req, @Body() dto: StartScanDto) {

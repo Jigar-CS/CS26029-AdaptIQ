@@ -302,10 +302,11 @@ export class ProfileService implements OnModuleInit {
     }
 
     // Sanitize skills array
-    const rawSkills = Array.isArray(dto.skills)
-      ? dto.skills
-      : typeof dto.skills === 'string'
-      ? dto.skills.split(',').map((s) => s.trim()).filter(Boolean)
+    const skillsInput = dto.skills as unknown;
+    const rawSkills = Array.isArray(skillsInput)
+      ? (skillsInput as string[])
+      : typeof skillsInput === 'string'
+      ? skillsInput.split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
     const cleanSkills = rawSkills ? sanitizeSkills(rawSkills) : undefined;
 

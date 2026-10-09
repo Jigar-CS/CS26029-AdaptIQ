@@ -8,9 +8,17 @@ import {
   Req,
   ForbiddenException,
 } from '@nestjs/common';
-import { RagService, CreateDocumentDto } from './rag.service';
+import {
+  RagService,
+  CreateDocumentDto,
+  ExtractQuestionsDto,
+  CreateAssessmentFromQuestionsDto,
+  ExtractedQuestionItem,
+} from './rag.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { DocumentType } from '@prisma/client';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @Controller('rag')
 export class RagController {
@@ -62,5 +70,45 @@ export class RagController {
       body.topic || 'General',
       body.count || 2,
     );
+  }
+
+  /**
+   * Upload question PDF/document and extract structured questions
+   */
+  @Post('extract-questions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async extractQuestions(@Body() dto: ExtractQuestionsDto) {
+    return this.ragService.extractQuestionsFromDocument(dto);
+  }
+
+  /**
+   * Import extracted questions into a course question bank
+   */
+  @Post('courses/:courseId/import-questions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async importQuestions(
+    @Req() req: any,
+    @Param('courseId') courseId: string,
+    @Body('questions') questions: ExtractedQuestionItem[],
+  ) {
+    const facultyId = req.user?.facultyId || req.user?.facultyProfile?.id || req.user?.id;
+    return this.ragService.importQuestionsToCourse(courseId, questions || [], facultyId);
+  }
+
+  /**
+   * Directly create an assessment with the extracted questions
+   */
+  @Post('courses/:courseId/create-assessment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async createAssessmentFromQuestions(
+    @Req() req: any,
+    @Param('courseId') courseId: string,
+    @Body() dto: CreateAssessmentFromQuestionsDto,
+  ) {
+    const facultyId = req.user?.facultyId || req.user?.facultyProfile?.id || req.user?.id;
+    return this.ragService.createAssessmentFromExtractedQuestions(courseId, dto, facultyId);
   }
 }

@@ -661,23 +661,43 @@ export class AssessmentService {
           } catch (_) {}
 
           const probId = meta?.codingProblemId;
-          const prob = probId
+          let prob = probId
             ? await this.prisma.codingProblem.findUnique({
                 where: { id: probId },
                 include: { testCases: { orderBy: { order: 'asc' } } },
               })
             : null;
 
+          if (!prob && meta?.slug) {
+            prob = await this.prisma.codingProblem.findUnique({
+              where: { slug: meta.slug },
+              include: { testCases: { orderBy: { order: 'asc' } } },
+            });
+          }
+
+          let testCasesToEvaluate: Array<{ input: string; expectedOutput: string; isHidden: boolean }> = [];
           if (prob && prob.testCases.length > 0) {
+            testCasesToEvaluate = prob.testCases.map((tc) => ({
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              isHidden: tc.isHidden,
+            }));
+          } else if (meta?.sampleTestCases || meta?.testCasesToCheck) {
+            const samples = Array.isArray(meta.sampleTestCases) ? meta.sampleTestCases : [];
+            const checks = Array.isArray(meta.testCasesToCheck) ? meta.testCasesToCheck : [];
+            testCasesToEvaluate = [...samples, ...checks].map((tc) => ({
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              isHidden: !!tc.isHidden,
+            }));
+          }
+
+          if (testCasesToEvaluate.length > 0) {
             try {
               const verdict = await this.codeRunner.execute(
                 language,
                 sourceCode,
-                prob.testCases.map((tc) => ({
-                  input: tc.input,
-                  expectedOutput: tc.expectedOutput,
-                  isHidden: tc.isHidden,
-                })),
+                testCasesToEvaluate,
               );
 
               const passedRatio = verdict.totalTestCases > 0
@@ -687,22 +707,24 @@ export class AssessmentService {
               isCorrect = verdict.status === 'ACCEPTED';
 
               // Persist CodeSubmission record for AST plagiarism and audit
-              try {
-                await this.prisma.codeSubmission.create({
-                  data: {
-                    studentId: studentProfileId,
-                    problemId: prob.id,
-                    language,
-                    sourceCode,
-                    status: verdict.status as any,
-                    executionTimeMs: verdict.executionTimeMs,
-                    memoryUsedKb: verdict.memoryKb,
-                    testCasesPassed: verdict.testCasesPassed,
-                    totalTestCases: verdict.totalTestCases,
-                    judgeDetails: JSON.stringify(verdict.testResults),
-                  },
-                });
-              } catch (_) {}
+              if (prob) {
+                try {
+                  await this.prisma.codeSubmission.create({
+                    data: {
+                      studentId: studentProfileId,
+                      problemId: prob.id,
+                      language,
+                      sourceCode,
+                      status: verdict.status as any,
+                      executionTimeMs: verdict.executionTimeMs,
+                      memoryUsedKb: verdict.memoryKb,
+                      testCasesPassed: verdict.testCasesPassed,
+                      totalTestCases: verdict.totalTestCases,
+                      judgeDetails: JSON.stringify(verdict.testResults),
+                    },
+                  });
+                } catch (_) {}
+              }
             } catch (runnerErr: any) {
               this.logger.warn(`Automated exam code evaluation error: ${runnerErr.message}`);
             }

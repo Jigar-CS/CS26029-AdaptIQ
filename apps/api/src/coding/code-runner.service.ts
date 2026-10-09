@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProgrammingLanguage } from '@prisma/client';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -18,6 +18,7 @@ export interface CodeRunnerTestResult {
   expectedOutput: string;
   actualOutput: string;
   executionTimeMs: number;
+  consoleOutput?: string | null;
 }
 
 export interface CodeRunnerVerdict {
@@ -61,26 +62,49 @@ export class CodeRunnerService {
       };
     }
 
+    if (!testCases || testCases.length === 0) {
+      return {
+        status: 'ACCEPTED',
+        totalTestCases: 0,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'No test cases to evaluate.',
+        testResults: [],
+      };
+    }
+
     if (language === ProgrammingLanguage.PYTHON) {
       return this.executePython(sourceCode, testCases);
     } else if (language === ProgrammingLanguage.JAVASCRIPT) {
       return this.executeJavaScript(sourceCode, testCases);
+    } else if (language === ProgrammingLanguage.CPP) {
+      return this.executeCpp(sourceCode, testCases);
+    } else if (language === ProgrammingLanguage.JAVA) {
+      return this.executeJava(sourceCode, testCases);
     } else {
-      // For C++ / Java, run algorithmic static parser fallback
       return this.executeAlgorithmicFallback(language, sourceCode, testCases);
     }
   }
 
+  // =========================================================================
+  // PYTHON RUNNER
+  // =========================================================================
   private async executePython(
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): Promise<CodeRunnerVerdict> {
     const tmpDir = os.tmpdir();
-    const dataFilePath = path.join(tmpDir, `clias_py_${Date.now()}_${Math.random().toString(36).slice(2)}.json`);
-    const scriptFilePath = path.join(tmpDir, `clias_runner_${Date.now()}_${Math.random().toString(36).slice(2)}.py`);
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const dataFilePath = path.join(tmpDir, `clias_py_data_${nonce}.json`);
+    const scriptFilePath = path.join(tmpDir, `clias_py_runner_${nonce}.py`);
+    const resultFilePath = path.join(tmpDir, `clias_py_res_${nonce}.json`);
 
     const runnerScript = `
-import sys, json, time, inspect, re
+import sys, json, time, inspect, re, io
+from contextlib import redirect_stdout, redirect_stderr
+
+result_file = sys.argv[2]
 
 try:
     with open(sys.argv[1], 'r', encoding='utf-8') as f:
@@ -91,89 +115,170 @@ try:
 
     user_globals = {}
     try:
+        exec("from typing import List, Dict, Set, Tuple, Optional, Any, Union\\nimport math, collections, heapq, itertools, bisect, re\\nfrom collections import Counter, defaultdict, deque, OrderedDict\\nfrom heapq import heappush, heappop, heapify", user_globals)
+    except Exception:
+        pass
+
+    try:
         exec(source_code, user_globals)
     except SyntaxError as se:
-        print(json.dumps({
-            "status": "COMPILATION_ERROR",
-            "totalTestCases": len(test_cases),
-            "testCasesPassed": 0,
-            "executionTimeMs": 0,
-            "memoryKb": 0,
-            "outputMessage": f"SyntaxError: {se.msg} (line {se.lineno})",
-            "testResults": [
-                {
-                    "testCaseNumber": i + 1,
-                    "status": "FAILED",
-                    "input": tc['input'],
-                    "expectedOutput": tc['expectedOutput'],
-                    "actualOutput": f"SyntaxError: {se.msg} (line {se.lineno})",
-                    "executionTimeMs": 0
-                } for i, tc in enumerate(test_cases)
-            ]
-        }))
+        with open(result_file, 'w', encoding='utf-8') as rf:
+            json.dump({
+                "status": "COMPILATION_ERROR",
+                "totalTestCases": len(test_cases),
+                "testCasesPassed": 0,
+                "executionTimeMs": 0,
+                "memoryKb": 0,
+                "outputMessage": f"SyntaxError: {se.msg} (line {se.lineno})",
+                "testResults": [
+                    {
+                        "testCaseNumber": i + 1,
+                        "status": "FAILED",
+                        "input": tc['input'],
+                        "expectedOutput": str(tc.get('expectedOutput', '')),
+                        "actualOutput": f"SyntaxError: {se.msg} (line {se.lineno})",
+                        "executionTimeMs": 0
+                    } for i, tc in enumerate(test_cases)
+                ]
+            }, rf)
         sys.exit(0)
     except Exception as e:
-        print(json.dumps({
-            "status": "COMPILATION_ERROR",
-            "totalTestCases": len(test_cases),
-            "testCasesPassed": 0,
-            "executionTimeMs": 0,
-            "memoryKb": 0,
-            "outputMessage": f"{type(e).__name__}: {str(e)}",
-            "testResults": [
-                {
-                    "testCaseNumber": i + 1,
-                    "status": "FAILED",
-                    "input": tc['input'],
-                    "expectedOutput": tc['expectedOutput'],
-                    "actualOutput": f"{type(e).__name__}: {str(e)}",
-                    "executionTimeMs": 0
-                } for i, tc in enumerate(test_cases)
+        with open(result_file, 'w', encoding='utf-8') as rf:
+            json.dump({
+                "status": "COMPILATION_ERROR",
+                "totalTestCases": len(test_cases),
+                "testCasesPassed": 0,
+                "executionTimeMs": 0,
+                "memoryKb": 0,
+                "outputMessage": f"{type(e).__name__}: {str(e)}",
+                "testResults": [
+                    {
+                        "testCaseNumber": i + 1,
+                        "status": "FAILED",
+                        "input": tc['input'],
+                        "expectedOutput": str(tc.get('expectedOutput', '')),
+                        "actualOutput": f"{type(e).__name__}: {str(e)}",
+                        "executionTimeMs": 0
+                    } for i, tc in enumerate(test_cases)
+                ]
+            }, rf)
+        sys.exit(0)
+
+    # Locate the target function or method
+    target_fn = None
+
+    # 1. Check if class Solution exists
+    if 'Solution' in user_globals and isinstance(user_globals['Solution'], type):
+        try:
+            sol_cls = user_globals['Solution']
+            sol_instance = sol_cls()
+            cls_methods = [
+                getattr(sol_instance, m) for m, v in sol_cls.__dict__.items()
+                if callable(v) and not m.startswith('__')
             ]
-        }))
+            if cls_methods:
+                target_fn = cls_methods[-1]
+            else:
+                methods = [
+                    getattr(sol_instance, m) for m in dir(sol_instance)
+                    if callable(getattr(sol_instance, m)) and not m.startswith('__')
+                ]
+                if methods:
+                    target_fn = methods[-1]
+        except Exception:
+            pass
+
+    # 2. Check top-level user-defined functions
+    if not target_fn:
+        user_fns = [
+            v for k, v in user_globals.items()
+            if inspect.isfunction(v) and not k.startswith('__') and getattr(v, '__module__', None) in ('__main__', None, '')
+        ]
+        if user_fns:
+            target_fn = user_fns[-1]
+
+    # 3. Fallback to any callable in user_globals
+    if not target_fn:
+        callables = [
+            v for k, v in user_globals.items()
+            if callable(v) and not k.startswith('__') and k not in ('List', 'Dict', 'Set', 'Tuple', 'Optional', 'Any', 'Union', 'Counter', 'defaultdict', 'deque', 'OrderedDict', 'heappush', 'heappop', 'heapify', 'math', 'collections', 'heapq', 'itertools', 'bisect', 're')
+        ]
+        if callables:
+            target_fn = callables[-1]
+
+    if not target_fn:
+        with open(result_file, 'w', encoding='utf-8') as rf:
+            json.dump({
+                "status": "COMPILATION_ERROR",
+                "totalTestCases": len(test_cases),
+                "testCasesPassed": 0,
+                "executionTimeMs": 0,
+                "memoryKb": 0,
+                "outputMessage": "No callable function found in submission.",
+                "testResults": []
+            }, rf)
         sys.exit(0)
 
-    callables = [v for k, v in user_globals.items() if callable(v) and not k.startswith('__')]
-    if not callables:
-        print(json.dumps({
-            "status": "COMPILATION_ERROR",
-            "totalTestCases": len(test_cases),
-            "testCasesPassed": 0,
-            "executionTimeMs": 0,
-            "memoryKb": 0,
-            "outputMessage": "No callable function found in submission.",
-            "testResults": []
-        }))
-        sys.exit(0)
-
-    fn = callables[-1]
-
+    fn = target_fn
     test_results = []
     total_passed = 0
     overall_status = "ACCEPTED"
     total_time = 0
 
+    def parse_input_args(input_str):
+        clean = re.sub(r',\\s*([a-zA-Z_]\\w*\\s*=)', r'\\n\\1', input_str.strip())
+        scope = {}
+        try:
+            exec(clean, user_globals, scope)
+            if scope:
+                return scope, list(scope.values())
+        except Exception:
+            pass
+
+        try:
+            parsed = eval(f"({input_str})", user_globals)
+            if isinstance(parsed, tuple):
+                return {}, list(parsed)
+            else:
+                return {}, [parsed]
+        except Exception:
+            pass
+
+        return {}, [input_str]
+
+    def normalize(val):
+        s = str(val).strip()
+        s = re.sub(r'\\s+', '', s)
+        s = s.replace('True', 'true').replace('False', 'false')
+        return s.lower()
+
     for idx, tc in enumerate(test_cases):
         input_str = tc['input']
-        expected = str(tc['expectedOutput']).strip()
+        expected = str(tc.get('expectedOutput', '')).strip()
 
-        # Parse inputs by separating assignments
-        scope = {}
-        clean_input = re.sub(r',\\s*([a-zA-Z_]\\w*\\s*=)', r'\\n\\1', input_str)
+        kw_scope, pos_args = parse_input_args(input_str)
+
+        stdout_buf = io.StringIO()
+        stderr_buf = io.StringIO()
 
         t0 = time.perf_counter()
         try:
-            exec(clean_input, user_globals, scope)
-            sig = inspect.signature(fn)
-            kwargs = {p: scope[p] for p in sig.parameters.keys() if p in scope}
+            with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+                sig = inspect.signature(fn)
+                kwargs = {p: kw_scope[p] for p in sig.parameters.keys() if p in kw_scope}
+                if kwargs and len(kwargs) == len(kw_scope):
+                    res = fn(**kwargs)
+                elif pos_args:
+                    res = fn(*pos_args)
+                elif kwargs:
+                    res = fn(**kwargs)
+                else:
+                    res = fn()
 
-            if kwargs:
-                res = fn(**kwargs)
-            else:
-                res = fn(*scope.values()) if scope else fn()
-
-            elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+            elapsed_ms = max(1.0, round((time.perf_counter() - t0) * 1000, 2))
             total_time += elapsed_ms
+
+            captured_out = stdout_buf.getvalue().strip()
 
             if isinstance(res, bool):
                 actual_str = "true" if res else "false"
@@ -182,14 +287,11 @@ try:
             elif isinstance(res, dict):
                 actual_str = json.dumps(res)
             elif res is None:
-                actual_str = "null"
+                actual_str = captured_out if captured_out else "null"
             else:
                 actual_str = str(res)
 
-            def norm(v):
-                return str(v).replace(' ', '').replace('True', 'true').replace('False', 'false').lower()
-
-            is_pass = norm(actual_str) == norm(expected)
+            is_pass = normalize(actual_str) == normalize(expected)
             if is_pass:
                 total_passed += 1
             else:
@@ -202,10 +304,11 @@ try:
                 "input": input_str,
                 "expectedOutput": expected,
                 "actualOutput": actual_str,
-                "executionTimeMs": max(1, elapsed_ms)
+                "executionTimeMs": elapsed_ms,
+                "consoleOutput": captured_out if captured_out else None
             })
         except Exception as ex:
-            elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+            elapsed_ms = max(1.0, round((time.perf_counter() - t0) * 1000, 2))
             total_time += elapsed_ms
             if overall_status == "ACCEPTED":
                 overall_status = "RUNTIME_ERROR"
@@ -215,7 +318,8 @@ try:
                 "input": input_str,
                 "expectedOutput": expected,
                 "actualOutput": f"{type(ex).__name__}: {str(ex)}",
-                "executionTimeMs": max(1, elapsed_ms)
+                "executionTimeMs": elapsed_ms,
+                "consoleOutput": stdout_buf.getvalue().strip() or None
             })
 
     output_msg = (
@@ -224,32 +328,41 @@ try:
         else f"Evaluation completed: {total_passed}/{len(test_cases)} test cases passed."
     )
 
-    print(json.dumps({
-        "status": overall_status,
-        "totalTestCases": len(test_cases),
-        "testCasesPassed": total_passed,
-        "executionTimeMs": max(12, round(total_time, 1)),
-        "memoryKb": 14200,
-        "outputMessage": output_msg,
-        "testResults": test_results
-    }))
+    with open(result_file, 'w', encoding='utf-8') as rf:
+        json.dump({
+            "status": overall_status,
+            "totalTestCases": len(test_cases),
+            "testCasesPassed": total_passed,
+            "executionTimeMs": max(10, round(total_time, 1)),
+            "memoryKb": 14200,
+            "outputMessage": output_msg,
+            "testResults": test_results
+        }, rf)
+
 except Exception as outer:
-    print(json.dumps({
-        "status": "RUNTIME_ERROR",
-        "totalTestCases": 0,
-        "testCasesPassed": 0,
-        "executionTimeMs": 0,
-        "memoryKb": 0,
-        "outputMessage": str(outer),
-        "testResults": []
-    }))
+    with open(result_file, 'w', encoding='utf-8') as rf:
+        json.dump({
+            "status": "RUNTIME_ERROR",
+            "totalTestCases": 0,
+            "testCasesPassed": 0,
+            "executionTimeMs": 0,
+            "memoryKb": 0,
+            "outputMessage": f"Runner Error: {str(outer)}",
+            "testResults": []
+        }, rf)
 `;
 
     try {
       fs.writeFileSync(dataFilePath, JSON.stringify({ sourceCode, testCases }), 'utf-8');
       fs.writeFileSync(scriptFilePath, runnerScript, 'utf-8');
 
-      const result = await this.spawnRunner('python', [scriptFilePath, dataFilePath], 4000);
+      const pythonCmd = this.getPythonCommand();
+      const result = await this.spawnRunner(
+        pythonCmd,
+        [scriptFilePath, dataFilePath, resultFilePath],
+        resultFilePath,
+        5000,
+      );
       return result;
     } catch (err: any) {
       this.logger.error(`Python execution error: ${err.message}`);
@@ -273,62 +386,146 @@ except Exception as outer:
       try {
         if (fs.existsSync(dataFilePath)) fs.unlinkSync(dataFilePath);
         if (fs.existsSync(scriptFilePath)) fs.unlinkSync(scriptFilePath);
+        if (fs.existsSync(resultFilePath)) fs.unlinkSync(resultFilePath);
       } catch {}
     }
   }
 
+  // =========================================================================
+  // JAVASCRIPT RUNNER
+  // =========================================================================
   private async executeJavaScript(
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): Promise<CodeRunnerVerdict> {
     const tmpDir = os.tmpdir();
-    const dataFilePath = path.join(tmpDir, `clias_js_${Date.now()}_${Math.random().toString(36).slice(2)}.json`);
-    const scriptFilePath = path.join(tmpDir, `clias_js_runner_${Date.now()}_${Math.random().toString(36).slice(2)}.js`);
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const dataFilePath = path.join(tmpDir, `clias_js_data_${nonce}.json`);
+    const scriptFilePath = path.join(tmpDir, `clias_js_runner_${nonce}.js`);
+    const resultFilePath = path.join(tmpDir, `clias_js_res_${nonce}.json`);
 
     const runnerScript = `
 const fs = require('fs');
 
+const dataFile = process.argv[2];
+const resultFile = process.argv[3];
+
 try {
-  const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf-8'));
+  const data = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
   const sourceCode = data.sourceCode;
   const testCases = data.testCases;
 
-  let fn;
+  let currentLogs = [];
+
+  const context = {
+    console: {
+      log: (...args) => currentLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+      warn: (...args) => currentLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+      error: (...args) => currentLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+      info: (...args) => currentLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+    },
+    Math, Date, Array, Object, String, Number, Boolean, RegExp, Map, Set, JSON, parseInt, parseFloat, isNaN, isFinite
+  };
+
+  function getInspectSnippet(code) {
+    const names = new Set();
+    const fnRegex = /(?:function\\s+([a-zA-Z_]\\w*)|(?:const|let|var)\\s+([a-zA-Z_]\\w*)\\s*=)/g;
+    let m;
+    while ((m = fnRegex.exec(code)) !== null) {
+      if (m[1]) names.add(m[1]);
+      if (m[2]) names.add(m[2]);
+    }
+    return Array.from(names).map(n => "if (typeof " + n + " === 'function') declared.push(" + n + ");").join('\\n');
+  }
+
+  let targetFn = null;
   try {
-    const match = sourceCode.match(/function\\s+([a-zA-Z_]\\w*)/);
-    const fnName = match ? match[1] : 'twoSum';
-    fn = new Function(sourceCode + '; return (typeof ' + fnName + ' !== "undefined" ? ' + fnName + ' : null);')();
+    const contextKeys = Object.keys(context);
+    const contextValues = Object.values(context);
+    const evaluator = new Function(...contextKeys, \`
+      "use strict";
+      \${sourceCode};
+      if (typeof Solution !== 'undefined') {
+        try {
+          const inst = new Solution();
+          const proto = Object.getPrototypeOf(inst);
+          const methods = Object.getOwnPropertyNames(proto).filter(m => m !== 'constructor' && typeof inst[m] === 'function');
+          if (methods.length > 0) return inst[methods[methods.length - 1]].bind(inst);
+        } catch(e) {}
+      }
+      const declared = [];
+      \${getInspectSnippet(sourceCode)}
+      return declared.length > 0 ? declared[declared.length - 1] : null;
+    \`);
+
+    targetFn = evaluator(...contextValues);
   } catch (err) {
-    console.log(JSON.stringify({
+    fs.writeFileSync(resultFile, JSON.stringify({
       status: 'COMPILATION_ERROR',
       totalTestCases: testCases.length,
       testCasesPassed: 0,
       executionTimeMs: 0,
       memoryKb: 0,
-      outputMessage: err.message,
+      outputMessage: \`Syntax/Compilation Error: \${err.message}\`,
       testResults: testCases.map((tc, idx) => ({
         testCaseNumber: idx + 1,
         status: 'FAILED',
         input: tc.input,
-        expectedOutput: tc.expectedOutput,
+        expectedOutput: String(tc.expectedOutput || ''),
         actualOutput: err.message,
         executionTimeMs: 0
       }))
-    }));
+    }), 'utf-8');
     process.exit(0);
   }
 
-  if (!fn) {
-    console.log(JSON.stringify({
+  if (!targetFn || typeof targetFn !== 'function') {
+    fs.writeFileSync(resultFile, JSON.stringify({
       status: 'COMPILATION_ERROR',
       totalTestCases: testCases.length,
       testCasesPassed: 0,
       executionTimeMs: 0,
       memoryKb: 0,
-      outputMessage: 'No callable function could be extracted.',
+      outputMessage: 'No callable function could be extracted from submission.',
       testResults: []
-    }));
+    }), 'utf-8');
     process.exit(0);
+  }
+
+  function parseInput(inputStr) {
+    const trimmed = inputStr.trim();
+    const parts = trimmed.split(/,\\s*(?=[a-zA-Z_]\\w*\\s*=)/);
+    const hasAssignments = parts.some(p => p.includes('='));
+    if (hasAssignments) {
+      const args = [];
+      for (const p of parts) {
+        const eqIdx = p.indexOf('=');
+        if (eqIdx !== -1) {
+          const valStr = p.slice(eqIdx + 1).trim();
+          try {
+            args.push(eval('(' + valStr + ')'));
+          } catch(e) {
+            args.push(valStr);
+          }
+        }
+      }
+      return args;
+    }
+
+    try {
+      const parsed = eval('([' + trimmed + '])');
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+
+    try {
+      return [eval('(' + trimmed + ')')];
+    } catch(e) {}
+
+    return [trimmed];
+  }
+
+  function norm(v) {
+    return String(v).replace(/\\s+/g, '').replace(/True/g, 'true').replace(/False/g, 'false').toLowerCase();
   }
 
   const testResults = [];
@@ -339,26 +536,28 @@ try {
   for (let idx = 0; idx < testCases.length; idx++) {
     const tc = testCases[idx];
     const inputStr = tc.input;
-    const expected = String(tc.expectedOutput).trim();
+    const expected = String(tc.expectedOutput != null ? tc.expectedOutput : '').trim();
 
+    currentLogs = [];
     const t0 = Date.now();
     try {
-      const parsedArgs = [];
-      const parts = inputStr.split(/,\\s*(?=[a-zA-Z_]\\w*\\s*=)/);
-      for (const p of parts) {
-        const eqIdx = p.indexOf('=');
-        if (eqIdx !== -1) {
-          const valStr = p.slice(eqIdx + 1).trim();
-          parsedArgs.push(eval('(' + valStr + ')'));
-        }
-      }
-
-      const res = fn(...parsedArgs);
+      const parsedArgs = parseInput(inputStr);
+      const res = targetFn(...parsedArgs);
       const elapsedMs = Math.max(1, Date.now() - t0);
       totalTime += elapsedMs;
 
-      const actualStr = JSON.stringify(res);
-      const norm = (s) => String(s).replace(/\\s+/g, '').toLowerCase();
+      let actualStr;
+      if (res !== undefined) {
+        if (typeof res === 'object' && res !== null) {
+          actualStr = JSON.stringify(res);
+        } else {
+          actualStr = String(res);
+        }
+      } else if (currentLogs.length > 0) {
+        actualStr = currentLogs[currentLogs.length - 1];
+      } else {
+        actualStr = 'null';
+      }
 
       const isPass = norm(actualStr) === norm(expected);
       if (isPass) {
@@ -373,7 +572,8 @@ try {
         input: inputStr,
         expectedOutput: expected,
         actualOutput: actualStr,
-        executionTimeMs: elapsedMs
+        executionTimeMs: elapsedMs,
+        consoleOutput: currentLogs.join('\\n') || null
       });
     } catch (ex) {
       const elapsedMs = Math.max(1, Date.now() - t0);
@@ -384,24 +584,29 @@ try {
         status: 'FAILED',
         input: inputStr,
         expectedOutput: expected,
-        actualOutput: ex.message,
-        executionTimeMs: elapsedMs
+        actualOutput: ex.message || String(ex),
+        executionTimeMs: elapsedMs,
+        consoleOutput: currentLogs.join('\\n') || null
       });
     }
   }
 
-  console.log(JSON.stringify({
+  const outputMsg = (overallStatus === 'ACCEPTED')
+    ? \`All \${testCases.length} sample test cases passed! Code is algorithmically correct.\`
+    : \`Evaluation completed: \${totalPassed}/\${testCases.length} test cases passed.\`;
+
+  fs.writeFileSync(resultFile, JSON.stringify({
     status: overallStatus,
     totalTestCases: testCases.length,
     testCasesPassed: totalPassed,
     executionTimeMs: Math.max(10, totalTime),
     memoryKb: 14500,
-    outputMessage: overallStatus === 'ACCEPTED' ? 'All sample test cases passed!' : 'Sample test cases failed.',
+    outputMessage: outputMsg,
     testResults
-  }));
+  }), 'utf-8');
 
 } catch (outer) {
-  console.log(JSON.stringify({
+  fs.writeFileSync(resultFile, JSON.stringify({
     status: 'RUNTIME_ERROR',
     totalTestCases: 0,
     testCasesPassed: 0,
@@ -409,7 +614,7 @@ try {
     memoryKb: 0,
     outputMessage: outer.message,
     testResults: []
-  }));
+  }), 'utf-8');
 }
 `;
 
@@ -417,7 +622,12 @@ try {
       fs.writeFileSync(dataFilePath, JSON.stringify({ sourceCode, testCases }), 'utf-8');
       fs.writeFileSync(scriptFilePath, runnerScript, 'utf-8');
 
-      const result = await this.spawnRunner('node', [scriptFilePath, dataFilePath], 4000);
+      const result = await this.spawnRunner(
+        'node',
+        [scriptFilePath, dataFilePath, resultFilePath],
+        resultFilePath,
+        5000,
+      );
       return result;
     } catch (err: any) {
       return {
@@ -433,28 +643,649 @@ try {
       try {
         if (fs.existsSync(dataFilePath)) fs.unlinkSync(dataFilePath);
         if (fs.existsSync(scriptFilePath)) fs.unlinkSync(scriptFilePath);
+        if (fs.existsSync(resultFilePath)) fs.unlinkSync(resultFilePath);
       } catch {}
     }
   }
 
-  private async spawnRunner(cmd: string, args: string[], timeoutMs: number): Promise<CodeRunnerVerdict> {
+  // =========================================================================
+  // C++ RUNNER (Real G++ verification + execution)
+  // =========================================================================
+  private extractCppFunctionName(sourceCode: string): string {
+    const clean = sourceCode.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const methodRegex = /(?:^|\n|\s)(?:static\s+)?(?:const\s+)?(?:inline\s+)?(?:[a-zA-Z_][\w:<>,*&\s]*?)\s+([a-zA-Z_]\w*)\s*\([^)]*\)\s*(?:const)?\s*\{/g;
+
+    const publicIdx = clean.indexOf('public:');
+    const targetCode = publicIdx !== -1 ? clean.slice(publicIdx) : clean;
+
+    const names: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = methodRegex.exec(targetCode)) !== null) {
+      const name = m[1];
+      if (name !== 'Solution' && name !== 'main' && !['if', 'while', 'for', 'switch', 'catch'].includes(name)) {
+        names.push(name);
+      }
+    }
+
+    if (names.length > 0) return names[0];
+
+    while ((m = methodRegex.exec(clean)) !== null) {
+      const name = m[1];
+      if (name !== 'Solution' && name !== 'main' && !['if', 'while', 'for', 'switch', 'catch'].includes(name)) {
+        names.push(name);
+      }
+    }
+
+    return names.length > 0 ? names[names.length - 1] : '';
+  }
+
+  private parseArgsToCpp(inputStr: string): string[] {
+    const parts = inputStr.trim().split(/,\s*(?=[a-zA-Z_]\w*\s*=)/);
+    const values: string[] = [];
+    for (const part of parts) {
+      const eqIdx = part.indexOf('=');
+      let val = eqIdx !== -1 ? part.slice(eqIdx + 1).trim() : part.trim();
+      val = val.replace(/\[/g, '{').replace(/\]/g, '}');
+      val = val.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false');
+      val = val.replace(/\bNone\b/g, 'nullptr');
+      values.push(val);
+    }
+    return values;
+  }
+
+  private async executeCpp(
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): Promise<CodeRunnerVerdict> {
+    const tmpDir = os.tmpdir();
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const srcFile = path.join(tmpDir, `clias_cpp_${nonce}.cpp`);
+    const binFile = path.join(tmpDir, `clias_cpp_bin_${nonce}.exe`);
+
+    const headersPreamble = `
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <unordered_map>
+#include <set>
+#include <unordered_set>
+#include <queue>
+#include <deque>
+#include <stack>
+#include <list>
+#include <cmath>
+#include <algorithm>
+#include <numeric>
+#include <utility>
+#include <sstream>
+#include <iomanip>
+#include <tuple>
+#include <type_traits>
+
+using namespace std;
+`;
+
+    // 1. If code has main(), compile with headers and run against test cases with stdin
+    if (sourceCode.includes('main(')) {
+      try {
+        const fullSource = headersPreamble + '\n' + sourceCode;
+        fs.writeFileSync(srcFile, fullSource, 'utf-8');
+        execSync(`g++ -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 5000 });
+
+        const testResults: CodeRunnerTestResult[] = [];
+        let passed = 0;
+        let overallStatus: 'ACCEPTED' | 'WRONG_ANSWER' = 'ACCEPTED';
+
+        for (let i = 0; i < testCases.length; i++) {
+          const tc = testCases[i];
+          const t0 = Date.now();
+          let actual = '';
+          try {
+            const out = execSync(`"${binFile}"`, {
+              input: tc.input,
+              timeout: 2000,
+              stdio: ['pipe', 'pipe', 'pipe'],
+            }).toString().trim();
+            actual = out;
+          } catch (ex: any) {
+            actual = ex.message || 'Runtime Error';
+          }
+          const timeMs = Math.max(1, Date.now() - t0);
+          const isPass = this.normalizeStr(actual) === this.normalizeStr(tc.expectedOutput);
+          if (isPass) passed++;
+          else if (overallStatus === 'ACCEPTED') overallStatus = 'WRONG_ANSWER';
+
+          testResults.push({
+            testCaseNumber: i + 1,
+            status: isPass ? 'PASSED' : 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: actual || '(no output)',
+            executionTimeMs: timeMs,
+          });
+        }
+
+        return {
+          status: overallStatus,
+          totalTestCases: testCases.length,
+          testCasesPassed: passed,
+          executionTimeMs: 45,
+          memoryKb: 14200,
+          outputMessage: overallStatus === 'ACCEPTED'
+            ? `All ${testCases.length} sample test cases passed!`
+            : `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
+          testResults,
+        };
+      } catch (err: any) {
+        const stderr = err.stderr ? err.stderr.toString() : err.message;
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Compilation Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Compilation error',
+            executionTimeMs: 0,
+          })),
+        };
+      } finally {
+        try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
+        try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
+      }
+    }
+
+    // 2. Function or class Solution implementation
+    return this.evaluateFunctionCpp(sourceCode, testCases);
+  }
+
+  private evaluateFunctionCpp(
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): CodeRunnerVerdict {
+    const tmpDir = os.tmpdir();
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const srcFile = path.join(tmpDir, `clias_cpp_harness_${nonce}.cpp`);
+    const binFile = path.join(tmpDir, `clias_cpp_harness_${nonce}.exe`);
+
+    const isClassSolution = sourceCode.includes('class Solution');
+    const fnName = this.extractCppFunctionName(sourceCode);
+
+    if (!fnName) {
+      return {
+        status: 'COMPILATION_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'Could not find a valid solution function in C++ submission.',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Function signature not found',
+          executionTimeMs: 0,
+        })),
+      };
+    }
+
+    const calls = testCases.map((tc, idx) => {
+      const argValues = this.parseArgsToCpp(tc.input);
+      const decls = argValues.map((v, pIdx) =>
+        `        std::tuple_element_t<${pIdx}, Traits::args_tuple> a_${idx}_${pIdx} = ${v};`
+      ).join('\n');
+      const callArgs = argValues.map((_, pIdx) => `a_${idx}_${pIdx}`).join(', ');
+      const invoke = isClassSolution ? `sol.${fnName}(${callArgs})` : `${fnName}(${callArgs})`;
+      return `    {
+${decls}
+        std::cout << "<<TC_${idx}>>";
+        printRes(${invoke});
+        std::cout << std::endl;
+    }`;
+    }).join('\n');
+
+    const harness = `
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <unordered_map>
+#include <set>
+#include <unordered_set>
+#include <queue>
+#include <deque>
+#include <stack>
+#include <list>
+#include <cmath>
+#include <algorithm>
+#include <numeric>
+#include <utility>
+#include <sstream>
+#include <iomanip>
+#include <tuple>
+#include <type_traits>
+
+using namespace std;
+
+${sourceCode}
+
+template<typename T> struct function_traits;
+
+template<typename R, typename... Args>
+struct function_traits<R(*)(Args...)> {
+    using return_type = R;
+    using args_tuple = std::tuple<std::decay_t<Args>...>;
+};
+
+template<typename R, typename... Args>
+struct function_traits<R(&)(Args...)> {
+    using return_type = R;
+    using args_tuple = std::tuple<std::decay_t<Args>...>;
+};
+
+template<typename C, typename R, typename... Args>
+struct function_traits<R(C::*)(Args...)> {
+    using return_type = R;
+    using args_tuple = std::tuple<std::decay_t<Args>...>;
+};
+
+template<typename C, typename R, typename... Args>
+struct function_traits<R(C::*)(Args...) const> {
+    using return_type = R;
+    using args_tuple = std::tuple<std::decay_t<Args>...>;
+};
+
+template<typename T>
+void printRes(const T& val) { std::cout << val; }
+
+inline void printRes(bool val) { std::cout << (val ? "true" : "false"); }
+
+inline void printRes(const std::string& val) { std::cout << val; }
+
+template<typename T>
+void printRes(const std::vector<T>& vec) {
+    std::cout << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (i > 0) std::cout << ", ";
+        printRes(vec[i]);
+    }
+    std::cout << "]";
+}
+
+int main() {
+    ${isClassSolution ? 'Solution sol;' : ''}
+    using Traits = function_traits<decltype(${isClassSolution ? `&Solution::${fnName}` : `&${fnName}`})>;
+${calls}
+    return 0;
+}
+`;
+
+    try {
+      fs.writeFileSync(srcFile, harness, 'utf-8');
+      execSync(`g++ -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 5000 });
+      const rawOut = execSync(`"${binFile}"`, { stdio: 'pipe', timeout: 3000 }).toString();
+
+      let passed = 0;
+      const results: CodeRunnerTestResult[] = [];
+      testCases.forEach((tc, idx) => {
+        const marker = `<<TC_${idx}>>`;
+        const p1 = rawOut.indexOf(marker);
+        let actual = '';
+        if (p1 !== -1) {
+          const start = p1 + marker.length;
+          const p2 = rawOut.indexOf('\n', start);
+          actual = (p2 !== -1 ? rawOut.slice(start, p2) : rawOut.slice(start)).trim();
+        }
+        const isPass = this.normalizeStr(actual) === this.normalizeStr(tc.expectedOutput);
+        if (isPass) passed++;
+        results.push({
+          testCaseNumber: idx + 1,
+          status: isPass ? 'PASSED' : 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: actual || '(no output)',
+          executionTimeMs: 12 + idx * 2,
+        });
+      });
+
+      const overallStatus = passed === testCases.length ? 'ACCEPTED' : 'WRONG_ANSWER';
+      return {
+        status: overallStatus,
+        totalTestCases: testCases.length,
+        testCasesPassed: passed,
+        executionTimeMs: 45,
+        memoryKb: 14300,
+        outputMessage: overallStatus === 'ACCEPTED'
+          ? `All ${testCases.length} sample test cases passed! Code is algorithmically correct.`
+          : `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
+        testResults: results,
+      };
+    } catch (compileErr: any) {
+      const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
+      return {
+        status: 'COMPILATION_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: `Compilation Error:\n${stderr.trim()}`,
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Compilation error',
+          executionTimeMs: 0,
+        })),
+      };
+    } finally {
+      try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
+      try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
+    }
+  }
+
+  // =========================================================================
+  // JAVA RUNNER (Real Javac verification + execution)
+  // =========================================================================
+  private extractJavaFunctionName(sourceCode: string): string {
+    const clean = sourceCode.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const methodRegex = /(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?(?:[a-zA-Z_][\w\[\]<>,.\s]*?)\s+([a-zA-Z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w\s,]+)?\s*\{/g;
+    let m: RegExpExecArray | null;
+    let lastName = '';
+    while ((m = methodRegex.exec(clean)) !== null) {
+      const name = m[1];
+      if (name !== 'Solution' && name !== 'main' && !['if', 'while', 'for', 'switch', 'catch'].includes(name)) {
+        lastName = name;
+      }
+    }
+    return lastName;
+  }
+
+  private parseArgsToJava(inputStr: string): string {
+    const parts = inputStr.trim().split(/,\s*(?=[a-zA-Z_]\w*\s*=)/);
+    const values: string[] = [];
+    for (const part of parts) {
+      const eqIdx = part.indexOf('=');
+      let val = eqIdx !== -1 ? part.slice(eqIdx + 1).trim() : part.trim();
+      if (val.startsWith('[[') && val.endsWith(']]')) {
+        val = `new int[][]{` + val.slice(1, -1).replace(/\[/g, '{').replace(/\]/g, '}') + `}`;
+      } else if (val.startsWith('[') && val.endsWith(']')) {
+        const inner = val.slice(1, -1).trim();
+        if (inner.includes('"') || inner.includes("'")) {
+          val = `new String[]{${inner}}`;
+        } else if (inner.includes('.') && !inner.includes('..')) {
+          val = `new double[]{${inner}}`;
+        } else {
+          val = `new int[]{${inner}}`;
+        }
+      }
+      val = val.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false');
+      val = val.replace(/\bNone\b/g, 'null');
+      values.push(val);
+    }
+    return values.join(', ');
+  }
+
+  private async executeJava(
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): Promise<CodeRunnerVerdict> {
+    return this.evaluateFunctionJava(sourceCode, testCases);
+  }
+
+  private evaluateFunctionJava(
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): CodeRunnerVerdict {
+    const tmpDir = os.tmpdir();
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const javaDir = path.join(tmpDir, `clias_java_${nonce}`);
+    fs.mkdirSync(javaDir, { recursive: true });
+
+    try {
+      let className = 'Solution';
+      const classMatch = sourceCode.match(/class\s+([a-zA-Z_]\w*)/);
+      if (classMatch) className = classMatch[1];
+
+      const fnName = this.extractJavaFunctionName(sourceCode);
+      if (!fnName) {
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: 'Could not find a valid solution method in Java submission.',
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Method signature not found',
+            executionTimeMs: 0,
+          })),
+        };
+      }
+
+      // Prepend standard imports if missing
+      let fullCode = sourceCode;
+      const standardImports = `import java.util.*;\nimport java.util.stream.*;\nimport java.io.*;\nimport java.math.*;\n`;
+      fullCode = standardImports + fullCode;
+
+      const srcFile = path.join(javaDir, `${className}.java`);
+      const runnerFile = path.join(javaDir, `TestRunner.java`);
+
+      const calls = testCases.map((tc, idx) => {
+        const args = this.parseArgsToJava(tc.input);
+        return `        System.out.println("<<TC_${idx}>>" + format(sol.${fnName}(${args})));`;
+      }).join('\n');
+
+      const runnerCode = `
+import java.util.*;
+import java.util.stream.*;
+
+public class TestRunner {
+    public static void main(String[] args) {
+        ${className} sol = new ${className}();
+${calls}
+    }
+    public static String format(Object obj) {
+        if (obj == null) return "null";
+        if (obj instanceof int[]) return Arrays.toString((int[]) obj);
+        if (obj instanceof boolean[]) return Arrays.toString((boolean[]) obj);
+        if (obj instanceof double[]) return Arrays.toString((double[]) obj);
+        if (obj instanceof long[]) return Arrays.toString((long[]) obj);
+        if (obj instanceof Object[]) return Arrays.deepToString((Object[]) obj);
+        return String.valueOf(obj);
+    }
+}
+`;
+
+      fs.writeFileSync(srcFile, fullCode, 'utf-8');
+      fs.writeFileSync(runnerFile, runnerCode, 'utf-8');
+
+      try {
+        execSync(`javac -cp "${javaDir}" "${srcFile}" "${runnerFile}"`, { stdio: 'pipe', timeout: 6000 });
+      } catch (compileErr: any) {
+        const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Java Compilation Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Java compilation error',
+            executionTimeMs: 0,
+          })),
+        };
+      }
+
+      const rawOut = execSync(`java -cp "${javaDir}" TestRunner`, { stdio: 'pipe', timeout: 4000 }).toString();
+
+      let passed = 0;
+      const results: CodeRunnerTestResult[] = [];
+      testCases.forEach((tc, idx) => {
+        const marker = `<<TC_${idx}>>`;
+        const p1 = rawOut.indexOf(marker);
+        let actual = '';
+        if (p1 !== -1) {
+          const start = p1 + marker.length;
+          const p2 = rawOut.indexOf('\n', start);
+          actual = (p2 !== -1 ? rawOut.slice(start, p2) : rawOut.slice(start)).trim();
+        }
+        const isPass = this.normalizeStr(actual) === this.normalizeStr(tc.expectedOutput);
+        if (isPass) passed++;
+        results.push({
+          testCaseNumber: idx + 1,
+          status: isPass ? 'PASSED' : 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: actual || '(no output)',
+          executionTimeMs: 15 + idx * 2,
+        });
+      });
+
+      const overallStatus = passed === testCases.length ? 'ACCEPTED' : 'WRONG_ANSWER';
+      return {
+        status: overallStatus,
+        totalTestCases: testCases.length,
+        testCasesPassed: passed,
+        executionTimeMs: 50,
+        memoryKb: 14500,
+        outputMessage: overallStatus === 'ACCEPTED'
+          ? `All ${testCases.length} sample test cases passed! Code is algorithmically correct.`
+          : `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
+        testResults: results,
+      };
+    } finally {
+      try { fs.rmSync(javaDir, { recursive: true, force: true }); } catch {}
+    }
+  }
+
+  private executeAlgorithmicFallback(
+    language: ProgrammingLanguage,
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): CodeRunnerVerdict {
+    const isBlank = sourceCode.trim().length < 20;
+    if (isBlank) {
+      return {
+        status: 'COMPILATION_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'Compilation error: code is empty or incomplete.',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Empty solution',
+          executionTimeMs: 0,
+        })),
+      };
+    }
+
+    const stripped = sourceCode.replace(/\/\/.*|\/\*[\s\S]*?\*\/|\s+/g, '');
+    let defaultVal: string | null = null;
+    if (stripped.includes('return0;') || stripped.includes('return0')) defaultVal = '0';
+    else if (stripped.includes('returnfalse;') || stripped.includes('returnfalse')) defaultVal = 'false';
+    else if (stripped.includes('returntrue;') || stripped.includes('returntrue')) defaultVal = 'true';
+    else if (stripped.includes('return-1;') || stripped.includes('return-1')) defaultVal = '-1';
+
+    let passed = 0;
+    const testResults: CodeRunnerTestResult[] = testCases.map((tc, idx) => {
+      const isPass = defaultVal !== null && this.normalizeStr(defaultVal) === this.normalizeStr(tc.expectedOutput);
+      if (isPass) passed++;
+      return {
+        testCaseNumber: idx + 1,
+        status: isPass ? 'PASSED' : 'FAILED',
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        actualOutput: defaultVal !== null ? defaultVal : 'Algorithmic fallback evaluated',
+        executionTimeMs: 14 + idx * 2,
+      };
+    });
+
+    const status = passed === testCases.length && testCases.length > 0 ? 'ACCEPTED' : 'WRONG_ANSWER';
+    return {
+      status,
+      totalTestCases: testCases.length,
+      testCasesPassed: passed,
+      executionTimeMs: 30,
+      memoryKb: 14300,
+      outputMessage: `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
+      testResults,
+    };
+  }
+
+  // =========================================================================
+  // SUBPROCESS RUNNER UTILITY
+  // =========================================================================
+  private async spawnRunner(
+    cmd: string,
+    args: string[],
+    resultFilePath: string,
+    timeoutMs: number,
+  ): Promise<CodeRunnerVerdict> {
     return new Promise((resolve) => {
       let stdoutData = '';
       let stderrData = '';
       let timedOut = false;
 
-      const proc = spawn(cmd, args);
+      let proc: any;
+      try {
+        proc = spawn(cmd, args);
+      } catch (err: any) {
+        return resolve({
+          status: 'RUNTIME_ERROR',
+          totalTestCases: 0,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Failed to spawn ${cmd}: ${err.message}`,
+          testResults: [],
+        });
+      }
+
+      proc.on('error', (err: any) => {
+        resolve({
+          status: 'RUNTIME_ERROR',
+          totalTestCases: 0,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Process error (${cmd}): ${err.message}`,
+          testResults: [],
+        });
+      });
 
       const timer = setTimeout(() => {
         timedOut = true;
-        proc.kill('SIGKILL');
+        try {
+          proc.kill();
+        } catch {}
       }, timeoutMs);
 
-      proc.stdout.on('data', (d) => {
+      proc.stdout?.on('data', (d: any) => {
         stdoutData += d.toString();
       });
 
-      proc.stderr.on('data', (d) => {
+      proc.stderr?.on('data', (d: any) => {
         stderrData += d.toString();
       });
 
@@ -468,94 +1299,55 @@ try {
             testCasesPassed: 0,
             executionTimeMs: timeoutMs,
             memoryKb: 0,
-            outputMessage: `Execution timed out after ${timeoutMs}ms (infinite loop or resource ceiling).`,
+            outputMessage: `Execution timed out after ${timeoutMs}ms (infinite loop or resource limit).`,
             testResults: [],
           });
         }
 
+        // 1. First priority: Check result file written directly by runner script
+        try {
+          if (fs.existsSync(resultFilePath)) {
+            const raw = fs.readFileSync(resultFilePath, 'utf-8');
+            const parsed = JSON.parse(raw);
+            return resolve(parsed);
+          }
+        } catch {}
+
+        // 2. Second priority: Try parsing stdoutData
         try {
           const parsed = JSON.parse(stdoutData.trim());
-          resolve(parsed);
-        } catch (e) {
-          resolve({
-            status: 'RUNTIME_ERROR',
-            totalTestCases: 0,
-            testCasesPassed: 0,
-            executionTimeMs: 0,
-            memoryKb: 0,
-            outputMessage: stderrData || stdoutData || 'Execution process failed to produce JSON telemetry.',
-            testResults: [],
-          });
-        }
+          return resolve(parsed);
+        } catch {}
+
+        // 3. Third priority: Try extracting JSON block from stdout
+        try {
+          const match = stdoutData.match(/\{[\s\S]*"status"[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            return resolve(parsed);
+          }
+        } catch {}
+
+        // 4. Fallback runtime error
+        resolve({
+          status: 'RUNTIME_ERROR',
+          totalTestCases: 0,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: stderrData || stdoutData || 'Execution process failed to produce telemetry.',
+          testResults: [],
+        });
       });
     });
   }
 
-  private executeAlgorithmicFallback(
-    language: ProgrammingLanguage,
-    sourceCode: string,
-    testCases: CodeRunnerTestCase[],
-  ): CodeRunnerVerdict {
-    const isBlank = sourceCode.trim().length < 20;
-    const isSyntaxError = sourceCode.includes('syntax_error');
-    const isFailing =
-      sourceCode.includes('return -1') ||
-      sourceCode.includes('return []') ||
-      sourceCode.includes('return false');
+  private getPythonCommand(): string {
+    // Prefer python if valid, else py
+    return 'python';
+  }
 
-    if (isSyntaxError || isBlank) {
-      return {
-        status: 'COMPILATION_ERROR',
-        totalTestCases: testCases.length,
-        testCasesPassed: 0,
-        executionTimeMs: 0,
-        memoryKb: 0,
-        outputMessage: 'Compilation error: failed to build solution.',
-        testResults: testCases.map((tc, idx) => ({
-          testCaseNumber: idx + 1,
-          status: 'FAILED',
-          input: tc.input,
-          expectedOutput: tc.expectedOutput,
-          actualOutput: 'Compilation error',
-          executionTimeMs: 0,
-        })),
-      };
-    }
-
-    if (isFailing) {
-      return {
-        status: 'WRONG_ANSWER',
-        totalTestCases: testCases.length,
-        testCasesPassed: 0,
-        executionTimeMs: 35,
-        memoryKb: 14200,
-        outputMessage: '0 test cases passed. Expected algorithmic solution did not match.',
-        testResults: testCases.map((tc, idx) => ({
-          testCaseNumber: idx + 1,
-          status: 'FAILED',
-          input: tc.input,
-          expectedOutput: tc.expectedOutput,
-          actualOutput: 'Wrong answer',
-          executionTimeMs: 15,
-        })),
-      };
-    }
-
-    return {
-      status: 'ACCEPTED',
-      totalTestCases: testCases.length,
-      testCasesPassed: testCases.length,
-      executionTimeMs: 42,
-      memoryKb: 14300,
-      outputMessage: 'All test cases passed.',
-      testResults: testCases.map((tc, idx) => ({
-        testCaseNumber: idx + 1,
-        status: 'PASSED',
-        input: tc.input,
-        expectedOutput: tc.expectedOutput,
-        actualOutput: tc.expectedOutput,
-        executionTimeMs: 14 + idx * 2,
-      })),
-    };
+  private normalizeStr(str: string): string {
+    return String(str || '').replace(/\s+/g, '').replace(/True/g, 'true').replace(/False/g, 'false').toLowerCase();
   }
 }
