@@ -3,6 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
+import {
+  sanitizeText,
+  sanitizePhone,
+  sanitizeAiInput,
+  validateUrl,
+  validateProfileField,
+  LIMITS,
+} from '@/lib/sanitize';
 import { UserRole } from '@clias/shared-types';
 import {
   User,
@@ -173,22 +181,60 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
     setSaveSuccess(null);
     setErrorMessage(null);
 
+    // ── Client-side validation ───────────────────────────────────────────────
+    if (!name.trim()) {
+      setErrorMessage('Full name is required.');
+      setSaving(false);
+      return;
+    }
+    if (name.trim().length > LIMITS.name) {
+      setErrorMessage(`Name must be ${LIMITS.name} characters or fewer.`);
+      setSaving(false);
+      return;
+    }
+    if (phoneNumber && !/^[0-9\s\-+().]*$/.test(phoneNumber)) {
+      setErrorMessage('Phone number contains invalid characters.');
+      setSaving(false);
+      return;
+    }
+    if (bio && bio.length > LIMITS.bio) {
+      setErrorMessage(`Bio must be ${LIMITS.bio} characters or fewer.`);
+      setSaving(false);
+      return;
+    }
+    if (githubUrl && !validateUrl(githubUrl)) {
+      setErrorMessage('GitHub URL must be a valid http/https URL.');
+      setSaving(false);
+      return;
+    }
+    if (linkedinUrl && !validateUrl(linkedinUrl)) {
+      setErrorMessage('LinkedIn URL must be a valid http/https URL.');
+      setSaving(false);
+      return;
+    }
+    if (portfolioUrl && !validateUrl(portfolioUrl)) {
+      setErrorMessage('Portfolio URL must be a valid http/https URL.');
+      setSaving(false);
+      return;
+    }
+
+    // ── Sanitize before sending ──────────────────────────────────────────────
     const payload = {
-      name,
-      phoneNumber,
-      bio,
-      department,
-      designation,
-      officeLocation,
-      specialization,
-      githubUrl,
-      linkedinUrl,
-      portfolioUrl,
-      skills,
-      targetRole,
-      semester: Number(semester),
-      division,
-      employeeCode,
+      name:            sanitizeText(name, LIMITS.name),
+      phoneNumber:     sanitizePhone(phoneNumber),
+      bio:             sanitizeText(bio, LIMITS.bio),
+      department:      sanitizeText(department, 120),
+      designation:     sanitizeText(designation, 120),
+      officeLocation:  sanitizeText(officeLocation, LIMITS.officeLocation),
+      specialization:  sanitizeText(specialization, LIMITS.specialization),
+      githubUrl:       githubUrl.trim() || undefined,
+      linkedinUrl:     linkedinUrl.trim() || undefined,
+      portfolioUrl:    portfolioUrl.trim() || undefined,
+      skills:          skills.map((s) => sanitizeText(s, LIMITS.skill)).filter(Boolean).slice(0, LIMITS.maxSkills),
+      targetRole:      sanitizeText(targetRole, 40),
+      semester:        Number(semester),
+      division:        sanitizeText(division, 40),
+      employeeCode:    sanitizeText(employeeCode, 40),
       preferences,
     };
 
@@ -210,11 +256,18 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
     e.preventDefault();
     setPasswordMessage(null);
 
+    if (!currentPassword) {
+      setPasswordMessage({ type: 'error', text: 'Please enter your current password.' });
+      return;
+    }
     if (newPassword.length < 6) {
       setPasswordMessage({ type: 'error', text: 'New password must be at least 6 characters long.' });
       return;
     }
-
+    if (newPassword.length > LIMITS.password) {
+      setPasswordMessage({ type: 'error', text: `Password must be ${LIMITS.password} characters or fewer.` });
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'New password and confirmation do not match.' });
       return;
@@ -223,8 +276,9 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
     setPasswordSaving(true);
     try {
       await api.post('/profile/change-password', {
-        currentPassword,
-        newPassword,
+        // Strip null bytes — no other transform needed (passwords are hashed server-side)
+        currentPassword: currentPassword.replace(/\0/g, ''),
+        newPassword: newPassword.replace(/\0/g, ''),
       });
       setPasswordMessage({ type: 'success', text: 'Password successfully updated! Your account is now secured.' });
       setCurrentPassword('');
@@ -243,11 +297,16 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
   const addSkill = (e: React.KeyboardEvent | React.MouseEvent) => {
     if ('key' in e && e.key !== 'Enter') return;
     e.preventDefault();
-    const trimmed = newSkillInput.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills([...skills, trimmed]);
-      setNewSkillInput('');
+    const trimmed = sanitizeText(newSkillInput, LIMITS.skill);
+    if (!trimmed) return;
+    if (skills.length >= LIMITS.maxSkills) {
+      setErrorMessage(`You can add a maximum of ${LIMITS.maxSkills} skills.`);
+      return;
     }
+    if (!skills.includes(trimmed)) {
+      setSkills([...skills, trimmed]);
+    }
+    setNewSkillInput('');
   };
 
   const removeSkill = (skillToRemove: string) => {

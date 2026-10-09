@@ -16,6 +16,11 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole, InterventionStatus } from '@prisma/client';
 
+/** Resolves the studentProfileId from JWT payload consistently */
+function resolveStudentId(req: any): string | undefined {
+  return req.user?.studentId || req.user?.studentProfile?.id;
+}
+
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnalyticsController {
@@ -28,64 +33,71 @@ export class AnalyticsController {
   @Get('student/me/summary')
   @Roles(UserRole.STUDENT)
   async getMyDashboardSummary(@Request() req) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getStudentDashboardSummary(req.user.studentId);
+    return this.analyticsService.getStudentDashboardSummary(studentId);
   }
 
   @Get('student/me/learning-curve')
   @Roles(UserRole.STUDENT)
   async getMyLearningCurve(@Request() req, @Query('topicId') topicId?: string) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getLearningCurve(req.user.studentId, topicId);
+    return this.analyticsService.getLearningCurve(studentId, topicId);
   }
 
   @Get('student/me/mastery')
   @Roles(UserRole.STUDENT)
   async getMyMastery(@Request() req) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getTopicStrengthsAndWeaknesses(req.user.studentId);
+    return this.analyticsService.getTopicStrengthsAndWeaknesses(studentId);
   }
 
   @Get('student/me/bkt-comparison')
   @Roles(UserRole.STUDENT)
   async getMyBktComparison(@Request() req) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getStudentBktComparison(req.user.studentId);
+    return this.analyticsService.getStudentBktComparison(studentId);
   }
 
   @Get('student/me/retention')
   @Roles(UserRole.STUDENT)
   async getMyRetentionReport(@Request() req) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getStudentRetentionReport(req.user.studentId);
+    return this.analyticsService.getStudentRetentionReport(studentId);
   }
 
   @Get('student/me/knowledge-graph')
   @Roles(UserRole.STUDENT)
   async getMyKnowledgeGraph(@Request() req, @Query('courseCode') courseCode?: string) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getStudentKnowledgeGraph(req.user.studentId, courseCode || 'CS301');
+    return this.analyticsService.getStudentKnowledgeGraph(studentId, courseCode || 'CS301');
   }
 
   @Get('student/me/check-prerequisites/:topicId')
   @Roles(UserRole.STUDENT)
   async checkTopicPrerequisites(@Request() req, @Param('topicId') topicId: string) {
-    if (!req.user.studentId) {
+    const studentId = resolveStudentId(req);
+    if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.validateTopicPrerequisites(req.user.studentId, topicId);
+    return this.analyticsService.validateTopicPrerequisites(studentId, topicId);
   }
 
   // ============================================================================
@@ -108,7 +120,7 @@ export class AnalyticsController {
     @Body() body: { courseId: string; topicId?: string; division?: string },
   ) {
     return this.analyticsService.dispatchRemediationNudge({
-      facultyUserId: req.user.sub,
+      facultyUserId: req.user.id,
       courseId: body.courseId,
       topicId: body.topicId,
       division: body.division,
@@ -118,7 +130,7 @@ export class AnalyticsController {
   @Get('counsellor/mentees/summary')
   @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
   async getCounsellorMenteesCohortAnalytics(@Request() req) {
-    return this.analyticsService.getCounsellorMenteesCohortAnalytics(req.user.sub);
+    return this.analyticsService.getCounsellorMenteesCohortAnalytics(req.user.id);
   }
 
   @Get('department/:departmentId/summary')
@@ -164,4 +176,3 @@ export class AnalyticsController {
     return this.analyticsService.getHODCurriculumHealth(departmentId);
   }
 }
-

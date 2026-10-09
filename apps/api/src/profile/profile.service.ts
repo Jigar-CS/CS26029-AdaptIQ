@@ -11,6 +11,14 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CareerRoleType, UserRole } from '@prisma/client';
 import { findBatchStudent, formatStudentName } from '../auth/data/cse-batch-students';
+import {
+  sanitizeText,
+  sanitizeUrl,
+  sanitizePhone,
+  sanitizeSkills,
+  sanitizeEnum,
+  MAX_LENGTHS,
+} from '../common/sanitize.util';
 
 @Injectable()
 export class ProfileService implements OnModuleInit {
@@ -267,15 +275,46 @@ export class ProfileService implements OnModuleInit {
       throw new NotFoundException('User account not found');
     }
 
-    const skillsJson = Array.isArray(dto.skills)
-      ? JSON.stringify(dto.skills)
+    // ── Sanitize every user-supplied field before persistence ──────────────────
+    const cleanName        = dto.name        ? sanitizeText(dto.name, MAX_LENGTHS.name) : undefined;
+    const cleanPhone       = dto.phoneNumber ? sanitizePhone(dto.phoneNumber)           : undefined;
+    const cleanBio         = dto.bio         ? sanitizeText(dto.bio, MAX_LENGTHS.bio)   : undefined;
+    const cleanDept        = dto.department  ? sanitizeText(dto.department, MAX_LENGTHS.department) : undefined;
+    const cleanDesig       = dto.designation ? sanitizeText(dto.designation, MAX_LENGTHS.name)      : undefined;
+    const cleanOfficeLoc   = dto.officeLocation ? sanitizeText(dto.officeLocation, MAX_LENGTHS.officeLocation) : undefined;
+    const cleanSpec        = dto.specialization ? sanitizeText(dto.specialization, MAX_LENGTHS.specialization) : undefined;
+    const cleanGithub      = dto.githubUrl    ? sanitizeUrl(dto.githubUrl)    : undefined;
+    const cleanLinkedin    = dto.linkedinUrl  ? sanitizeUrl(dto.linkedinUrl)  : undefined;
+    const cleanPortfolio   = dto.portfolioUrl ? sanitizeUrl(dto.portfolioUrl) : undefined;
+    const cleanDivision    = dto.division     ? sanitizeText(dto.division, MAX_LENGTHS.division)    : undefined;
+    const cleanEmpCode     = dto.employeeCode ? sanitizeText(dto.employeeCode, MAX_LENGTHS.employeeCode) : undefined;
+    const cleanTargetRole  = dto.targetRole   ? sanitizeText(dto.targetRole, 40) : undefined;
+
+    // Validate URL fields — reject if protocol is not http/https
+    if (dto.githubUrl && cleanGithub === null) {
+      throw new BadRequestException('githubUrl must be a valid http/https URL.');
+    }
+    if (dto.linkedinUrl && cleanLinkedin === null) {
+      throw new BadRequestException('linkedinUrl must be a valid http/https URL.');
+    }
+    if (dto.portfolioUrl && cleanPortfolio === null) {
+      throw new BadRequestException('portfolioUrl must be a valid http/https URL.');
+    }
+
+    // Sanitize skills array
+    const rawSkills = Array.isArray(dto.skills)
+      ? dto.skills
       : typeof dto.skills === 'string'
-      ? JSON.stringify(dto.skills.split(',').map((s) => s.trim()).filter(Boolean))
+      ? dto.skills.split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
+    const cleanSkills = rawSkills ? sanitizeSkills(rawSkills) : undefined;
+
+    const skillsJson = cleanSkills ? JSON.stringify(cleanSkills) : undefined;
 
     const preferencesJson = dto.preferences ? JSON.stringify(dto.preferences) : undefined;
 
-    // 1. Upsert into user_profiles table
+    // 1. Upsert into user_profiles table — all values are sanitized above and
+    //    passed as parameterized placeholders (?), preventing SQL injection.
     try {
       await this.prisma.$executeRawUnsafe(
         `INSERT INTO user_profiles 
@@ -297,33 +336,33 @@ export class ProfileService implements OnModuleInit {
           preferences = COALESCE(?, preferences),
           updatedAt = NOW()`,
         userId,
-        dto.name || null,
-        dto.phoneNumber || null,
-        dto.avatarUrl || null,
-        dto.bio || null,
-        dto.department || null,
-        dto.designation || null,
-        dto.officeLocation || null,
-        dto.specialization || null,
-        dto.githubUrl || null,
-        dto.linkedinUrl || null,
-        dto.portfolioUrl || null,
-        skillsJson || null,
-        preferencesJson || null,
+        cleanName       ?? null,
+        cleanPhone      ?? null,
+        dto.avatarUrl   ?? null,
+        cleanBio        ?? null,
+        cleanDept       ?? null,
+        cleanDesig      ?? null,
+        cleanOfficeLoc  ?? null,
+        cleanSpec       ?? null,
+        cleanGithub     ?? null,
+        cleanLinkedin   ?? null,
+        cleanPortfolio  ?? null,
+        skillsJson      ?? null,
+        preferencesJson ?? null,
         // parameters for ON DUPLICATE KEY UPDATE:
-        dto.name || null,
-        dto.phoneNumber || null,
-        dto.avatarUrl || null,
-        dto.bio || null,
-        dto.department || null,
-        dto.designation || null,
-        dto.officeLocation || null,
-        dto.specialization || null,
-        dto.githubUrl || null,
-        dto.linkedinUrl || null,
-        dto.portfolioUrl || null,
-        skillsJson || null,
-        preferencesJson || null,
+        cleanName       ?? null,
+        cleanPhone      ?? null,
+        dto.avatarUrl   ?? null,
+        cleanBio        ?? null,
+        cleanDept       ?? null,
+        cleanDesig      ?? null,
+        cleanOfficeLoc  ?? null,
+        cleanSpec       ?? null,
+        cleanGithub     ?? null,
+        cleanLinkedin   ?? null,
+        cleanPortfolio  ?? null,
+        skillsJson      ?? null,
+        preferencesJson ?? null,
       );
     } catch (err: any) {
       this.logger.warn(`Could not save into user_profiles: ${err.message}`);
@@ -333,9 +372,9 @@ export class ProfileService implements OnModuleInit {
     const authorized = user.studentProfile?.authorizedStudent || user.authorizedRecord;
     if (authorized) {
       const studentUpdates: any = {};
-      if (dto.name && dto.name.trim()) studentUpdates.name = dto.name.trim();
-      if (dto.department) studentUpdates.department = dto.department.trim();
-      if (dto.division) studentUpdates.division = dto.division.trim();
+      if (cleanName)      studentUpdates.name     = cleanName;
+      if (cleanDept)      studentUpdates.department = cleanDept;
+      if (cleanDivision)  studentUpdates.division = cleanDivision;
       if (dto.semester !== undefined) studentUpdates.semester = Number(dto.semester);
 
       if (Object.keys(studentUpdates).length > 0) {
@@ -346,17 +385,17 @@ export class ProfileService implements OnModuleInit {
       }
 
       // If targetRole was provided and user is a student, update StudentPlacementProfile
-      if (dto.targetRole && user.studentProfile) {
+      if (cleanTargetRole && user.studentProfile) {
         const validRoles = Object.values(CareerRoleType);
-        if (validRoles.includes(dto.targetRole as CareerRoleType)) {
+        if (validRoles.includes(cleanTargetRole as CareerRoleType)) {
           await this.prisma.studentPlacementProfile.upsert({
             where: { studentId: user.studentProfile.id },
             create: {
               studentId: user.studentProfile.id,
-              targetRole: dto.targetRole as CareerRoleType,
+              targetRole: cleanTargetRole as CareerRoleType,
             },
             update: {
-              targetRole: dto.targetRole as CareerRoleType,
+              targetRole: cleanTargetRole as CareerRoleType,
             },
           });
         }
@@ -366,8 +405,7 @@ export class ProfileService implements OnModuleInit {
     // 3. Synchronize with FacultyProfile if faculty
     if (user.facultyProfile) {
       const facultyUpdates: any = {};
-      if (dto.employeeCode) facultyUpdates.employeeCode = dto.employeeCode.trim();
-      if (dto.department) facultyUpdates.departmentId = dto.department.trim();
+      if (cleanEmpCode) facultyUpdates.employeeCode = cleanEmpCode;
 
       if (Object.keys(facultyUpdates).length > 0) {
         await this.prisma.facultyProfile.update({

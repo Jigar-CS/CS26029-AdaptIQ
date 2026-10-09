@@ -409,7 +409,6 @@ export class AuthService {
 
       // Generate JWT
       const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
-
       return {
         success: true,
         message: 'Account successfully registered and activated.',
@@ -513,7 +512,7 @@ export class AuthService {
         this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
       });
 
-      const token = this.generateToken(user.id, user.email, user.role, undefined, user.facultyProfile?.id);
+      const token = this.generateToken(user.id, user.email, user.role, undefined, user.facultyProfile?.id, user.facultyProfile?.courseId || undefined);
 
       return {
         success: true,
@@ -621,7 +620,7 @@ export class AuthService {
     const studentId = user.studentProfile?.id;
     const facultyId = user.facultyProfile?.id;
     const assignedCourse = user.facultyProfile?.course;
-    const token = this.generateToken(user.id, user.email, user.role, studentId, facultyId);
+    const token = this.generateToken(user.id, user.email, user.role, studentId, facultyId, user.facultyProfile?.courseId || undefined);
 
     let displayName = user.studentProfile?.authorizedStudent?.name;
     if (!displayName) {
@@ -688,6 +687,7 @@ export class AuthService {
     role: UserRole,
     studentId?: string,
     facultyId?: string,
+    courseId?: string,
   ): string {
     return this.jwtService.sign({
       sub: userId,
@@ -695,6 +695,7 @@ export class AuthService {
       role,
       studentId,
       facultyId,
+      courseId,
     });
   }
 }

@@ -1,49 +1,52 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
+
+interface JwtPayload {
+  sub: string;
+  email: string;
+  role: string;
+  studentId?: string;
+  facultyId?: string;
+  courseId?: string;
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private prisma: PrismaService) {
+  constructor(private config: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'clias_super_secure_jwt_secret_development_key_change_in_prod_987654321',
+      secretOrKey:
+        config.get<string>('JWT_SECRET') ||
+        'clias_super_secure_jwt_secret_development_key_change_in_prod_987654321',
     });
   }
 
-  async validate(payload: { sub: string; email: string; role: string }) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: {
-        studentProfile: {
-          include: {
-            authorizedStudent: true,
-          },
-        },
-        facultyProfile: {
-          include: {
-            course: true,
-          },
-        },
-      },
-    });
-
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('User account not found or deactivated');
+  /**
+   * Optimised JWT validation: derives the user object entirely from the token
+   * payload — no DB round-trip on every request.
+   *
+   * Token is short-lived (JWT_EXPIRES_IN); revocation is handled by expiry.
+   * A full DB lookup only happens in places that genuinely need current DB data
+   * (e.g., profile endpoint).
+   */
+  async validate(payload: JwtPayload) {
+    if (!payload.sub || !payload.email || !payload.role) {
+      throw new UnauthorizedException('Malformed authentication token.');
     }
 
     return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      studentId: user.studentProfile?.id,
-      facultyId: user.facultyProfile?.id,
-      courseId: user.facultyProfile?.courseId,
-      assignedCourse: user.facultyProfile?.course,
-      studentProfile: user.studentProfile,
-      facultyProfile: user.facultyProfile,
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      studentId: payload.studentId,
+      facultyId: payload.facultyId,
+      courseId: payload.courseId,
+      // Backwards-compatible shape for controllers that access req.user.studentProfile?.id
+      studentProfile: payload.studentId ? { id: payload.studentId } : null,
+      facultyProfile: payload.facultyId ? { id: payload.facultyId } : null,
     };
   }
 }

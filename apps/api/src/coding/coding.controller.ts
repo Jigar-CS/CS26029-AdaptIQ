@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   CodingService,
@@ -18,6 +19,9 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { QuestionDifficulty } from '@prisma/client';
+import { sanitizeAiInput, sanitizeText } from '../common/sanitize.util';
+
+const ALLOWED_DIFFICULTIES: QuestionDifficulty[] = ['EASY', 'MEDIUM', 'HARD'];
 
 @Controller('coding')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,7 +33,9 @@ export class CodingController {
     @Query('difficulty') difficulty?: QuestionDifficulty,
     @Query('courseId') courseId?: string,
   ) {
-    return this.codingService.getProblems(difficulty, courseId);
+    const safeDifficulty =
+      difficulty && ALLOWED_DIFFICULTIES.includes(difficulty) ? difficulty : undefined;
+    return this.codingService.getProblems(safeDifficulty, courseId);
   }
 
   @Post('problems')
@@ -39,7 +45,17 @@ export class CodingController {
 
   @Post('problems/generate-ai')
   async generateAiProblem(@Body() dto: GenerateAiProblemDto) {
-    return this.codingService.generateAiProblem(dto);
+    // Sanitize free-text fields before forwarding to the AI service
+    const safeDto: GenerateAiProblemDto = {
+      ...dto,
+      topic: dto.topic ? sanitizeAiInput(dto.topic, 120) : undefined,
+      customPrompt: dto.customPrompt ? sanitizeAiInput(dto.customPrompt, 500) : undefined,
+      difficulty:
+        dto.difficulty && ALLOWED_DIFFICULTIES.includes(dto.difficulty)
+          ? dto.difficulty
+          : undefined,
+    };
+    return this.codingService.generateAiProblem(safeDto);
   }
 
   @Post('problems/seed-curated')
@@ -54,6 +70,10 @@ export class CodingController {
 
   @Post('problems/:id/run')
   async runCode(@Param('id') id: string, @Body() dto: RunCodeDto) {
+    // Source code can be large — allow up to 64 KB
+    if (dto.sourceCode && dto.sourceCode.length > 65536) {
+      throw new BadRequestException('Source code exceeds the maximum allowed size (64 KB).');
+    }
     return this.codingService.runCode(id, dto);
   }
 
@@ -63,13 +83,16 @@ export class CodingController {
     @Param('id') id: string,
     @Body() dto: SubmitCodeDto,
   ) {
-    const studentId = req.user.studentId || req.user.id;
+    if (dto.sourceCode && dto.sourceCode.length > 65536) {
+      throw new BadRequestException('Source code exceeds the maximum allowed size (64 KB).');
+    }
+    const studentId = req.user?.studentId || req.user?.studentProfile?.id || req.user?.id;
     return this.codingService.submitCode(studentId, id, dto);
   }
 
   @Get('submissions')
   async getSubmissions(@Request() req, @Query('problemId') problemId?: string) {
-    const studentId = req.user.studentId || req.user.id;
+    const studentId = req.user?.studentId || req.user?.studentProfile?.id || req.user?.id;
     return this.codingService.getStudentSubmissions(studentId, problemId);
   }
 }

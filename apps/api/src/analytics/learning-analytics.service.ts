@@ -12,9 +12,43 @@ export interface MasteryCalculationInput {
   timeTakenSeconds?: number;
 }
 
+/** Simple in-process TTL cache to reduce repeated DB round-trips for hot endpoints */
+class TtlCache<T> {
+  private store = new Map<string, { value: T; expiresAt: number }>();
+
+  get(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return entry.value;
+  }
+
+  set(key: string, value: T, ttlMs: number): void {
+    this.store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  }
+
+  invalidate(key: string): void {
+    this.store.delete(key);
+  }
+
+  invalidatePrefix(prefix: string): void {
+    for (const k of this.store.keys()) {
+      if (k.startsWith(prefix)) this.store.delete(k);
+    }
+  }
+}
+
 @Injectable()
 export class LearningAnalyticsService {
   private readonly logger = new Logger('LearningAnalyticsService');
+
+  /** In-process TTL cache: 30s for dashboard summaries, 60s for course analytics */
+  private readonly cache = new TtlCache<any>();
+  private readonly DASHBOARD_TTL = 30_000;   // 30 seconds
+  private readonly COHORT_TTL   = 60_000;   // 60 seconds
 
   // Multipliers for difficulty in EWMA
   private readonly difficultyWeights: Record<QuestionDifficulty, number> = {
@@ -115,6 +149,9 @@ export class LearningAnalyticsService {
         reason: LearningHistoryReason.PRACTICE_ATTEMPT,
       },
     });
+
+    // Invalidate the cached dashboard summary so the next load reflects this attempt
+    this.cache.invalidate(`dashboard:${studentId}`);
 
     return updatedMastery;
   }
@@ -301,10 +338,11 @@ export class LearningAnalyticsService {
    * Complete student dashboard analytics summary with Phase 2 extensions
    */
   async getStudentDashboardSummary(studentId: string) {
-    // 1. Overall stats
-    const [totalAttempts, correctAttempts, allMasteries, curve, testsCount] = await Promise.all([
-      this.prisma.questionAttempt.count({ where: { studentId } }),
-      this.prisma.questionAttempt.count({ where: { studentId, isCorrect: true } }),
+    const cacheKey = `dashboard:${studentId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
+    // 1. Run all independent queries in parallel for maximum performance
+    const [allMasteries, curve, testsCount, recentAttempts, allAttemptsForIrt] = await Promise.all([
       this.prisma.skillMastery.findMany({
         where: { studentId },
         include: {
@@ -315,7 +353,30 @@ export class LearningAnalyticsService {
       }),
       this.getLearningCurve(studentId),
       this.prisma.assessmentSubmission.count({ where: { studentId } }).catch(() => 0),
+      this.prisma.questionAttempt.findMany({
+        where: { studentId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          question: {
+            include: {
+              topic: true,
+              course: true,
+            },
+          },
+        },
+      }),
+      this.prisma.questionAttempt.findMany({
+        where: { studentId },
+        select: { difficultyAtAttempt: true, isCorrect: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
     ]);
+
+    // Derive totalAttempts and correctAttempts from the IRT query (avoids 2 extra COUNT queries)
+    const totalAttempts = allAttemptsForIrt.length;
+    const correctAttempts = allAttemptsForIrt.filter((a) => a.isCorrect).length;
 
     const accuracy = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
     const overallMastery =
@@ -325,9 +386,36 @@ export class LearningAnalyticsService {
           )
         : 0;
 
-    const { strongTopics, weakTopics } = await this.getTopicStrengthsAndWeaknesses(studentId);
+    // Compute strengths/weaknesses directly from already-fetched masteries (no extra DB call)
+    const sortedMasteries = [...allMasteries].sort((a, b) => b.masteryScore - a.masteryScore);
+    const strongTopics = sortedMasteries
+      .filter((m) => m.masteryScore >= 70)
+      .slice(0, 5)
+      .map((m) => ({
+        topicId: m.topicId,
+        topicName: m.topic.name,
+        courseName: m.topic.course.name,
+        courseCode: m.topic.course.code,
+        masteryScore: Math.round(m.masteryScore),
+        attemptCount: m.attemptCount,
+        accuracy: m.attemptCount > 0 ? Math.round((m.correctCount / m.attemptCount) * 100) : 0,
+      }));
 
-    // Phase 2: Compute decayed mastery and retention status across topics
+    const weakTopics = [...allMasteries]
+      .filter((m) => m.masteryScore < 70)
+      .sort((a, b) => a.masteryScore - b.masteryScore)
+      .slice(0, 5)
+      .map((m) => ({
+        topicId: m.topicId,
+        topicName: m.topic.name,
+        courseName: m.topic.course.name,
+        courseCode: m.topic.course.code,
+        masteryScore: Math.round(m.masteryScore),
+        attemptCount: m.attemptCount,
+        accuracy: m.attemptCount > 0 ? Math.round((m.correctCount / m.attemptCount) * 100) : 0,
+      }));
+
+    // Phase 2: Compute decayed mastery and retention status across topics (pure in-memory, no DB)
     const retentionAnalyses = allMasteries.map((m) =>
       ForgettingCurveEngine.analyzeRetention({
         topicId: m.topicId,
@@ -356,27 +444,7 @@ export class LearningAnalyticsService {
         };
       });
 
-    // Phase 2: Recent attempts activity
-    const recentAttempts = await this.prisma.questionAttempt.findMany({
-      where: { studentId },
-      orderBy: { createdAt: 'desc' },
-      take: 6,
-      include: {
-        question: {
-          include: {
-            topic: true,
-            course: true,
-          },
-        },
-      },
-    });
-
-    // Phase 2: Estimate IRT Latent Ability
-    const allAttemptsForIrt = await this.prisma.questionAttempt.findMany({
-      where: { studentId },
-      select: { difficultyAtAttempt: true, isCorrect: true },
-      take: 100,
-    });
+    // Phase 2: Estimate IRT Latent Ability (in-memory, no extra DB call)
     const irtAbility = BktIrtEngine.estimateStudentAbility(
       allAttemptsForIrt.map((a) => ({
         difficulty: a.difficultyAtAttempt,
@@ -394,21 +462,16 @@ export class LearningAnalyticsService {
       irtAbility,
     });
 
-    let streakDays = 0;
-    if (totalAttempts > 0) {
-      const recentAttemptsDates = await this.prisma.questionAttempt.findMany({
-        where: { studentId },
-        select: { createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-      });
-      const uniqueDays = new Set(
-        recentAttemptsDates.map((d) => d.createdAt.toISOString().slice(0, 10)),
-      );
-      streakDays = uniqueDays.size;
-    }
+    // Compute streak from already-fetched attempts (no extra DB call)
+    const uniqueDays = new Set(
+      allAttemptsForIrt.map((d) => d.createdAt.toISOString().slice(0, 10)),
+    );
+    const streakDays = uniqueDays.size;
 
-    return {
+    // Use the first 6 of recent attempts for activity display
+    const recentSix = (recentAttempts as any[]).slice(0, 6);
+
+    const result = {
       overallMastery,
       questionsPracticed: totalAttempts,
       accuracy,
@@ -442,16 +505,19 @@ export class LearningAnalyticsService {
         };
       }),
       learningCurve: curve,
-      recentActivity: recentAttempts.map((a) => ({
+      recentActivity: recentSix.map((a: any) => ({
         id: a.id,
-        courseCode: a.question.course.code,
-        topicName: a.question.topic.name,
+        courseCode: a.question?.course?.code || '',
+        topicName: a.question?.topic?.name || '',
         difficulty: a.difficultyAtAttempt,
         isCorrect: a.isCorrect,
         timeTakenSeconds: a.timeTakenSeconds,
         createdAt: a.createdAt,
       })),
     };
+
+    this.cache.set(cacheKey, result, this.DASHBOARD_TTL);
+    return result;
   }
 
   // ============================================================================
@@ -462,6 +528,9 @@ export class LearningAnalyticsService {
    * Generates a transparent, side-by-side benchmark of EWMA vs BKT for all topics practiced by student
    */
   async getStudentBktComparison(studentId: string) {
+    const cacheKey = `bkt:${studentId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
     const masteries = await this.prisma.skillMastery.findMany({
       where: { studentId },
       include: {
@@ -749,6 +818,10 @@ export class LearningAnalyticsService {
    * Faculty Course Cohort Analytics: Aggregates mastery distribution and bottlenecks across enrolled students
    */
   async getFacultyCourseCohortAnalytics(courseId: string, division?: string) {
+    const cacheKey = `cohort:${courseId}:${division || 'ALL'}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
+
     const clean = courseId.replace(/^course-/, '');
     const course = await this.prisma.course.findFirst({
       where: {
@@ -962,7 +1035,7 @@ export class LearningAnalyticsService {
       new Set(rawDivisions.map((d) => d.division).filter(Boolean)),
     ).sort();
 
-    return {
+    const result = {
       courseId: course.id,
       courseCode: course.code,
       courseName: course.name,
@@ -997,6 +1070,9 @@ export class LearningAnalyticsService {
       bottleneckTopics,
       atRiskStudents,
     };
+
+    this.cache.set(cacheKey, result, this.COHORT_TTL);
+    return result;
   }
 
   /**

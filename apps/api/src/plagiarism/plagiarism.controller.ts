@@ -27,7 +27,7 @@ export class PlagiarismController {
   @Post('scan')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
   async startScan(@Request() req, @Body() dto: StartScanDto) {
-    const facultyId = req.user.facultyProfileId || req.user.id;
+    const facultyId = req.user.facultyId || req.user.facultyProfile?.id || req.user.id;
     return this.plagiarismService.startScan(dto, facultyId);
   }
 

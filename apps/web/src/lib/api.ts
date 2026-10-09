@@ -1,5 +1,15 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
+// In browser, use a relative path through Next.js rewrite proxy (eliminates CORS preflight latency).
+// In server-side context (SSR/SSG), fall back to the absolute URL.
+function getBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    // Browser: use Next.js rewrite proxy — same-origin means no OPTIONS preflight
+    return '/api/v1';
+  }
+  return BASE_URL;
+}
+
 export class ApiError extends Error {
   status: number;
   data: any;
@@ -24,7 +34,7 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const url = `${getBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const isAiOrLongRunning =
     endpoint.includes('/ai') ||

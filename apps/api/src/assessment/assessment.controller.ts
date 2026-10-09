@@ -26,7 +26,12 @@ export class AssessmentController {
   @Get('student')
   @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
   async getStudentAssessments(@Req() req: any, @Query('courseId') courseId?: string) {
-    const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
+    // Priority: studentId from JWT > studentProfile.id > userId
+    const studentProfileId =
+      req.user?.studentId ||
+      req.user?.studentProfile?.id ||
+      req.user?.id;
+
     let targetCourseId = courseId;
     if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
       targetCourseId = req.user.courseId;
@@ -40,7 +45,10 @@ export class AssessmentController {
   @Post(':id/start')
   @Roles(UserRole.STUDENT)
   async startAttempt(@Req() req: any, @Param('id') assessmentId: string) {
-    const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
+    const studentProfileId =
+      req.user?.studentId ||
+      req.user?.studentProfile?.id ||
+      req.user?.id;
     return this.assessmentService.startAttempt(assessmentId, studentProfileId);
   }
 
@@ -54,7 +62,10 @@ export class AssessmentController {
     @Param('id') submissionId: string,
     @Body('answers') answers: SubmitAnswerDto[],
   ) {
-    const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
+    const studentProfileId =
+      req.user?.studentId ||
+      req.user?.studentProfile?.id ||
+      req.user?.id;
     return this.assessmentService.submitAttempt(submissionId, studentProfileId, answers || []);
   }
 
@@ -64,7 +75,10 @@ export class AssessmentController {
   @Get('submissions/:id/result')
   @Roles(UserRole.STUDENT, UserRole.FACULTY)
   async getSubmissionResult(@Req() req: any, @Param('id') submissionId: string) {
-    const studentProfileId = req.user?.studentProfile?.id || req.user?.id;
+    const studentProfileId =
+      req.user?.studentId ||
+      req.user?.studentProfile?.id ||
+      req.user?.id;
     return this.assessmentService.getSubmissionResult(submissionId, studentProfileId);
   }
 
@@ -74,7 +88,10 @@ export class AssessmentController {
   @Post()
   @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
   async createAssessment(@Req() req: any, @Body() dto: CreateAssessmentDto) {
-    const facultyProfileId = req.user?.facultyProfile?.id || req.user?.id;
+    const facultyProfileId =
+      req.user?.facultyId ||
+      req.user?.facultyProfile?.id ||
+      req.user?.id;
     if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
       dto.courseId = req.user.courseId;
     }
