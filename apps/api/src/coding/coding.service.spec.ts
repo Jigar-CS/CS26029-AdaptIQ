@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CodingService } from './coding.service';
+import { CodeRunnerService } from './code-runner.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ProgrammingLanguage,
@@ -58,6 +59,7 @@ describe('CodingService', () => {
       codingProblem: {
         findMany: jest.fn().mockResolvedValue([mockProblem]),
         findUnique: jest.fn().mockResolvedValue(mockProblem),
+        findFirst: jest.fn().mockResolvedValue(mockProblem),
       },
       studentProfile: {
         findFirst: jest.fn().mockResolvedValue({ id: 'student-1' }),
@@ -71,12 +73,31 @@ describe('CodingService', () => {
       },
     };
 
+    const mockCodeRunner = {
+      execute: jest.fn().mockResolvedValue({
+        status: 'ACCEPTED',
+        totalTestCases: 2,
+        testCasesPassed: 2,
+        executionTimeMs: 35,
+        memoryKb: 14200,
+        outputMessage: 'All sample test cases passed!',
+        testResults: [
+          { testCaseNumber: 1, status: 'PASSED', input: 'tc1', expectedOutput: 'out1', actualOutput: 'out1', executionTimeMs: 10 },
+          { testCaseNumber: 2, status: 'PASSED', input: 'tc2', expectedOutput: 'out2', actualOutput: 'out2', executionTimeMs: 10 },
+        ],
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingService,
         {
           provide: PrismaService,
           useValue: prisma,
+        },
+        {
+          provide: CodeRunnerService,
+          useValue: mockCodeRunner,
         },
       ],
     }).compile();

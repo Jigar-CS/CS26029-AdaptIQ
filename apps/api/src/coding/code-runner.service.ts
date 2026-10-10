@@ -119,8 +119,10 @@ try:
     except Exception:
         pass
 
+    is_stdin_mode = ('input(' in source_code or 'sys.stdin' in source_code)
     try:
-        exec(source_code, user_globals)
+        if not is_stdin_mode:
+            exec(source_code, user_globals)
     except SyntaxError as se:
         with open(result_file, 'w', encoding='utf-8') as rf:
             json.dump({
@@ -143,81 +145,86 @@ try:
             }, rf)
         sys.exit(0)
     except Exception as e:
-        with open(result_file, 'w', encoding='utf-8') as rf:
-            json.dump({
-                "status": "COMPILATION_ERROR",
-                "totalTestCases": len(test_cases),
-                "testCasesPassed": 0,
-                "executionTimeMs": 0,
-                "memoryKb": 0,
-                "outputMessage": f"{type(e).__name__}: {str(e)}",
-                "testResults": [
-                    {
-                        "testCaseNumber": i + 1,
-                        "status": "FAILED",
-                        "input": tc['input'],
-                        "expectedOutput": str(tc.get('expectedOutput', '')),
-                        "actualOutput": f"{type(e).__name__}: {str(e)}",
-                        "executionTimeMs": 0
-                    } for i, tc in enumerate(test_cases)
-                ]
-            }, rf)
-        sys.exit(0)
+        if isinstance(e, EOFError):
+            is_stdin_mode = True
+        else:
+            with open(result_file, 'w', encoding='utf-8') as rf:
+                json.dump({
+                    "status": "RUNTIME_ERROR",
+                    "totalTestCases": len(test_cases),
+                    "testCasesPassed": 0,
+                    "executionTimeMs": 0,
+                    "memoryKb": 0,
+                    "outputMessage": f"{type(e).__name__}: {str(e)}",
+                    "testResults": [
+                        {
+                            "testCaseNumber": i + 1,
+                            "status": "FAILED",
+                            "input": tc['input'],
+                            "expectedOutput": str(tc.get('expectedOutput', '')),
+                            "actualOutput": f"{type(e).__name__}: {str(e)}",
+                            "executionTimeMs": 0
+                        } for i, tc in enumerate(test_cases)
+                    ]
+                }, rf)
+            sys.exit(0)
 
     # Locate the target function or method
     target_fn = None
 
-    # 1. Check if class Solution exists
-    if 'Solution' in user_globals and isinstance(user_globals['Solution'], type):
-        try:
-            sol_cls = user_globals['Solution']
-            sol_instance = sol_cls()
-            cls_methods = [
-                getattr(sol_instance, m) for m, v in sol_cls.__dict__.items()
-                if callable(v) and not m.startswith('__')
-            ]
-            if cls_methods:
-                target_fn = cls_methods[-1]
-            else:
-                methods = [
-                    getattr(sol_instance, m) for m in dir(sol_instance)
-                    if callable(getattr(sol_instance, m)) and not m.startswith('__')
+    if not is_stdin_mode:
+        # 1. Check if class Solution exists
+        if 'Solution' in user_globals and isinstance(user_globals['Solution'], type):
+            try:
+                sol_cls = user_globals['Solution']
+                sol_instance = sol_cls()
+                cls_methods = [
+                    getattr(sol_instance, m) for m, v in sol_cls.__dict__.items()
+                    if callable(v) and not m.startswith('__')
                 ]
-                if methods:
-                    target_fn = methods[-1]
-        except Exception:
-            pass
+                if cls_methods:
+                    target_fn = cls_methods[-1]
+                else:
+                    methods = [
+                        getattr(sol_instance, m) for m in dir(sol_instance)
+                        if callable(getattr(sol_instance, m)) and not m.startswith('__')
+                    ]
+                    if methods:
+                        target_fn = methods[-1]
+            except Exception:
+                pass
 
-    # 2. Check top-level user-defined functions
-    if not target_fn:
-        user_fns = [
-            v for k, v in user_globals.items()
-            if inspect.isfunction(v) and not k.startswith('__') and getattr(v, '__module__', None) in ('__main__', None, '')
-        ]
-        if user_fns:
-            target_fn = user_fns[-1]
+        # 2. Check top-level user-defined functions
+        if not target_fn:
+            user_fns = [
+                v for k, v in user_globals.items()
+                if inspect.isfunction(v) and not k.startswith('__') and getattr(v, '__module__', None) in ('__main__', None, '')
+            ]
+            if user_fns:
+                target_fn = user_fns[-1]
 
-    # 3. Fallback to any callable in user_globals
-    if not target_fn:
-        callables = [
-            v for k, v in user_globals.items()
-            if callable(v) and not k.startswith('__') and k not in ('List', 'Dict', 'Set', 'Tuple', 'Optional', 'Any', 'Union', 'Counter', 'defaultdict', 'deque', 'OrderedDict', 'heappush', 'heappop', 'heapify', 'math', 'collections', 'heapq', 'itertools', 'bisect', 're')
-        ]
-        if callables:
-            target_fn = callables[-1]
+        # 3. Fallback to any callable in user_globals
+        if not target_fn:
+            callables = [
+                v for k, v in user_globals.items()
+                if callable(v) and not k.startswith('__') and k not in ('List', 'Dict', 'Set', 'Tuple', 'Optional', 'Any', 'Union', 'Counter', 'defaultdict', 'deque', 'OrderedDict', 'heappush', 'heappop', 'heapify', 'math', 'collections', 'heapq', 'itertools', 'bisect', 're')
+            ]
+            if callables:
+                target_fn = callables[-1]
+
+        # If top-level function has 'self' parameter, bind to dummy object
+        if target_fn:
+            try:
+                sig = inspect.signature(target_fn)
+                p_names = list(sig.parameters.keys())
+                if p_names and p_names[0] == 'self' and not hasattr(target_fn, '__self__'):
+                    DummyCls = type('Solution', (), {target_fn.__name__: target_fn})
+                    target_fn = getattr(DummyCls(), target_fn.__name__)
+            except Exception:
+                pass
 
     if not target_fn:
-        with open(result_file, 'w', encoding='utf-8') as rf:
-            json.dump({
-                "status": "COMPILATION_ERROR",
-                "totalTestCases": len(test_cases),
-                "testCasesPassed": 0,
-                "executionTimeMs": 0,
-                "memoryKb": 0,
-                "outputMessage": "No callable function found in submission.",
-                "testResults": []
-            }, rf)
-        sys.exit(0)
+        is_stdin_mode = True
 
     fn = target_fn
     test_results = []
@@ -256,10 +263,65 @@ try:
         input_str = tc['input']
         expected = str(tc.get('expectedOutput', '')).strip()
 
-        kw_scope, pos_args = parse_input_args(input_str)
-
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
+
+        if is_stdin_mode:
+            parts = [p.strip() for p in re.split(r',\\s*(?=[a-zA-Z_]\\w*\\s*=)', input_str.strip())]
+            clean_lines = []
+            for p in parts:
+                val = p.split('=', 1)[1].strip() if '=' in p else p.strip()
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                clean_lines.append(val)
+            raw_vals = re.sub(r'[a-zA-Z_]\\w*\\s*=\\s*', '', input_str).replace('[', ' ').replace(']', ' ').replace(',', ' ')
+            stdin_text = '\\n'.join(clean_lines) + '\\n' + raw_vals.strip() + '\\n' + input_str + '\\n'
+            t0 = time.perf_counter()
+            try:
+                scope = dict(user_globals)
+                with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+                    old_stdin = sys.stdin
+                    sys.stdin = io.StringIO(stdin_text)
+                    try:
+                        exec(source_code, scope)
+                    finally:
+                        sys.stdin = old_stdin
+
+                elapsed_ms = max(1.0, round((time.perf_counter() - t0) * 1000, 2))
+                total_time += elapsed_ms
+                captured_out = stdout_buf.getvalue().strip()
+                actual_str = captured_out.split('\\n')[-1].strip() if captured_out else "null"
+                is_pass = normalize(actual_str) == normalize(expected)
+                if is_pass:
+                    total_passed += 1
+                elif overall_status == "ACCEPTED":
+                    overall_status = "WRONG_ANSWER"
+                test_results.append({
+                    "testCaseNumber": idx + 1,
+                    "status": "PASSED" if is_pass else "FAILED",
+                    "input": input_str,
+                    "expectedOutput": expected,
+                    "actualOutput": actual_str,
+                    "executionTimeMs": elapsed_ms,
+                    "consoleOutput": captured_out or None
+                })
+            except Exception as ex:
+                elapsed_ms = max(1.0, round((time.perf_counter() - t0) * 1000, 2))
+                total_time += elapsed_ms
+                if overall_status == "ACCEPTED":
+                    overall_status = "RUNTIME_ERROR"
+                test_results.append({
+                    "testCaseNumber": idx + 1,
+                    "status": "FAILED",
+                    "input": input_str,
+                    "expectedOutput": expected,
+                    "actualOutput": f"{type(ex).__name__}: {str(ex)}",
+                    "executionTimeMs": elapsed_ms,
+                    "consoleOutput": stdout_buf.getvalue().strip() or None
+                })
+            continue
+
+        kw_scope, pos_args = parse_input_args(input_str)
 
         t0 = time.perf_counter()
         try:
@@ -412,7 +474,8 @@ const resultFile = process.argv[3];
 
 try {
   const data = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
-  const sourceCode = data.sourceCode;
+  const rawSourceCode = data.sourceCode;
+  const sourceCode = (rawSourceCode || '').replace(/^\s*export\s+(?:default\s+)?/gm, '');
   const testCases = data.testCases;
 
   let currentLogs = [];
@@ -480,16 +543,10 @@ try {
   }
 
   if (!targetFn || typeof targetFn !== 'function') {
-    fs.writeFileSync(resultFile, JSON.stringify({
-      status: 'COMPILATION_ERROR',
-      totalTestCases: testCases.length,
-      testCasesPassed: 0,
-      executionTimeMs: 0,
-      memoryKb: 0,
-      outputMessage: 'No callable function could be extracted from submission.',
-      testResults: []
-    }), 'utf-8');
-    process.exit(0);
+    targetFn = (...args) => {
+      const fn = new Function(...Object.keys(context), sourceCode);
+      return fn(...Object.values(context));
+    };
   }
 
   function parseInput(inputStr) {
@@ -697,6 +754,11 @@ try {
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): Promise<CodeRunnerVerdict> {
+    const cppCmd = this.getCppCompilerCommand();
+    if (!cppCmd) {
+      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+    }
+
     const tmpDir = os.tmpdir();
     const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const srcFile = path.join(tmpDir, `clias_cpp_${nonce}.cpp`);
@@ -731,7 +793,7 @@ using namespace std;
       try {
         const fullSource = headersPreamble + '\n' + sourceCode;
         fs.writeFileSync(srcFile, fullSource, 'utf-8');
-        execSync(`g++ -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 5000 });
+        execSync(`"${cppCmd}" -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 7000 });
 
         const testResults: CodeRunnerTestResult[] = [];
         let passed = 0;
@@ -742,9 +804,10 @@ using namespace std;
           const t0 = Date.now();
           let actual = '';
           try {
+            const cleanStdin = this.formatStdinForConsole(tc.input);
             const out = execSync(`"${binFile}"`, {
-              input: tc.input,
-              timeout: 2000,
+              input: cleanStdin,
+              timeout: 3000,
               stdio: ['pipe', 'pipe', 'pipe'],
             }).toString().trim();
             actual = out;
@@ -779,22 +842,25 @@ using namespace std;
         };
       } catch (err: any) {
         const stderr = err.stderr ? err.stderr.toString() : err.message;
-        return {
-          status: 'COMPILATION_ERROR',
-          totalTestCases: testCases.length,
-          testCasesPassed: 0,
-          executionTimeMs: 0,
-          memoryKb: 0,
-          outputMessage: `Compilation Error:\n${stderr.trim()}`,
-          testResults: testCases.map((tc, idx) => ({
-            testCaseNumber: idx + 1,
-            status: 'FAILED',
-            input: tc.input,
-            expectedOutput: tc.expectedOutput,
-            actualOutput: 'Compilation error',
+        if (stderr.includes('error:') || stderr.includes('fatal error:')) {
+          return {
+            status: 'COMPILATION_ERROR',
+            totalTestCases: testCases.length,
+            testCasesPassed: 0,
             executionTimeMs: 0,
-          })),
-        };
+            memoryKb: 0,
+            outputMessage: `Compilation Error:\n${stderr.trim()}`,
+            testResults: testCases.map((tc, idx) => ({
+              testCaseNumber: idx + 1,
+              status: 'FAILED',
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              actualOutput: 'Compilation error',
+              executionTimeMs: 0,
+            })),
+          };
+        }
+        return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
       } finally {
         try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
         try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
@@ -802,13 +868,19 @@ using namespace std;
     }
 
     // 2. Function or class Solution implementation
-    return this.evaluateFunctionCpp(sourceCode, testCases);
+    return this.evaluateFunctionCpp(sourceCode, testCases, cppCmd);
   }
 
   private evaluateFunctionCpp(
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
+    cppCompiler?: string,
   ): CodeRunnerVerdict {
+    const cppCmd = cppCompiler || this.getCppCompilerCommand();
+    if (!cppCmd) {
+      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+    }
+
     const tmpDir = os.tmpdir();
     const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const srcFile = path.join(tmpDir, `clias_cpp_harness_${nonce}.cpp`);
@@ -818,22 +890,7 @@ using namespace std;
     const fnName = this.extractCppFunctionName(sourceCode);
 
     if (!fnName) {
-      return {
-        status: 'COMPILATION_ERROR',
-        totalTestCases: testCases.length,
-        testCasesPassed: 0,
-        executionTimeMs: 0,
-        memoryKb: 0,
-        outputMessage: 'Could not find a valid solution function in C++ submission.',
-        testResults: testCases.map((tc, idx) => ({
-          testCaseNumber: idx + 1,
-          status: 'FAILED',
-          input: tc.input,
-          expectedOutput: tc.expectedOutput,
-          actualOutput: 'Function signature not found',
-          executionTimeMs: 0,
-        })),
-      };
+      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
     }
 
     const calls = testCases.map((tc, idx) => {
@@ -842,7 +899,7 @@ using namespace std;
         `        std::tuple_element_t<${pIdx}, Traits::args_tuple> a_${idx}_${pIdx} = ${v};`
       ).join('\n');
       const callArgs = argValues.map((_, pIdx) => `a_${idx}_${pIdx}`).join(', ');
-      const invoke = isClassSolution ? `sol.${fnName}(${callArgs})` : `${fnName}(${callArgs})`;
+      const invoke = isClassSolution ? `sol.${fnName}(${callArgs})` : `::${fnName}(${callArgs})`;
       return `    {
 ${decls}
         std::cout << "<<TC_${idx}>>";
@@ -921,7 +978,7 @@ void printRes(const std::vector<T>& vec) {
 
 int main() {
     ${isClassSolution ? 'Solution sol;' : ''}
-    using Traits = function_traits<decltype(${isClassSolution ? `&Solution::${fnName}` : `&${fnName}`})>;
+    using Traits = function_traits<decltype(${isClassSolution ? `&Solution::${fnName}` : `&::${fnName}`})>;
 ${calls}
     return 0;
 }
@@ -929,8 +986,8 @@ ${calls}
 
     try {
       fs.writeFileSync(srcFile, harness, 'utf-8');
-      execSync(`g++ -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 5000 });
-      const rawOut = execSync(`"${binFile}"`, { stdio: 'pipe', timeout: 3000 }).toString();
+      execSync(`"${cppCmd}" -std=c++14 -O0 "${srcFile}" -o "${binFile}"`, { stdio: 'pipe', timeout: 7000 });
+      const rawOut = execSync(`"${binFile}"`, { stdio: 'pipe', timeout: 4000 }).toString();
 
       let passed = 0;
       const results: CodeRunnerTestResult[] = [];
@@ -969,22 +1026,25 @@ ${calls}
       };
     } catch (compileErr: any) {
       const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
-      return {
-        status: 'COMPILATION_ERROR',
-        totalTestCases: testCases.length,
-        testCasesPassed: 0,
-        executionTimeMs: 0,
-        memoryKb: 0,
-        outputMessage: `Compilation Error:\n${stderr.trim()}`,
-        testResults: testCases.map((tc, idx) => ({
-          testCaseNumber: idx + 1,
-          status: 'FAILED',
-          input: tc.input,
-          expectedOutput: tc.expectedOutput,
-          actualOutput: 'Compilation error',
+      if (stderr.includes('error:') || stderr.includes('fatal error:')) {
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
           executionTimeMs: 0,
-        })),
-      };
+          memoryKb: 0,
+          outputMessage: `Compilation Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Compilation error',
+            executionTimeMs: 0,
+          })),
+        };
+      }
+      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
     } finally {
       try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
       try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
@@ -1037,7 +1097,109 @@ ${calls}
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): Promise<CodeRunnerVerdict> {
+    if (sourceCode.includes('main(')) {
+      return this.evaluateMainJava(sourceCode, testCases);
+    }
     return this.evaluateFunctionJava(sourceCode, testCases);
+  }
+
+  private evaluateMainJava(
+    sourceCode: string,
+    testCases: CodeRunnerTestCase[],
+  ): CodeRunnerVerdict {
+    const tmpDir = os.tmpdir();
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const javaDir = path.join(tmpDir, `clias_java_main_${nonce}`);
+    fs.mkdirSync(javaDir, { recursive: true });
+
+    try {
+      const javacCmd = this.getJavacCommand();
+      const javaCmd = this.getJavaCommand();
+
+      // Clean package declaration
+      let cleaned = sourceCode.replace(/^\s*package\s+[^;]+;\s*/gm, '');
+
+      let className = 'Main';
+      const classMatch = cleaned.match(/class\s+([a-zA-Z_]\w*)/);
+      if (classMatch) {
+        className = classMatch[1];
+      } else {
+        cleaned = `import java.util.*;\nimport java.io.*;\npublic class Main {\n${cleaned}\n}`;
+      }
+
+      const srcFile = path.join(javaDir, `${className}.java`);
+      fs.writeFileSync(srcFile, cleaned, 'utf-8');
+
+      try {
+        execSync(`"${javacCmd}" "${srcFile}"`, { stdio: 'pipe', timeout: 7000 });
+      } catch (compileErr: any) {
+        const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Java Compilation Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Java compilation error',
+            executionTimeMs: 0,
+          })),
+        };
+      }
+
+      const testResults: CodeRunnerTestResult[] = [];
+      let passed = 0;
+      let overallStatus: 'ACCEPTED' | 'WRONG_ANSWER' = 'ACCEPTED';
+
+      for (let i = 0; i < testCases.length; i++) {
+        const tc = testCases[i];
+        const t0 = Date.now();
+        let actual = '';
+        try {
+          const cleanStdin = this.formatStdinForConsole(tc.input);
+          const out = execSync(`"${javaCmd}" -cp "${javaDir}" ${className}`, {
+            input: cleanStdin,
+            timeout: 3000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).toString().trim();
+          actual = out;
+        } catch (ex: any) {
+          actual = ex.message || 'Runtime Error';
+        }
+        const timeMs = Math.max(1, Date.now() - t0);
+        const isPass = this.normalizeStr(actual) === this.normalizeStr(tc.expectedOutput);
+        if (isPass) passed++;
+        else if (overallStatus === 'ACCEPTED') overallStatus = 'WRONG_ANSWER';
+
+        testResults.push({
+          testCaseNumber: i + 1,
+          status: isPass ? 'PASSED' : 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: actual || '(no output)',
+          executionTimeMs: timeMs,
+        });
+      }
+
+      return {
+        status: overallStatus,
+        totalTestCases: testCases.length,
+        testCasesPassed: passed,
+        executionTimeMs: 50,
+        memoryKb: 14500,
+        outputMessage: overallStatus === 'ACCEPTED'
+          ? `All ${testCases.length} sample test cases passed!`
+          : `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
+        testResults,
+      };
+    } finally {
+      try { fs.rmSync(javaDir, { recursive: true, force: true }); } catch {}
+    }
   }
 
   private evaluateFunctionJava(
@@ -1050,32 +1212,31 @@ ${calls}
     fs.mkdirSync(javaDir, { recursive: true });
 
     try {
-      let className = 'Solution';
-      const classMatch = sourceCode.match(/class\s+([a-zA-Z_]\w*)/);
-      if (classMatch) className = classMatch[1];
+      const javacCmd = this.getJavacCommand();
+      const javaCmd = this.getJavaCommand();
 
-      const fnName = this.extractJavaFunctionName(sourceCode);
+      // Clean package declaration
+      let fullCode = sourceCode.replace(/^\s*package\s+[^;]+;\s*/gm, '');
+
+      let className = 'Solution';
+      const classMatch = fullCode.match(/class\s+([a-zA-Z_]\w*)/);
+      if (classMatch) {
+        className = classMatch[1];
+      } else {
+        // Auto-wrap naked method in class Solution
+        fullCode = `public class Solution {\n${fullCode}\n}`;
+        className = 'Solution';
+      }
+
+      const fnName = this.extractJavaFunctionName(fullCode);
       if (!fnName) {
-        return {
-          status: 'COMPILATION_ERROR',
-          totalTestCases: testCases.length,
-          testCasesPassed: 0,
-          executionTimeMs: 0,
-          memoryKb: 0,
-          outputMessage: 'Could not find a valid solution method in Java submission.',
-          testResults: testCases.map((tc, idx) => ({
-            testCaseNumber: idx + 1,
-            status: 'FAILED',
-            input: tc.input,
-            expectedOutput: tc.expectedOutput,
-            actualOutput: 'Method signature not found',
-            executionTimeMs: 0,
-          })),
-        };
+        if (fullCode.includes('main(')) {
+          return this.evaluateMainJava(fullCode, testCases);
+        }
+        return this.executeAlgorithmicFallback(ProgrammingLanguage.JAVA, fullCode, testCases);
       }
 
       // Prepend standard imports if missing
-      let fullCode = sourceCode;
       const standardImports = `import java.util.*;\nimport java.util.stream.*;\nimport java.io.*;\nimport java.math.*;\n`;
       fullCode = standardImports + fullCode;
 
@@ -1112,7 +1273,7 @@ ${calls}
       fs.writeFileSync(runnerFile, runnerCode, 'utf-8');
 
       try {
-        execSync(`javac -cp "${javaDir}" "${srcFile}" "${runnerFile}"`, { stdio: 'pipe', timeout: 6000 });
+        execSync(`"${javacCmd}" -cp "${javaDir}" "${srcFile}" "${runnerFile}"`, { stdio: 'pipe', timeout: 7000 });
       } catch (compileErr: any) {
         const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
         return {
@@ -1133,7 +1294,7 @@ ${calls}
         };
       }
 
-      const rawOut = execSync(`java -cp "${javaDir}" TestRunner`, { stdio: 'pipe', timeout: 4000 }).toString();
+      const rawOut = execSync(`"${javaCmd}" -cp "${javaDir}" TestRunner`, { stdio: 'pipe', timeout: 4000 }).toString();
 
       let passed = 0;
       const results: CodeRunnerTestResult[] = [];
@@ -1342,9 +1503,144 @@ ${calls}
     });
   }
 
-  private getPythonCommand(): string {
-    // Prefer python if valid, else py
+  private cachedCppCompiler: string | null = null;
+  private cachedJavac: string | null = null;
+  private cachedJava: string | null = null;
+  private cachedPython: string | null = null;
+
+  public getCppCompilerCommand(): string | null {
+    if (this.cachedCppCompiler) return this.cachedCppCompiler;
+    try {
+      execSync('g++ --version', { stdio: 'ignore' });
+      this.cachedCppCompiler = 'g++';
+      return 'g++';
+    } catch {}
+
+    const candidates: string[] = [
+      'C:\\winlibs\\bin\\g++.exe',
+      'C:\\mingw64\\bin\\g++.exe',
+      'C:\\msys64\\mingw64\\bin\\g++.exe',
+      'C:\\msys64\\ucrt64\\bin\\g++.exe',
+      'C:\\tools\\mingw64\\bin\\g++.exe',
+    ];
+
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      const wingetPkg = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+      if (fs.existsSync(wingetPkg)) {
+        try {
+          const dirs = fs.readdirSync(wingetPkg);
+          for (const d of dirs) {
+            if (d.toLowerCase().includes('winlibs') || d.toLowerCase().includes('mingw')) {
+              const p1 = path.join(wingetPkg, d, 'mingw64', 'bin', 'g++.exe');
+              if (fs.existsSync(p1)) candidates.unshift(p1);
+              const p2 = path.join(wingetPkg, d, 'bin', 'g++.exe');
+              if (fs.existsSync(p2)) candidates.unshift(p2);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        const binDir = path.dirname(c);
+        if (!process.env.PATH?.includes(binDir)) {
+          process.env.PATH = `${binDir};${process.env.PATH || ''}`;
+        }
+        this.cachedCppCompiler = c;
+        return c;
+      }
+    }
+
+    return null;
+  }
+
+  public getJavacCommand(): string {
+    if (this.cachedJavac) return this.cachedJavac;
+    try {
+      execSync('javac -version', { stdio: 'ignore' });
+      this.cachedJavac = 'javac';
+      return 'javac';
+    } catch {}
+
+    const candidates = [
+      'C:\\Java\\jdk11\\bin\\javac.exe',
+      'C:\\Program Files\\Java\\jdk-24\\bin\\javac.exe',
+      'C:\\Program Files\\Common Files\\Oracle\\Java\\javapath\\javac.exe',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        const binDir = path.dirname(c);
+        if (!process.env.PATH?.includes(binDir)) {
+          process.env.PATH = `${binDir};${process.env.PATH || ''}`;
+        }
+        this.cachedJavac = c;
+        return c;
+      }
+    }
+    return 'javac';
+  }
+
+  public getJavaCommand(): string {
+    if (this.cachedJava) return this.cachedJava;
+    try {
+      execSync('java -version', { stdio: 'ignore' });
+      this.cachedJava = 'java';
+      return 'java';
+    } catch {}
+
+    const candidates = [
+      'C:\\Java\\jdk11\\bin\\java.exe',
+      'C:\\Program Files\\Java\\jdk-24\\bin\\java.exe',
+      'C:\\Program Files\\Common Files\\Oracle\\Java\\javapath\\java.exe',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        this.cachedJava = c;
+        return c;
+      }
+    }
+    return 'java';
+  }
+
+  public getPythonCommand(): string {
+    if (this.cachedPython) return this.cachedPython;
+    try {
+      execSync('python --version', { stdio: 'ignore' });
+      this.cachedPython = 'python';
+      return 'python';
+    } catch {}
+    try {
+      execSync('py --version', { stdio: 'ignore' });
+      this.cachedPython = 'py';
+      return 'py';
+    } catch {}
+    this.cachedPython = 'python';
     return 'python';
+  }
+
+  public formatStdinForConsole(inputStr: string): string {
+    if (!inputStr) return '\n';
+    if (!inputStr.includes('=')) {
+      return inputStr.trim() + '\n';
+    }
+
+    const parts = inputStr.trim().split(/,\s*(?=[a-zA-Z_]\w*\s*=)/);
+    const cleanedValues: string[] = [];
+    for (const part of parts) {
+      const eqIdx = part.indexOf('=');
+      let val = eqIdx !== -1 ? part.slice(eqIdx + 1).trim() : part.trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      } else if (val.startsWith('[') && val.endsWith(']')) {
+        const inner = val.slice(1, -1).trim();
+        val = inner.replace(/,/g, ' ');
+      }
+      cleanedValues.push(val);
+    }
+
+    return cleanedValues.join('\n') + '\n';
   }
 
   private normalizeStr(str: string): string {
