@@ -49,19 +49,34 @@ export class PracticeService {
       throw new ForbiddenException('Access denied to this practice session.');
     }
 
-    // Find questions already attempted in this session
-    const attemptedQuestionIds = await this.prisma.questionAttempt
+    // Find questions already attempted by this student across all sessions
+    const studentAttempts = await this.prisma.questionAttempt
+      .findMany({
+        where: { studentId },
+        select: { questionId: true },
+      })
+      .then((attempts) => attempts.map((a) => a.questionId));
+
+    const sessionAttempts = await this.prisma.questionAttempt
       .findMany({
         where: { practiceSessionId: sessionId },
         select: { questionId: true },
       })
       .then((attempts) => attempts.map((a) => a.questionId));
 
-    // Filter criteria
+    const attemptedQuestionIds = Array.from(new Set([...studentAttempts, ...sessionAttempts]));
+
+    const selectOptions = {
+      id: true,
+      optionText: true,
+      order: true,
+    };
+
+    // Tier 1: Search for unattempted questions in topic + difficulty
     const where: any = {
       courseId: session.courseId,
       status: 'APPROVED',
-      id: { notIn: attemptedQuestionIds },
+      ...(attemptedQuestionIds.length > 0 ? { id: { notIn: attemptedQuestionIds } } : {}),
     };
 
     if (session.topicId) {
@@ -71,22 +86,75 @@ export class PracticeService {
       where.difficulty = session.difficulty;
     }
 
-    const availableQuestions = await this.prisma.question.findMany({
+    let availableQuestions = await this.prisma.question.findMany({
       where,
-      take: 10,
+      take: 15,
       include: {
         topic: { select: { id: true, name: true } },
         options: {
-          select: {
-            id: true,
-            optionText: true,
-            order: true,
-            // SECURITY: Never leak isCorrect to client!
-          },
+          select: selectOptions,
           orderBy: { order: 'asc' },
         },
       },
     });
+
+    // Tier 2: If none at exact difficulty, try any difficulty in topic
+    if (availableQuestions.length === 0 && session.topicId) {
+      availableQuestions = await this.prisma.question.findMany({
+        where: {
+          courseId: session.courseId,
+          topicId: session.topicId,
+          status: 'APPROVED',
+          ...(attemptedQuestionIds.length > 0 ? { id: { notIn: attemptedQuestionIds } } : {}),
+        },
+        take: 15,
+        include: {
+          topic: { select: { id: true, name: true } },
+          options: {
+            select: selectOptions,
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+    }
+
+    // Tier 3: If topic exhausted, try other topics in course
+    if (availableQuestions.length === 0) {
+      availableQuestions = await this.prisma.question.findMany({
+        where: {
+          courseId: session.courseId,
+          status: 'APPROVED',
+          ...(attemptedQuestionIds.length > 0 ? { id: { notIn: attemptedQuestionIds } } : {}),
+        },
+        take: 15,
+        include: {
+          topic: { select: { id: true, name: true } },
+          options: {
+            select: selectOptions,
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+    }
+
+    // Absolute fallback: exclude at least current session attempts
+    if (availableQuestions.length === 0) {
+      availableQuestions = await this.prisma.question.findMany({
+        where: {
+          courseId: session.courseId,
+          status: 'APPROVED',
+          ...(sessionAttempts.length > 0 ? { id: { notIn: sessionAttempts } } : {}),
+        },
+        take: 5,
+        include: {
+          topic: { select: { id: true, name: true } },
+          options: {
+            select: selectOptions,
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+    }
 
     if (availableQuestions.length === 0) {
       return null;

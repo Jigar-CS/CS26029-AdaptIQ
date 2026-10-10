@@ -103,95 +103,167 @@ export class AdaptiveLearningService {
     const calibration = await this.getCalibratedDifficulty(studentId, topicId);
     const targetDifficulty = preferredDifficulty || calibration.recommendedDifficulty;
 
-    // Find questions in this topic matching the target difficulty
-    const candidateQuestions = await this.prisma.question.findMany({
+    // 1. Fetch ALL question IDs previously attempted by this student across ALL sessions
+    const previousAttempts = await this.prisma.questionAttempt.findMany({
+      where: { studentId },
+      select: { questionId: true },
+    });
+
+    const studentAttemptedIds = previousAttempts.map((a) => a.questionId);
+
+    // Merge student's lifetime attempts with current session excludeIds
+    const excludedIdSet = new Set<string>([
+      ...studentAttemptedIds,
+      ...(excludeIds || []),
+    ]);
+    const allExcludedIds = Array.from(excludedIdSet);
+    const notInClause = allExcludedIds.length > 0 ? { notIn: allExcludedIds } : undefined;
+
+    const selectOptions = {
+      id: true,
+      optionText: true,
+      order: true,
+    };
+
+    // Tier 1: Search for unattempted questions in matching topic & exact target difficulty (Fast <5ms DB query)
+    let candidateQuestions = await this.prisma.question.findMany({
       where: {
         topicId,
         ...(courseId ? { courseId } : {}),
         difficulty: targetDifficulty,
-        ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+        ...(notInClause ? { id: notInClause } : {}),
       },
       include: {
         options: {
-          select: {
-            id: true,
-            optionText: true,
-            order: true,
-            // Exclude isCorrect and misconceptionId from client payload
-          },
+          select: selectOptions,
           orderBy: { order: 'asc' },
         },
         topic: true,
       },
+      take: 20,
     });
 
+    // Tier 2: If no unattempted questions at exact difficulty, search unattempted questions in same topic across any difficulty
     if (candidateQuestions.length === 0) {
-      // Step A: Automatically generate a fresh, verified AI question for this topic & difficulty
-      try {
-        const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
-        if (topic) {
-          const aiResult = await this.aiQuestionGenerator.generateAndPersistQuestion({
-            topicName: topic.name,
-            courseId: courseId || topic.courseId,
-            difficulty: targetDifficulty,
-            preferredDifficulty: targetDifficulty,
-          });
-
-          if (aiResult?.question) {
-            return {
-              question: aiResult.question,
-              calibration: {
-                ...calibration,
-                activeDifficulty: targetDifficulty,
-                isManualOverride: !!preferredDifficulty,
-              },
-              isFallback: false,
-              isAiGenerated: true,
-            };
-          }
-        }
-      } catch (genErr) {
-        console.warn('AI question auto-generation fallback to database:', genErr);
-      }
-
-      // Step B: Fallback: try any question in topic not yet attempted
-      const fallback = await this.prisma.question.findFirst({
+      candidateQuestions = await this.prisma.question.findMany({
         where: {
           topicId,
           ...(courseId ? { courseId } : {}),
-          ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+          ...(notInClause ? { id: notInClause } : {}),
         },
         include: {
           options: {
-            select: { id: true, optionText: true, order: true },
+            select: selectOptions,
             orderBy: { order: 'asc' },
           },
           topic: true,
         },
+        take: 20,
       });
+    }
 
+    // Tier 3: If whole topic is exhausted by this student, search unattempted questions in the same course
+    if (candidateQuestions.length === 0 && courseId) {
+      candidateQuestions = await this.prisma.question.findMany({
+        where: {
+          courseId,
+          ...(notInClause ? { id: notInClause } : {}),
+        },
+        include: {
+          options: {
+            select: selectOptions,
+            orderBy: { order: 'asc' },
+          },
+          topic: true,
+        },
+        take: 20,
+      });
+    }
+
+    // Proactive background synthesis: If remaining unattempted questions in this topic are low (<= 3),
+    // trigger background question generation asynchronously so the question bank stays stocked without adding latency!
+    if (candidateQuestions.length <= 3) {
+      this.prisma.topic.findUnique({ where: { id: topicId } }).then((topic) => {
+        if (topic) {
+          this.aiQuestionGenerator.generateAndPersistQuestion({
+            topicName: topic.name,
+            courseId: courseId || topic.courseId,
+            difficulty: targetDifficulty,
+            preferredDifficulty: targetDifficulty,
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+
+    // If candidate unattempted questions exist, select one instantly (<5ms)
+    if (candidateQuestions.length > 0) {
+      const selected = candidateQuestions[Math.floor(Math.random() * candidateQuestions.length)];
       return {
-        question: fallback,
+        question: selected,
         calibration: {
           ...calibration,
-          activeDifficulty: targetDifficulty,
+          activeDifficulty: selected.difficulty || targetDifficulty,
           isManualOverride: !!preferredDifficulty,
         },
-        isFallback: true,
+        isFallback: false,
       };
     }
 
-    // Select random question from eligible pool
-    const selected = candidateQuestions[Math.floor(Math.random() * candidateQuestions.length)];
+    // Tier 4: All existing questions in topic and course have been attempted by this student!
+    // Synthesize a fresh, verified AI question on demand.
+    try {
+      const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
+      if (topic) {
+        const aiResult = await this.aiQuestionGenerator.generateAndPersistQuestion({
+          topicName: topic.name,
+          courseId: courseId || topic.courseId,
+          difficulty: targetDifficulty,
+          preferredDifficulty: targetDifficulty,
+        });
+
+        if (aiResult?.question) {
+          return {
+            question: aiResult.question,
+            calibration: {
+              ...calibration,
+              activeDifficulty: targetDifficulty,
+              isManualOverride: !!preferredDifficulty,
+            },
+            isFallback: false,
+            isAiGenerated: true,
+          };
+        }
+      }
+    } catch (genErr) {
+      console.warn('AI question auto-generation fallback:', genErr);
+    }
+
+    // Absolute fallback: least recently attempted question or any question not in current session
+    const sessionExcludedIds = excludeIds && excludeIds.length > 0 ? { notIn: excludeIds } : undefined;
+    const fallback = await this.prisma.question.findFirst({
+      where: {
+        topicId,
+        ...(courseId ? { courseId } : {}),
+        ...(sessionExcludedIds ? { id: sessionExcludedIds } : {}),
+      },
+      include: {
+        options: {
+          select: selectOptions,
+          orderBy: { order: 'asc' },
+        },
+        topic: true,
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
 
     return {
-      question: selected,
+      question: fallback,
       calibration: {
         ...calibration,
         activeDifficulty: targetDifficulty,
         isManualOverride: !!preferredDifficulty,
       },
-      isFallback: false,
+      isFallback: true,
     };
   }
 

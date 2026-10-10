@@ -1,13 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth-context';
 import {
   BrainCircuit,
-  Mail,
   KeyRound,
   Lock,
   CheckCircle2,
@@ -15,16 +13,16 @@ import {
   Loader2,
   GraduationCap,
   Briefcase,
-  UserCheck,
   ShieldAlert,
   BookOpen,
+  RotateCcw,
 } from 'lucide-react';
 import { UserRole } from '@clias/shared-types';
 
 export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Email, 2: OTP, 3: Set Password
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STUDENT);
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,12 +36,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState<number>(0);
 
   const router = useRouter();
   const universityName = process.env.NEXT_PUBLIC_UNIVERSITY_NAME || 'CHARUSAT';
 
   // Load available subjects on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchCourses = async () => {
       try {
         const list = await api.get('/courses');
@@ -58,11 +57,31 @@ export default function RegisterPage() {
     fetchCourses();
   }, []);
 
-  // Computed domain validation message
-  const domainPart = email.includes('@') ? email.split('@')[1]?.toLowerCase() : '';
+  // Timer for Resend OTP button
+  useEffect(() => {
+    let timer: any;
+    if (resendCountdown > 0) {
+      timer = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
+  // Fixed institutional domain based on selected role:
+  // Student -> charusat.edu.in
+  // Faculty -> charusat.ac.in
   const isFacultyOrStaff = selectedRole !== UserRole.STUDENT;
-  const isInvalidFacultyDomain = isFacultyOrStaff && email.length > 0 && domainPart !== '' && domainPart !== 'charusat.ac.in';
-  const isInvalidStudentDomain = !isFacultyOrStaff && email.length > 0 && domainPart !== '' && domainPart !== 'charusat.edu.in';
+  const targetDomain = isFacultyOrStaff ? 'charusat.ac.in' : 'charusat.edu.in';
+
+  // Clean identifier: strip any accidental '@...' typed or pasted
+  const cleanIdentifier = identifier.trim().toLowerCase().replace(/@.*$/, '');
+  const email = cleanIdentifier ? `${cleanIdentifier}@${targetDomain}` : '';
+
+  const handleIdentifierChange = (val: string) => {
+    // If the user pastes or types an email with '@', take only the prefix before '@'
+    const stripped = val.replace(/@.*$/, '').trim();
+    setIdentifier(stripped);
+    setError(null);
+  };
 
   // Step 1: Request OTP
   const handleRequestOtp = async (e: React.FormEvent) => {
@@ -70,37 +89,47 @@ export default function RegisterPage() {
     setError(null);
     setInfoMsg(null);
 
-    const emailTrimmed = email.trim().toLowerCase();
-
-    // Client-side domain check:
-    // Students can ONLY register via charusat.edu.in; non-students strictly via charusat.ac.in
-    if (selectedRole === UserRole.STUDENT) {
-      if (!emailTrimmed.endsWith('@charusat.edu.in')) {
-        setError(
-          'Student registration strictly requires an official @charusat.edu.in email address. Verification OTP cannot be sent.',
-        );
-        return;
-      }
-    } else {
-      if (!emailTrimmed.endsWith('@charusat.ac.in')) {
-        setError(
-          'Registration for Faculty & Institutional Staff strictly requires an official @charusat.ac.in email address. Verification OTP cannot be sent.',
-        );
-        return;
-      }
+    if (!cleanIdentifier) {
+      setError(
+        selectedRole === UserRole.STUDENT
+          ? 'Please enter your Student ID / Enrollment Number (e.g. 24CS093).'
+          : 'Please enter your Faculty ID or Official Name (e.g. dharasolanki.cse).'
+      );
+      return;
     }
 
     setLoading(true);
 
     try {
       const res = await api.post('/auth/register/request-otp', {
-        email: emailTrimmed,
+        email,
         role: selectedRole,
       });
-      setInfoMsg(res.message || `Verification code dispatched to ${emailTrimmed}. (Check server logs in dev)`);
+      setInfoMsg(res.message || `Verification code dispatched to ${email}.`);
       setStep(2);
+      setResendCountdown(30);
     } catch (err: any) {
       setError(err.message || 'Failed to request verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Resend OTP handler
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || loading) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.post('/auth/register/request-otp', {
+        email,
+        role: selectedRole,
+      });
+      setInfoMsg(res.message || `A new verification code has been dispatched to ${email}.`);
+      setResendCountdown(30);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend verification code.');
     } finally {
       setLoading(false);
     }
@@ -114,7 +143,7 @@ export default function RegisterPage() {
 
     try {
       const res = await api.post('/auth/register/verify-otp', {
-        email: email.trim().toLowerCase(),
+        email,
         otp: otp.trim(),
         role: selectedRole,
       });
@@ -124,7 +153,7 @@ export default function RegisterPage() {
       } else if (res.profile) {
         setStaffDetails(res.profile);
       } else {
-        setStaffDetails({ email, role: selectedRole, name: email.split('@')[0] });
+        setStaffDetails({ email, role: selectedRole, name: cleanIdentifier });
       }
       setStep(3);
     } catch (err: any) {
@@ -152,7 +181,7 @@ export default function RegisterPage() {
 
     try {
       const res = await api.post('/auth/register', {
-        email: email.trim().toLowerCase(),
+        email,
         otp: otp.trim(),
         password,
         role: selectedRole,
@@ -238,7 +267,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* STEP 1: Role Selection & Email */}
+          {/* STEP 1: Role Selection & Institutional ID */}
           {step === 1 && (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
@@ -250,7 +279,7 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setSelectedRole(UserRole.STUDENT);
-                      setEmail('');
+                      setIdentifier('');
                       setError(null);
                     }}
                     className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition ${
@@ -266,7 +295,7 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setSelectedRole(UserRole.FACULTY);
-                      setEmail('');
+                      setIdentifier('');
                       setError(null);
                     }}
                     className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition ${
@@ -286,73 +315,77 @@ export default function RegisterPage() {
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
                     <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Official Domain Requirement</span>
+                    <span>Fixed Faculty Domain: @charusat.ac.in</span>
                   </div>
                   <p className="text-amber-300/80">
-                    Faculty & staff must register with their official <strong>@charusat.ac.in</strong> email address. OTP will only be dispatched to verified <strong>@charusat.ac.in</strong> domains.
+                    Faculty & staff only need to enter their official ID or name prefix. Verification OTP will be automatically dispatched to <strong>[name/id]@charusat.ac.in</strong>.
                   </p>
                 </div>
               ) : (
                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
                     <ShieldAlert className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Student Institutional Domain</span>
+                    <span>Fixed Student Domain: @charusat.edu.in</span>
                   </div>
                   <p className="text-blue-300/80">
-                    Students must register strictly using their official <strong>@charusat.edu.in</strong> email address. OTP verification will only be sent to <strong>@charusat.edu.in</strong> accounts.
+                    Students only need to enter their Student ID (e.g. 24CS093). Verification OTP will be automatically dispatched to <strong>[student_id]@charusat.edu.in</strong>.
                   </p>
                 </div>
               )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Institutional Email Address
+                  {isFacultyOrStaff ? 'Faculty ID or Official Name' : 'Student ID / Enrollment Number'}
                 </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <div className="flex rounded-xl overflow-hidden border border-slate-700 bg-slate-900 focus-within:ring-2 focus-within:ring-indigo-500/40 focus-within:border-indigo-500 transition shadow-inner">
+                  <div className="pl-3.5 pr-1 flex items-center text-slate-500">
+                    {isFacultyOrStaff ? (
+                      <Briefcase className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <GraduationCap className="w-4 h-4 text-indigo-400" />
+                    )}
+                  </div>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setError(null);
-                    }}
+                    value={identifier}
+                    onChange={(e) => handleIdentifierChange(e.target.value)}
                     placeholder={
-                      selectedRole === UserRole.FACULTY
-                        ? 'name.dept@charusat.ac.in'
-                        : 'student@charusat.edu.in'
+                      isFacultyOrStaff
+                        ? 'e.g. dharasolanki.cse or john.doe'
+                        : 'e.g. 24CS093'
                     }
-                    className={`w-full pl-10 pr-4 py-2.5 text-xs bg-slate-900 border text-white rounded-xl focus:outline-none transition ${
-                      isInvalidFacultyDomain || isInvalidStudentDomain
-                        ? 'border-rose-500 focus:ring-2 focus:ring-rose-500/30'
-                        : 'border-slate-700 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500'
-                    }`}
+                    className="w-full py-2.5 px-2.5 text-xs bg-transparent text-white font-mono placeholder:text-slate-500 focus:outline-none"
                   />
+                  <div
+                    className={`px-3 py-2.5 border-l border-slate-700 text-xs font-mono font-bold flex items-center select-none ${
+                      isFacultyOrStaff ? 'bg-emerald-950/40 text-emerald-300' : 'bg-indigo-950/40 text-indigo-300'
+                    }`}
+                  >
+                    @{targetDomain}
+                  </div>
                 </div>
 
-                {isInvalidFacultyDomain && (
-                  <p className="text-[11px] text-rose-400 mt-1 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Domain must be @charusat.ac.in for faculty accounts.
-                  </p>
-                )}
-
-                {isInvalidStudentDomain && (
-                  <p className="text-[11px] text-rose-400 mt-1 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Domain must be @charusat.edu.in for student accounts.
-                  </p>
-                )}
+                <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="truncate mr-2">
+                    Mail will be sent to:{' '}
+                    <strong className="text-white font-mono">
+                      {cleanIdentifier ? `${cleanIdentifier}@${targetDomain}` : `[id]@${targetDomain}`}
+                    </strong>
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-400 shrink-0 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Locked
+                  </span>
+                </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || isInvalidFacultyDomain || isInvalidStudentDomain}
+                disabled={loading || !cleanIdentifier}
                 className="w-full py-3 px-4 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                <span>{loading ? 'Verifying domain & sending...' : 'Send Verification OTP'}</span>
+                <span>{loading ? 'Sending verification code...' : 'Send Verification OTP'}</span>
               </button>
             </form>
           )}
@@ -360,16 +393,22 @@ export default function RegisterPage() {
           {/* STEP 2: Verify OTP */}
           {step === 2 && (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-slate-500">Target Email:</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+              <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-slate-500 text-[11px]">Verification Email Dispatched:</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      selectedRole === UserRole.STUDENT
+                        ? 'bg-indigo-500/20 text-indigo-300'
+                        : 'bg-emerald-500/20 text-emerald-300'
+                    }`}
+                  >
                     {selectedRole}
                   </span>
                 </div>
-                <p className="font-bold text-white font-mono">{email}</p>
+                <p className="font-bold text-white font-mono text-sm">{email}</p>
                 <p className="text-[11px] text-indigo-400 mt-2">
-                  💡 In development mode, check the API server console log for the 6-digit OTP.
+                  💡 A 6-digit verification code has been dispatched to your email address.
                 </p>
               </div>
 
@@ -391,10 +430,26 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between text-xs px-0.5">
+                <span className="text-slate-400 text-[11px]">Didn&apos;t receive code?</span>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading || resendCountdown > 0}
+                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 disabled:cursor-not-allowed transition flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>{resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Code'}</span>
+                </button>
+              </div>
+
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => {
+                    setStep(1);
+                    setError(null);
+                  }}
                   className="w-1/3 py-2.5 px-3 text-xs font-semibold text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-800 transition"
                 >
                   Back
@@ -420,7 +475,7 @@ export default function RegisterPage() {
                     {selectedRole === UserRole.STUDENT ? 'Verified Student Record' : 'Verified Faculty Profile'}
                   </span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Verified @charusat.ac.in
+                    Verified @{targetDomain}
                   </span>
                 </div>
 

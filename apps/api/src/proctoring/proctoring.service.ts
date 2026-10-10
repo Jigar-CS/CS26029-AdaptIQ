@@ -70,7 +70,7 @@ export class ProctoringService {
   /**
    * Completes face enrollment verification at test start (Privacy by Design: no permanent raw biometric storage).
    */
-  async verifyFaceEnrollment(sessionId: string) {
+  async verifyFaceEnrollment(sessionId: string, snapshot?: string) {
     const session = await this.prisma.proctoringSession.findFirst({
       where: {
         OR: [{ id: sessionId }, { submissionId: sessionId }],
@@ -86,6 +86,9 @@ export class ProctoringService {
       data: {
         faceEnrollmentVerified: true,
         enrolledAt: new Date(),
+        invigilatorNotes: snapshot
+          ? `[BASELINE_ENROLLED] Candidate reference photo verified and enrolled at ${new Date().toISOString()}`
+          : session.invigilatorNotes,
         status:
           session.status === ProctoringSessionStatus.FLAGGED
             ? ProctoringSessionStatus.FLAGGED

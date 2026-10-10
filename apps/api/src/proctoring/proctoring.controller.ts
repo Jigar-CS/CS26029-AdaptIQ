@@ -29,8 +29,8 @@ export class ProctoringController {
 
   @Post('sessions/:id/enroll-face')
   @Roles(UserRole.STUDENT, UserRole.SUPER_ADMIN)
-  async verifyFaceEnrollment(@Param('id') id: string) {
-    return this.proctoringService.verifyFaceEnrollment(id);
+  async verifyFaceEnrollment(@Param('id') id: string, @Body() body?: { snapshot?: string }) {
+    return this.proctoringService.verifyFaceEnrollment(id, body?.snapshot);
   }
 
   @Post('sessions/:id/violation')

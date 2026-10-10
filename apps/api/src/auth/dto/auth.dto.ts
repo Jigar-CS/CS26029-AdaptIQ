@@ -2,8 +2,8 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, IsEnum } from 'cl
 import { UserRole } from '@prisma/client';
 
 export class RequestOtpDto {
-  @IsEmail({}, { message: 'A valid email address is required' })
-  @IsNotEmpty({ message: 'Email address cannot be empty' })
+  @IsString({ message: 'Email address or university ID is required' })
+  @IsNotEmpty({ message: 'Email address or university ID cannot be empty' })
   email: string;
 
   @IsOptional()
@@ -12,7 +12,7 @@ export class RequestOtpDto {
 }
 
 export class VerifyOtpDto {
-  @IsEmail({}, { message: 'A valid email address is required' })
+  @IsString({ message: 'Email address or university ID is required' })
   @IsNotEmpty()
   email: string;
 
@@ -26,7 +26,7 @@ export class VerifyOtpDto {
 }
 
 export class RegisterStudentDto {
-  @IsEmail()
+  @IsString({ message: 'Email address or university ID is required' })
   @IsNotEmpty()
   email: string;
 

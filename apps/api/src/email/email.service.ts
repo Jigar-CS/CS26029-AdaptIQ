@@ -57,6 +57,9 @@ export class NodemailerEmailService implements EmailService {
       host,
       port,
       secure,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
       auth: user && pass ? { user, pass } : undefined,
       tls: {
         rejectUnauthorized: false, // Prevents self-signed / local TLS certificate errors

@@ -72,6 +72,22 @@ export default function PracticePage() {
     totalTime: 0,
   });
 
+  // Post-Session Question Review & Explanation states
+  interface QuestionAttemptSummary {
+    questionNumber: number;
+    questionId: string;
+    questionText: string;
+    topicName?: string;
+    difficulty?: string;
+    selectedOptionText: string;
+    correctOptionText: string;
+    isCorrect: boolean;
+    explanation: string;
+    timeTakenSeconds: number;
+  }
+  const [sessionAttemptSummaries, setSessionAttemptSummaries] = useState<QuestionAttemptSummary[]>([]);
+  const [summaryFilter, setSummaryFilter] = useState<'WRONG' | 'ALL'>('WRONG');
+
   // On-Demand AI Topic Generation states
   const [isCustomTopicMode, setIsCustomTopicMode] = useState<boolean>(false);
   const [customTopicInput, setCustomTopicInput] = useState<string>('');
@@ -203,6 +219,8 @@ export default function PracticePage() {
     setSessionCompleted(false);
     setAttemptedQuestionIds([]);
     setSessionScore({ correct: 0, total: 0, totalTime: 0 });
+    setSessionAttemptSummaries([]);
+    setSummaryFilter('WRONG');
 
     const targetTopicId = overrideTopicId || selectedTopicId;
 
@@ -269,6 +287,8 @@ export default function PracticePage() {
     setSessionCompleted(false);
     setAttemptedQuestionIds([]);
     setSessionScore({ correct: 0, total: 0, totalTime: 0 });
+    setSessionAttemptSummaries([]);
+    setSummaryFilter('WRONG');
 
     try {
       const res = await api.post('/adaptive/generate-question', {
@@ -343,6 +363,7 @@ export default function PracticePage() {
     setSelectedOptionId(null);
     setSessionCompleted(false);
     setShowExitConfirmModal(false);
+    setSessionAttemptSummaries([]);
     if (selectedTopicId) {
       loadCalibration(selectedTopicId);
     }
@@ -366,6 +387,28 @@ export default function PracticePage() {
         total: prev.total + 1,
         totalTime: prev.totalTime + timerSeconds,
       }));
+
+      // Record full attempt detail for post-session conceptual review & explanation
+      const selectedOpt = currentQuestion.options?.find((opt: any) => opt.id === selectedOptionId);
+      const correctOpt = currentQuestion.options?.find((opt: any) => opt.id === res.correctOptionId);
+
+      const summaryItem: QuestionAttemptSummary = {
+        questionNumber: currentQuestionIndex,
+        questionId: currentQuestion.id,
+        questionText: currentQuestion.questionText,
+        topicName:
+          currentQuestion.topicName ||
+          selectedCourse?.topics?.find((t: any) => t.id === selectedTopicId)?.name ||
+          'Target Practice',
+        difficulty: currentQuestion.difficulty || selectedDifficulty,
+        selectedOptionText: selectedOpt?.optionText || 'Option Selected',
+        correctOptionText: correctOpt?.optionText || 'Correct Option',
+        isCorrect: res.isCorrect,
+        explanation: res.explanation || currentQuestion.explanation || 'Detailed explanation provided.',
+        timeTakenSeconds: timerSeconds,
+      };
+
+      setSessionAttemptSummaries((prev) => [...prev, summaryItem]);
 
       // Phase 4: Record attempt with adaptive engine for misconception & spaced repetition updates
       try {
@@ -804,11 +847,181 @@ export default function PracticePage() {
                     </div>
                   </div>
 
+                  {/* Detailed Post-Session Wrong Answers & Explanations Review */}
+                  <div className="pt-6 border-t border-slate-200 dark:border-slate-800 text-left space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                          <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
+                            Post-Session Concept Analysis & Wrong Answers Review
+                          </h4>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Review each problem you missed during this session along with detailed step-by-step conceptual explanations to bridge understanding.
+                        </p>
+                      </div>
+
+                      {/* Filter Tabs */}
+                      <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSummaryFilter('WRONG')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            summaryFilter === 'WRONG'
+                              ? 'bg-rose-500 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Wrong Answers ({sessionAttemptSummaries.filter((a) => !a.isCorrect).length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSummaryFilter('ALL')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            summaryFilter === 'ALL'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <span>All Questions ({sessionAttemptSummaries.length})</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* If 100% Correct / No Mistakes */}
+                    {sessionAttemptSummaries.filter((a) => !a.isCorrect).length === 0 ? (
+                      <div className="p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 text-center space-y-2">
+                        <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-xl">
+                          ✨
+                        </div>
+                        <h5 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-200">
+                          Flawless Session! 100% Accuracy
+                        </h5>
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300/80 max-w-md mx-auto">
+                          You answered every question in this practice set correctly. No conceptual errors or misconceptions were detected!
+                        </p>
+                      </div>
+                    ) : (
+                      /* List of Mistakes or Filtered Questions */
+                      <div className="space-y-4">
+                        {(summaryFilter === 'WRONG'
+                          ? sessionAttemptSummaries.filter((a) => !a.isCorrect)
+                          : sessionAttemptSummaries
+                        ).map((attempt) => (
+                          <div
+                            key={attempt.questionId + '-' + attempt.questionNumber}
+                            className={`p-5 rounded-2xl border transition ${
+                              attempt.isCorrect
+                                ? 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800'
+                                : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40'
+                            }`}
+                          >
+                            {/* Card Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                  attempt.isCorrect
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-rose-500 text-white'
+                                }`}>
+                                  Q{attempt.questionNumber}
+                                </span>
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                  {attempt.topicName}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                    attempt.difficulty === 'EASY'
+                                      ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                                      : attempt.difficulty === 'MEDIUM'
+                                      ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
+                                      : 'bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30'
+                                  }`}
+                                >
+                                  {attempt.difficulty}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="text-slate-400 font-mono text-[11px] flex items-center gap-1">
+                                  <Clock className="w-3 h-3" /> {attempt.timeTakenSeconds}s
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                                    attempt.isCorrect
+                                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
+                                  }`}
+                                >
+                                  {attempt.isCorrect ? 'Correct' : 'Incorrect'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Question Text */}
+                            <h5 className="text-sm font-bold text-slate-900 dark:text-white leading-relaxed mb-4">
+                              {attempt.questionText}
+                            </h5>
+
+                            {/* Answer comparison */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-xs">
+                              {/* Student's answer */}
+                              <div
+                                className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                                  attempt.isCorrect
+                                    ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 text-emerald-950 dark:text-emerald-200'
+                                    : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/50 text-rose-950 dark:text-rose-200'
+                                }`}
+                              >
+                                {attempt.isCorrect ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                )}
+                                <div>
+                                  <span className="block text-[10px] font-extrabold uppercase tracking-wider opacity-75 mb-0.5">
+                                    Your Answer:
+                                  </span>
+                                  <span className="font-medium">{attempt.selectedOptionText}</span>
+                                </div>
+                              </div>
+
+                              {/* Correct answer */}
+                              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-950 dark:text-emerald-200 flex items-start gap-2.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="block text-[10px] font-extrabold uppercase tracking-wider opacity-75 mb-0.5">
+                                    Correct Solution:
+                                  </span>
+                                  <span className="font-semibold">{attempt.correctOptionText}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Detailed Explanation */}
+                            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs leading-relaxed space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Detailed Explanation & Conceptual Rationale:</span>
+                              </div>
+                              <p className="text-slate-700 dark:text-slate-300 pl-5">
+                                {attempt.explanation}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-2 flex justify-center gap-3">
                     <button
                       onClick={() => {
                         setActiveSession(null);
                         setSessionCompleted(false);
+                        setSessionAttemptSummaries([]);
                         if (selectedTopicId) loadCalibration(selectedTopicId);
                       }}
                       className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-600/30 flex items-center gap-2"
