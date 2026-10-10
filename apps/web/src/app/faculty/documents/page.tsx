@@ -92,6 +92,7 @@ export default function FacultyDocumentsPage() {
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState('SYLLABUS');
   const [docContent, setDocContent] = useState('');
+  const [ingestFile, setIngestFile] = useState<File | null>(null);
   const [isIngesting, setIsIngesting] = useState(false);
 
   // Grounded quiz generator state
@@ -103,6 +104,7 @@ export default function FacultyDocumentsPage() {
 
   // Question PDF/Document Upload & Extraction State
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedQuestions, setExtractedQuestions] = useState<ExtractedQuestion[]>([]);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
@@ -185,24 +187,42 @@ export default function FacultyDocumentsPage() {
 
   const handleIngestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docTitle || !docContent) return;
+    if (!docTitle && !ingestFile) return;
+    if (!docContent && !ingestFile) return;
+
     setIsIngesting(true);
     const courseId = user?.courseId || 'CS301';
     try {
+      let fileBase64 = '';
+      if (ingestFile) {
+        fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(ingestFile);
+        });
+      }
+
+      const finalTitle = docTitle || (ingestFile ? ingestFile.name.replace(/\.[^/.]+$/, '') : 'Course Document');
       const newDoc: any = await api.post(`/rag/courses/${courseId}/documents`, {
-        title: docTitle,
+        title: finalTitle,
         docType: docType,
         extractedText: docContent,
+        fileBase64,
+        fileName: ingestFile?.name,
       });
+
       if (newDoc && newDoc.id) {
         setDocuments((prev) => [newDoc, ...prev]);
         setSelectedDoc(newDoc);
         setShowUploadModal(false);
         setDocTitle('');
         setDocContent('');
+        setIngestFile(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to ingest document:', err);
+      alert(err.message || 'Failed to ingest document');
     } finally {
       setIsIngesting(false);
     }
@@ -214,51 +234,58 @@ export default function FacultyDocumentsPage() {
     if (file) {
       setUploadFile(file);
       setExtractError(null);
+      setExtractStatus(null);
     }
   };
 
   // Upload and Extract Questions from PDF / Document
-  const handleUploadAndExtract = async () => {
-    if (!uploadFile) return;
+  const handleUploadAndExtract = async (fileToUse?: File) => {
+    const target = fileToUse || uploadFile;
+    if (!target) return;
 
     setIsExtracting(true);
     setExtractError(null);
-    setExtractStatus(`Reading ${uploadFile.name}...`);
+    setExtractStatus(`Reading ${target.name} (${(target.size / 1024).toFixed(1)} KB)...`);
 
     try {
       let fileBase64 = '';
       let textContent = '';
 
       // If text/doc file, read as text; for PDF read as Base64 Data URL
-      if (uploadFile.type === 'text/plain' || uploadFile.name.endsWith('.txt')) {
-        textContent = await uploadFile.text();
+      if (target.type === 'text/plain' || target.name.endsWith('.txt')) {
+        textContent = await target.text();
       } else {
+        setExtractStatus(`Encoding ${target.name} for Document AI parser...`);
         fileBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
           reader.onerror = reject;
-          reader.readAsDataURL(uploadFile);
+          reader.readAsDataURL(target);
         });
       }
 
-      setExtractStatus('Sending to Document AI question parser & multimodal extractor...');
+      setExtractStatus('Document AI & RAG Pipeline processing: parsing PDF text, options, answers & Bloom taxonomy...');
 
       const courseId = user?.courseId || 'CS301';
-      const response: any = await api.post('/rag/extract-questions', {
-        fileBase64,
-        text: textContent,
-        fileName: uploadFile.name,
-        courseId,
-      });
+      const response: any = await api.post(
+        '/rag/extract-questions',
+        {
+          fileBase64,
+          text: textContent,
+          fileName: target.name,
+          courseId,
+        },
+        { timeout: 90000 } as any,
+      );
 
       if (Array.isArray(response) && response.length > 0) {
         setExtractedQuestions(response);
         // Pre-select all extracted questions
         setSelectedQuestionIds(response.map((q) => q.id));
-        setExtractStatus(`Successfully extracted ${response.length} assessment questions!`);
+        setExtractStatus(`Successfully extracted ${response.length} assessment questions with options and answers!`);
         setActiveTab('extract-questions');
         setAssessmentTitle(
-          `Assessment from ${uploadFile.name.replace(/\.[^/.]+$/, '')}`
+          `Assessment from ${target.name.replace(/\.[^/.]+$/, '')}`
         );
         setAssessmentCode(
           `EXAM-${Date.now().toString().slice(-4)}`
@@ -268,6 +295,7 @@ export default function FacultyDocumentsPage() {
       }
     } catch (err: any) {
       console.error('Error extracting questions:', err);
+      setExtractStatus(null);
       setExtractError(err.message || 'Failed to extract questions from uploaded PDF.');
     } finally {
       setIsExtracting(false);
@@ -521,7 +549,7 @@ export default function FacultyDocumentsPage() {
                       Upload Question Paper (PDF / Document)
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Upload an existing examination paper, question bank, or unit test PDF. The Document AI engine will fetch each question, options, answers, and explanations.
+                      Upload an existing examination paper, question bank, or unit test PDF. The Document AI & RAG engine will extract questions, options, answers, and explanations.
                     </p>
                   </div>
 
@@ -531,12 +559,12 @@ export default function FacultyDocumentsPage() {
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition"
                     >
                       <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{uploadFile ? 'Choose Different File' : 'Select PDF / Document'}</span>
+                      <span>{uploadFile ? 'Change File' : 'Select PDF / Document'}</span>
                     </button>
 
                     {uploadFile && (
                       <button
-                        onClick={handleUploadAndExtract}
+                        onClick={() => handleUploadAndExtract()}
                         disabled={isExtracting}
                         className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition"
                       >
@@ -556,24 +584,85 @@ export default function FacultyDocumentsPage() {
                   </div>
                 </div>
 
+                {/* Drag and Drop Zone when no file is selected */}
+                {!uploadFile && (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      const dropped = e.dataTransfer.files?.[0];
+                      if (dropped) {
+                        setUploadFile(dropped);
+                        setExtractError(null);
+                        setExtractStatus(null);
+                      }
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-950/70'
+                    }`}
+                  >
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-3 border border-emerald-500/20">
+                      <FileUp className="w-6 h-6" />
+                    </div>
+                    <div className="text-sm font-bold text-white mb-1">
+                      Drag & drop your question paper PDF or document here
+                    </div>
+                    <div className="text-xs text-slate-400 max-w-md mx-auto">
+                      Supports PDF, TXT, DOCX files of any size (up to 50MB). The Document AI pipeline extracts text, options, answer keys, and bloom taxonomy.
+                    </div>
+                    <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-semibold hover:bg-slate-700">
+                      <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                      Browse Files
+                    </div>
+                  </div>
+                )}
+
                 {/* Upload File Preview Indicator */}
                 {uploadFile && (
-                  <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                  <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-xl flex items-center justify-between text-xs shadow-inner">
                     <div className="flex items-center gap-3">
-                      <FileText className="w-4 h-4 text-emerald-400" />
-                      <span className="font-semibold text-white">{uploadFile.name}</span>
-                      <span className="text-slate-500 font-mono">
-                        ({(uploadFile.size / 1024).toFixed(1)} KB)
-                      </span>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white text-sm">{uploadFile.name}</div>
+                        <div className="text-slate-400 font-mono text-[11px] mt-0.5">
+                          {uploadFile.size > 1024 * 1024
+                            ? `${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB`
+                            : `${(uploadFile.size / 1024).toFixed(1)} KB`} • {uploadFile.type || 'Document'}
+                        </div>
+                      </div>
                     </div>
-                    {!isExtracting && (
-                      <button
-                        onClick={() => setUploadFile(null)}
-                        className="text-slate-400 hover:text-rose-400"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {!isExtracting && (
+                        <button
+                          onClick={() => handleUploadAndExtract()}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg flex items-center gap-1.5 shadow-sm"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Extract Now</span>
+                        </button>
+                      )}
+                      {!isExtracting && (
+                        <button
+                          onClick={() => {
+                            setUploadFile(null);
+                            setExtractStatus(null);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-850"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1174,10 +1263,33 @@ export default function FacultyDocumentsPage() {
 
             <form onSubmit={handleIngestSubmit} className="space-y-4">
               <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Upload PDF / Syllabus File (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.docx"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setIngestFile(f);
+                      if (!docTitle) setDocTitle(f.name.replace(/\.[^/.]+$/, ''));
+                    }
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20"
+                />
+                {ingestFile && (
+                  <p className="text-[11px] text-cyan-400 mt-1">
+                    Selected: {ingestFile.name} ({(ingestFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">Document Title</label>
                 <input
                   type="text"
-                  required
+                  required={!ingestFile}
                   value={docTitle}
                   onChange={(e) => setDocTitle(e.target.value)}
                   placeholder="e.g. Unit 4: Graph Algorithms & Minimum Spanning Trees"
@@ -1201,14 +1313,18 @@ export default function FacultyDocumentsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Content / Syllabus Notes for Semantic Chunking
+                  Content / Syllabus Notes {ingestFile ? '(Optional if file uploaded)' : 'for Semantic Chunking'}
                 </label>
                 <textarea
-                  required
-                  rows={6}
+                  required={!ingestFile}
+                  rows={4}
                   value={docContent}
                   onChange={(e) => setDocContent(e.target.value)}
-                  placeholder="Paste syllabus paragraphs, slide summaries, or lecture notes. The RAG pipeline will automatically segment, vectorize, and index this content."
+                  placeholder={
+                    ingestFile
+                      ? 'Optional extra notes or comments. The uploaded file text will be extracted automatically.'
+                      : 'Paste syllabus paragraphs, slide summaries, or lecture notes. The RAG pipeline will automatically segment, vectorize, and index this content.'
+                  }
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
                 />
               </div>
@@ -1216,17 +1332,20 @@ export default function FacultyDocumentsPage() {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setIngestFile(null);
+                  }}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isIngesting}
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5"
+                  disabled={isIngesting || (!docTitle && !ingestFile) || (!docContent && !ingestFile)}
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5"
                 >
-                  {isIngesting ? 'Vectorizing...' : 'Ingest & Chunk'}
+                  {isIngesting ? 'Vectorizing & Indexing...' : 'Ingest & Chunk'}
                 </button>
               </div>
             </form>

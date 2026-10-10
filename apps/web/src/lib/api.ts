@@ -40,8 +40,11 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
     endpoint.includes('/ai') ||
     endpoint.includes('/generate') ||
     endpoint.includes('/coding') ||
-    endpoint.includes('/submit');
-  const timeoutMs = (options as any)?.timeout || (isAiOrLongRunning ? 45000 : 20000);
+    endpoint.includes('/submit') ||
+    endpoint.includes('/rag') ||
+    endpoint.includes('/extract') ||
+    endpoint.includes('/documents');
+  const timeoutMs = (options as any)?.timeout || (isAiOrLongRunning ? 90000 : 25000);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -77,13 +80,15 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 }
 
 export const api = {
-  get: <T = any>(endpoint: string) => fetchApi<T>(endpoint, { method: 'GET' }),
-  post: <T = any>(endpoint: string, body?: any) =>
-    fetchApi<T>(endpoint, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
-  put: <T = any>(endpoint: string, body?: any) =>
-    fetchApi<T>(endpoint, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
-  patch: <T = any>(endpoint: string, body?: any) =>
-    fetchApi<T>(endpoint, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
-  delete: <T = any>(endpoint: string) => fetchApi<T>(endpoint, { method: 'DELETE' }),
+  get: <T = any>(endpoint: string, options?: RequestInit) =>
+    fetchApi<T>(endpoint, { method: 'GET', ...options }),
+  post: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+    fetchApi<T>(endpoint, { method: 'POST', body: body ? JSON.stringify(body) : undefined, ...options }),
+  put: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+    fetchApi<T>(endpoint, { method: 'PUT', body: body ? JSON.stringify(body) : undefined, ...options }),
+  patch: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+    fetchApi<T>(endpoint, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined, ...options }),
+  delete: <T = any>(endpoint: string, options?: RequestInit) =>
+    fetchApi<T>(endpoint, { method: 'DELETE', ...options }),
 };
 
