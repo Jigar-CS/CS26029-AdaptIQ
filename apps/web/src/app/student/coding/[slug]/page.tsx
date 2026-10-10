@@ -23,6 +23,12 @@ import {
   ArrowLeft,
   Terminal,
   FileCode,
+  BookOpen,
+  Eye,
+  Copy,
+  Check,
+  X,
+  Filter,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -64,6 +70,7 @@ interface TestResultDetail {
 
 interface ExecutionVerdict {
   status: 'ACCEPTED' | 'WRONG_ANSWER' | 'COMPILATION_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT_EXCEEDED' | 'MEMORY_LIMIT_EXCEEDED';
+  score?: number;
   totalTestCases: number;
   testCasesPassed: number;
   executionTimeMs: number;
@@ -73,6 +80,27 @@ interface ExecutionVerdict {
   feedback?: string;
   testResults?: TestResultDetail[];
   judgeDetails?: TestResultDetail[];
+}
+
+interface SubmissionRecord {
+  id: string;
+  problemId: string;
+  studentId: string;
+  language: string;
+  sourceCode: string;
+  status: string;
+  score: number;
+  testCasesPassed: number;
+  totalTestCases: number;
+  executionTimeMs: number;
+  memoryUsedKb: number;
+  createdAt: string;
+  problem?: {
+    id?: string;
+    title: string;
+    slug: string;
+    difficulty?: string;
+  };
 }
 
 export default function ProblemEditorPage() {
@@ -91,6 +119,16 @@ export default function ProblemEditorPage() {
   const [selectedTestTab, setSelectedTestTab] = useState<number>(0);
   const [showHints, setShowHints] = useState<boolean>(false);
 
+  // Submission history & inspection state
+  const [leftTab, setLeftTab] = useState<'problem' | 'submissions'>('problem');
+  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<SubmissionRecord[]>([]);
+  const [submissionScope, setSubmissionScope] = useState<'problem' | 'all'>('problem');
+  const [loadingSubmissions, setLoadingSubmissions] = useState<boolean>(false);
+  const [inspectedSubmission, setInspectedSubmission] = useState<SubmissionRecord | null>(null);
+  const [submissionFilter, setSubmissionFilter] = useState<'ALL' | 'ACCEPTED' | 'FAILED'>('ALL');
+  const [codeCopied, setCodeCopied] = useState<boolean>(false);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
@@ -101,6 +139,23 @@ export default function ProblemEditorPage() {
       loadProblem();
     }
   }, [user, authLoading, slug]);
+
+  const loadSubmissions = async (problemIdOrSlug?: string) => {
+    setLoadingSubmissions(true);
+    try {
+      const targetProb = problemIdOrSlug || problem?.id || slug;
+      const [probSubs, allSubs] = await Promise.all([
+        targetProb ? api.get(`/coding/submissions?problemId=${targetProb}`) : Promise.resolve([]),
+        api.get('/coding/submissions'),
+      ]);
+      setSubmissions(Array.isArray(probSubs) ? probSubs : []);
+      setAllSubmissions(Array.isArray(allSubs) ? allSubs : []);
+    } catch (err: any) {
+      console.error('Failed to load submissions:', err);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
 
   const loadProblem = async () => {
     setLoading(true);
@@ -116,6 +171,8 @@ export default function ProblemEditorPage() {
       }
       setStarterCodesMap(parsedStarters);
       setSourceCode(parsedStarters[selectedLanguage] || '# Write your solution here');
+
+      loadSubmissions(data?.id || (Array.isArray(slug) ? slug[0] : slug));
     } catch (err: any) {
       console.error('Failed to load problem:', err);
     } finally {
@@ -175,6 +232,7 @@ export default function ProblemEditorPage() {
       });
       setVerdict(res.verdict);
       setSelectedTestTab(0);
+      loadSubmissions(problem.id);
     } catch (err: any) {
       console.error('Failed to submit code:', err);
       setVerdict({
@@ -191,6 +249,14 @@ export default function ProblemEditorPage() {
   };
 
   const testList = verdict?.testResults || verdict?.judgeDetails || [];
+
+  const currentList = submissionScope === 'problem' ? submissions : allSubmissions;
+  const filteredSubmissions = currentList.filter((sub) => {
+    if (submissionFilter === 'ALL') return true;
+    if (submissionFilter === 'ACCEPTED') return sub.status === 'ACCEPTED';
+    if (submissionFilter === 'FAILED') return sub.status !== 'ACCEPTED';
+    return true;
+  });
 
   return (
     <div className="flex bg-slate-950 min-h-screen text-slate-100 font-sans">
@@ -210,6 +276,12 @@ export default function ProblemEditorPage() {
             </Link>
 
             <div className="flex items-center gap-3">
+              {submissions.some((s) => s.status === 'ACCEPTED') && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Solved
+                </span>
+              )}
               <span
                 className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${problem?.difficulty === 'EASY'
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
@@ -230,91 +302,262 @@ export default function ProblemEditorPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Pane: Problem Description (5 Cols) */}
+              {/* Left Pane: Problem Description & Submissions (5 Cols) */}
               <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6 max-h-[820px] overflow-y-auto">
-                <div>
-                  <h1 className="text-2xl font-extrabold text-white tracking-tight">{problem.title}</h1>
-                  {problem.tags && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {problem.tags.split(',').map((t, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[10px] font-medium bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700/60"
-                        >
-                          {t.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Description Text */}
-                <div className="text-slate-300 text-xs leading-relaxed space-y-3 whitespace-pre-line font-normal">
-                  {problem.description}
-                </div>
-
-                {/* Sample Testcases */}
-                <div className="space-y-3 pt-4 border-t border-slate-800">
-                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Example Test Cases
-                  </h3>
-                  {problem.testCases.map((tc, idx) => (
-                    <div
-                      key={tc.id}
-                      className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5 font-mono text-[11px]"
-                    >
-                      <div className="text-slate-400 text-[10px] uppercase font-bold font-sans">
-                        Example {idx + 1}:
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Input: </span>
-                        <span className="text-blue-300">{tc.input}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Output: </span>
-                        <span className="text-emerald-300">{tc.expectedOutput}</span>
-                      </div>
-                      {tc.explanation && (
-                        <div className="text-slate-400 font-sans text-[10px] pt-1 border-t border-slate-800/80">
-                          {tc.explanation}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Constraints */}
-                <div className="space-y-2 pt-4 border-t border-slate-800">
-                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Constraints</h3>
-                  <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 font-mono text-[11px] whitespace-pre-line">
-                    {problem.constraints}
-                  </div>
-                </div>
-
-                {/* Hints Accordion */}
-                {problem.hints && (
-                  <div className="pt-2">
-                    <button
-                      onClick={() => setShowHints(!showHints)}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-semibold text-indigo-300 hover:bg-slate-800/50 transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        Algorithmic Hints & Approach
+                {/* Left Pane Navigation Tabs */}
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <button
+                    onClick={() => setLeftTab('problem')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      leftTab === 'problem'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Problem
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLeftTab('submissions');
+                      if (problem) loadSubmissions(problem.id);
+                    }}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      leftTab === 'submissions'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Submissions
+                    {submissions.length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950/80 text-blue-300 border border-blue-500/30">
+                        {submissions.length}
                       </span>
-                      {showHints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                    {showHints && (
-                      <div className="mt-2 p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-xs text-slate-300 space-y-2 animate-fadeIn">
-                        {JSON.parse(problem.hints).map((hint: string, hIdx: number) => (
-                          <div key={hIdx} className="flex items-start gap-2">
-                            <span className="text-indigo-400 font-bold">•</span>
-                            <span className="leading-relaxed">{hint}</span>
-                          </div>
-                        ))}
+                    )}
+                  </button>
+                </div>
+
+                {leftTab === 'submissions' ? (
+                  <div className="space-y-4">
+                    {/* Scope & Filter Controls */}
+                    <div className="flex flex-col gap-2 pb-2 border-b border-slate-800">
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Scope Switcher: This Problem vs All Problems */}
+                        <div className="flex items-center gap-1 bg-slate-950/80 p-0.5 rounded-lg border border-slate-800">
+                          <button
+                            onClick={() => setSubmissionScope('problem')}
+                            className={`text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all ${
+                              submissionScope === 'problem'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            This Problem ({submissions.length})
+                          </button>
+                          <button
+                            onClick={() => setSubmissionScope('all')}
+                            className={`text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all ${
+                              submissionScope === 'all'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            All Problems ({allSubmissions.length})
+                          </button>
+                        </div>
+
+                        {/* Status Filter */}
+                        <div className="flex items-center gap-1">
+                          {(['ALL', 'ACCEPTED', 'FAILED'] as const).map((f) => (
+                            <button
+                              key={f}
+                              onClick={() => setSubmissionFilter(f)}
+                              className={`text-[11px] px-2 py-0.5 rounded-md font-semibold transition-all ${
+                                submissionFilter === f
+                                  ? 'bg-slate-800 text-white border border-slate-700'
+                                  : 'text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              {f === 'ALL' ? 'All' : f === 'ACCEPTED' ? 'Pass' : 'Fail'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {loadingSubmissions ? (
+                      <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <Cpu className="w-4 h-4 animate-spin text-blue-400" />
+                        Loading previous submissions...
+                      </div>
+                    ) : filteredSubmissions.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-slate-400 space-y-2">
+                        <Clock className="w-8 h-8 mx-auto text-slate-600" />
+                        <p className="font-semibold text-slate-300">No submissions found</p>
+                        <p className="text-[11px] text-slate-500">
+                          {submissionScope === 'problem'
+                            ? 'Submit your solution using the editor on the right to test it against judge test cases.'
+                            : 'You have not submitted any solutions in the arena yet.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredSubmissions.map((sub) => {
+                          const isPass = sub.status === 'ACCEPTED';
+                          return (
+                            <div
+                              key={sub.id}
+                              className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                      isPass
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                        : sub.status === 'COMPILATION_ERROR'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                        : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                                    }`}
+                                  >
+                                    {sub.status.replace(/_/g, ' ')}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-blue-400">
+                                    Score: {sub.score ?? 0}%
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {new Date(sub.createdAt).toLocaleDateString()} {new Date(sub.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+
+                              {sub.problem?.title && submissionScope === 'all' && (
+                                <div className="text-xs font-semibold text-slate-300 truncate">
+                                  {sub.problem.title}
+                                </div>
+                              )}
+
+                              <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-900">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-slate-300 font-mono">{sub.language}</span>
+                                  <span>
+                                    {sub.testCasesPassed ?? 0}/{sub.totalTestCases ?? 0} Passed
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-slate-500" />
+                                    {sub.executionTimeMs}ms
+                                  </span>
+                                </div>
+
+                                <button
+                                  onClick={() => setInspectedSubmission(sub)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  Inspect Code
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
+                ) : (
+                  <>
+                    <div>
+                      <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+                        {submissions.some((s) => s.status === 'ACCEPTED') && (
+                          <span title="Solved - Correctly Submitted" className="inline-flex items-center text-emerald-400 shrink-0">
+                            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                          </span>
+                        )}
+                        <span>{problem.title}</span>
+                      </h1>
+                      {problem.tags && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {problem.tags.split(',').map((t, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[10px] font-medium bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700/60"
+                            >
+                              {t.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Description Text */}
+                    <div className="text-slate-300 text-xs leading-relaxed space-y-3 whitespace-pre-line font-normal">
+                      {problem.description}
+                    </div>
+
+                    {/* Sample Testcases */}
+                    <div className="space-y-3 pt-4 border-t border-slate-800">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Example Test Cases
+                      </h3>
+                      {problem.testCases.map((tc, idx) => (
+                        <div
+                          key={tc.id}
+                          className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5 font-mono text-[11px]"
+                        >
+                          <div className="text-slate-400 text-[10px] uppercase font-bold font-sans">
+                            Example {idx + 1}:
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Input: </span>
+                            <span className="text-blue-300">{tc.input}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Output: </span>
+                            <span className="text-emerald-300">{tc.expectedOutput}</span>
+                          </div>
+                          {tc.explanation && (
+                            <div className="text-slate-400 font-sans text-[10px] pt-1 border-t border-slate-800/80">
+                              {tc.explanation}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Constraints */}
+                    <div className="space-y-2 pt-4 border-t border-slate-800">
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Constraints</h3>
+                      <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 font-mono text-[11px] whitespace-pre-line">
+                        {problem.constraints}
+                      </div>
+                    </div>
+
+                    {/* Hints Accordion */}
+                    {problem.hints && (
+                      <div className="pt-2">
+                        <button
+                          onClick={() => setShowHints(!showHints)}
+                          className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-semibold text-indigo-300 hover:bg-slate-800/50 transition-colors"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            Algorithmic Hints & Approach
+                          </span>
+                          {showHints ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        {showHints && (
+                          <div className="mt-2 p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-xs text-slate-300 space-y-2 animate-fadeIn">
+                            {JSON.parse(problem.hints).map((hint: string, hIdx: number) => (
+                              <div key={hIdx} className="flex items-start gap-2">
+                                <span className="text-indigo-400 font-bold">•</span>
+                                <span className="leading-relaxed">{hint}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -404,6 +647,11 @@ export default function ProblemEditorPage() {
                         >
                           {verdict.status.replace(/_/g, ' ')}
                         </span>
+                        {verdict.score !== undefined && (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            Score: {verdict.score}%
+                          </span>
+                        )}
                         <span className="text-[11px] text-slate-400">
                           {verdict.testCasesPassed}/{verdict.totalTestCases} Passed
                         </span>
@@ -506,6 +754,80 @@ export default function ProblemEditorPage() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Read-Only Historical Submission Code Modal */}
+          {inspectedSubmission && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden space-y-4 p-6 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <FileCode className="w-4 h-4 text-blue-400" />
+                      <h3 className="text-sm font-bold text-white">
+                        {inspectedSubmission.problem?.title || 'Historical Submission Code'}
+                      </h3>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          inspectedSubmission.status === 'ACCEPTED'
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            : inspectedSubmission.status === 'COMPILATION_ERROR'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                        }`}
+                      >
+                        {inspectedSubmission.status.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-xs font-bold text-blue-400">
+                        Score: {inspectedSubmission.score ?? 0}%
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Submitted on {new Date(inspectedSubmission.createdAt).toLocaleString()} • {inspectedSubmission.language} • {inspectedSubmission.testCasesPassed ?? 0}/{inspectedSubmission.totalTestCases ?? 0} test cases passed ({inspectedSubmission.executionTimeMs}ms)
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setInspectedSubmission(null)}
+                    className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-blue-950/20 border border-blue-500/20 text-[11px] text-blue-300">
+                  Read-only view. Closing this modal preserves your current working draft in the editor.
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs leading-relaxed text-blue-200 max-h-[380px] overflow-y-auto">
+                  <pre className="whitespace-pre-wrap select-text font-mono text-xs">
+                    {inspectedSubmission.sourceCode || '// No source code recorded'}
+                  </pre>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                  <button
+                    onClick={() => {
+                      if (inspectedSubmission.sourceCode) {
+                        navigator.clipboard.writeText(inspectedSubmission.sourceCode);
+                        setCodeCopied(true);
+                        setTimeout(() => setCodeCopied(false), 2000);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
+                  >
+                    {codeCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {codeCopied ? 'Copied to Clipboard' : 'Copy Code'}
+                  </button>
+
+                  <button
+                    onClick={() => setInspectedSubmission(null)}
+                    className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
             </div>

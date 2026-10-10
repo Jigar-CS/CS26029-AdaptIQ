@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { useSidebar } from '@/lib/sidebar-context';
 import { api } from '@/lib/api';
-import { Bell, Search, Shield, User as UserIcon, Sun, Moon, Check, Sparkles, Lock } from 'lucide-react';
+import { Bell, Search, Shield, User as UserIcon, Sun, Moon, Check, Sparkles, Lock, Menu } from 'lucide-react';
 
 interface NotificationItem {
   id: string;
@@ -204,6 +205,7 @@ function NotificationCardBody({ item }: { item: NotificationItem }) {
 export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: NavbarProps) {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { toggleMobile } = useSidebar();
   const universityName = process.env.NEXT_PUBLIC_UNIVERSITY_NAME || 'CHARUSAT';
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -240,12 +242,28 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between sticky top-0 z-20 shadow-xs transition-colors duration-200">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-          {title || `${universityName} Learning Intelligence`}
-        </h1>
-        {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{subtitle}</p>}
+    <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-20 shadow-xs transition-colors duration-200">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {/* Mobile Hamburger Menu Toggle */}
+        <button
+          onClick={toggleMobile}
+          className="lg:hidden p-2 -ml-1 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0"
+          title="Toggle Navigation Menu"
+          aria-label="Toggle Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="truncate">
+          <h1 className="text-sm sm:text-lg md:text-xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
+            {title || `${universityName} Learning Intelligence`}
+          </h1>
+          {subtitle && (
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate hidden sm:block">
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -297,7 +315,7 @@ export function Navbar({ title, subtitle, isLocked = false, onLockedClick }: Nav
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-[460px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3">
+            <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] sm:w-[460px] max-w-[460px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">

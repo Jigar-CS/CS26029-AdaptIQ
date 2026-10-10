@@ -12,6 +12,19 @@ export interface MasteryCalculationInput {
   timeTakenSeconds?: number;
 }
 
+export interface LearningCurvePoint {
+  id: string;
+  recordedAt: Date;
+  masteryScore: number;
+  rawScore: number;
+  practiceMastery?: number;
+  assessmentMastery?: number;
+  topicName: string;
+  courseCode: string;
+  reason: LearningHistoryReason;
+  source: 'PRACTICE' | 'ASSESSMENT';
+}
+
 /** Simple in-process TTL cache to reduce repeated DB round-trips for hot endpoints */
 class TtlCache<T> {
   private store = new Map<string, { value: T; expiresAt: number }>();
@@ -73,14 +86,10 @@ export class LearningAnalyticsService {
     // Correct Easy -> 70% target, Medium -> 87.5% target, Hard -> 100% target
     const targetScore = input.isCorrect ? Math.min(100, 70 * weight) : 0;
 
-    let updatedMastery: number;
-    if (input.currentMastery === 0 && input.isCorrect) {
-      // First successful attempt jump-starts baseline
-      updatedMastery = targetScore;
-    } else {
-      // Exponentially Weighted Moving Average (EWMA)
-      updatedMastery = (1 - this.alpha) * input.currentMastery + this.alpha * targetScore;
-    }
+    // Anchor uninitialized mastery at an empirical 40% prior rather than jump-starting
+    // directly to 100%, preventing a single high score from unrealistically spiking the curve.
+    const baseline = input.currentMastery > 0 ? input.currentMastery : 40;
+    const updatedMastery = (1 - this.alpha) * baseline + this.alpha * targetScore;
 
     // Clamp score within bounds 0 - 100
     return Math.max(0, Math.min(100, Math.round(updatedMastery * 10) / 10));
@@ -157,18 +166,46 @@ export class LearningAnalyticsService {
   }
 
   /**
-   * Fetches overall mastery curve for visualization over time
+   * Fetches longitudinal mastery curve for visualization over time.
+   * Supports:
+   * - Source filtering: ALL (balanced 50/50 dual-stream fusion), PRACTICE only, ASSESSMENT only
+   * - Topic filtering: specific topicId or all topics
+   * - Exponential moving smoothing to represent progress without single-attempt spikes
+   * - Preserves genuine improvement and decline chronologically
    */
-  async getLearningCurve(studentId: string, topicId?: string) {
+  async getLearningCurve(
+    studentId: string,
+    topicId?: string,
+    source?: string,
+  ): Promise<LearningCurvePoint[]> {
     const where: any = { studentId };
-    if (topicId) {
+
+    if (topicId && topicId !== 'ALL') {
       where.topicId = topicId;
+    }
+
+    const normalizedSource = (source || 'ALL').toUpperCase();
+    if (normalizedSource === 'PRACTICE') {
+      where.reason = LearningHistoryReason.PRACTICE_ATTEMPT;
+    } else if (normalizedSource === 'ASSESSMENT') {
+      where.reason = {
+        in: [LearningHistoryReason.TEST_RESULT, LearningHistoryReason.REASSESSMENT],
+      };
+    } else {
+      where.reason = {
+        in: [
+          LearningHistoryReason.PRACTICE_ATTEMPT,
+          LearningHistoryReason.TEST_RESULT,
+          LearningHistoryReason.REASSESSMENT,
+          LearningHistoryReason.MANUAL_RECALCULATION,
+        ],
+      };
     }
 
     const history = await this.prisma.learningHistory.findMany({
       where,
       orderBy: { recordedAt: 'asc' },
-      take: 60,
+      take: 100,
       include: {
         topic: {
           select: {
@@ -181,14 +218,99 @@ export class LearningAnalyticsService {
       },
     });
 
-    return history.map((entry) => ({
-      id: entry.id,
-      recordedAt: entry.recordedAt,
-      masteryScore: entry.masteryScore,
-      topicName: entry.topic.name,
-      courseCode: entry.topic.course.code,
-      reason: entry.reason,
-    }));
+    if (history.length === 0) {
+      return [];
+    }
+
+    // Exponential smoothing parameters: Beta 0.35, Initial Prior 50%
+    const BETA = 0.35;
+    const INITIAL_PRIOR = 50.0;
+
+    // 1. Single Source Stream (Practice Only OR Assessments Only)
+    if (normalizedSource === 'PRACTICE' || normalizedSource === 'ASSESSMENT') {
+      let runningScore = INITIAL_PRIOR;
+      let initialized = false;
+
+      return history.map((entry) => {
+        const rawScore = Number(entry.masteryScore);
+        if (!initialized) {
+          runningScore = (1 - BETA) * INITIAL_PRIOR + BETA * rawScore;
+          initialized = true;
+        } else {
+          runningScore = (1 - BETA) * runningScore + BETA * rawScore;
+        }
+
+        const scoreRounded = Math.round(runningScore * 10) / 10;
+        const isAssess =
+          entry.reason === LearningHistoryReason.TEST_RESULT ||
+          entry.reason === LearningHistoryReason.REASSESSMENT;
+
+        return {
+          id: entry.id,
+          recordedAt: entry.recordedAt,
+          masteryScore: scoreRounded,
+          rawScore: Math.round(rawScore * 10) / 10,
+          practiceMastery: !isAssess ? scoreRounded : undefined,
+          assessmentMastery: isAssess ? scoreRounded : undefined,
+          topicName: entry.topic?.name || 'General',
+          courseCode: entry.topic?.course?.code || '',
+          reason: entry.reason,
+          source: (isAssess ? 'ASSESSMENT' : 'PRACTICE') as 'ASSESSMENT' | 'PRACTICE',
+        };
+      });
+    }
+
+    // 2. OVERALL LEARNING CURVE: Balanced Dual-Stream Fusion
+    // Maintains independent smoothed trajectories for Practice and Assessments
+    // so that higher volume in one stream does NOT dominate or dilute the other.
+    let runningPractice: number | null = null;
+    let runningAssessment: number | null = null;
+
+    return history.map((entry) => {
+      const isAssess =
+        entry.reason === LearningHistoryReason.TEST_RESULT ||
+        entry.reason === LearningHistoryReason.REASSESSMENT;
+      const rawScore = Number(entry.masteryScore);
+
+      if (isAssess) {
+        if (runningAssessment === null) {
+          runningAssessment = (1 - BETA) * INITIAL_PRIOR + BETA * rawScore;
+        } else {
+          runningAssessment = (1 - BETA) * runningAssessment + BETA * rawScore;
+        }
+      } else {
+        if (runningPractice === null) {
+          runningPractice = (1 - BETA) * INITIAL_PRIOR + BETA * rawScore;
+        } else {
+          runningPractice = (1 - BETA) * runningPractice + BETA * rawScore;
+        }
+      }
+
+      let combinedScore: number;
+      if (runningPractice !== null && runningAssessment !== null) {
+        // Equal 50/50 balance between continuous practice and formal evaluation
+        combinedScore = 0.5 * runningPractice + 0.5 * runningAssessment;
+      } else if (runningPractice !== null) {
+        combinedScore = runningPractice;
+      } else {
+        combinedScore = runningAssessment!;
+      }
+
+      const scoreRounded = Math.round(combinedScore * 10) / 10;
+
+      return {
+        id: entry.id,
+        recordedAt: entry.recordedAt,
+        masteryScore: scoreRounded,
+        rawScore: Math.round(rawScore * 10) / 10,
+        practiceMastery: runningPractice !== null ? Math.round(runningPractice * 10) / 10 : undefined,
+        assessmentMastery: runningAssessment !== null ? Math.round(runningAssessment * 10) / 10 : undefined,
+        topicName: entry.topic?.name || 'General',
+        courseCode: entry.topic?.course?.code || '',
+        reason: entry.reason,
+        source: isAssess ? 'ASSESSMENT' : 'PRACTICE',
+      };
+    });
   }
 
   /**
@@ -782,8 +904,17 @@ export class LearningAnalyticsService {
    * Validates if a student has met prerequisites before practicing a specific topic
    */
   async validateTopicPrerequisites(studentId: string, topicId: string): Promise<PrerequisiteCheckResult> {
-    const targetTopic = await this.prisma.topic.findUnique({
-      where: { id: topicId },
+    const student = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [{ id: studentId }, { userId: studentId }],
+      },
+    });
+    const effectiveStudentId = student ? student.id : studentId;
+
+    const targetTopic = await this.prisma.topic.findFirst({
+      where: {
+        OR: [{ id: topicId }, { slug: topicId }],
+      },
       include: { course: true },
     });
 
@@ -793,7 +924,7 @@ export class LearningAnalyticsService {
 
     const allCourseMasteries = await this.prisma.skillMastery.findMany({
       where: {
-        studentId,
+        studentId: effectiveStudentId,
         topic: { courseId: targetTopic.courseId },
       },
       include: { topic: true },
@@ -801,10 +932,13 @@ export class LearningAnalyticsService {
 
     const masteryLookup: Record<string, { name: string; masteryScore: number }> = {};
     for (const m of allCourseMasteries) {
-      masteryLookup[m.topic.slug] = {
+      const entry = {
         name: m.topic.name,
         masteryScore: m.masteryScore,
       };
+      masteryLookup[m.topic.slug] = entry;
+      masteryLookup[KnowledgeGraphEngine.canonicalizeSlug(m.topic.slug)] = entry;
+      masteryLookup[m.topic.id] = entry;
     }
 
     return KnowledgeGraphEngine.checkPrerequisites(targetTopic.slug, masteryLookup);

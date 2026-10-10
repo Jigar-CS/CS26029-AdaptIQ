@@ -1,7 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestionDifficulty, SpacedRepetitionStatus } from '@prisma/client';
 import { AiQuestionGeneratorService } from '../ai/ai-question-generator.service';
+import { LearningAnalyticsService } from '../analytics/learning-analytics.service';
+import { shuffleQuestionOptions } from '../common/shuffle.util';
 
 export interface CalibrationResult {
   topicId: string;
@@ -31,6 +38,7 @@ export class AdaptiveLearningService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiQuestionGenerator: AiQuestionGeneratorService,
+    private readonly analyticsService: LearningAnalyticsService,
   ) {}
 
   /**
@@ -42,10 +50,26 @@ export class AdaptiveLearningService {
    *  >= 85%: HARD (Deep synthesis & edge-case robustness)
    */
   async getCalibratedDifficulty(studentId: string, topicId: string): Promise<CalibrationResult> {
-    const topic = await this.prisma.topic.findUnique({
-      where: { id: topicId },
-      include: { course: true },
-    });
+    const student = this.prisma.studentProfile
+      ? await this.prisma.studentProfile.findFirst({
+          where: {
+            OR: [{ id: studentId }, { userId: studentId }],
+          },
+        })
+      : null;
+    const effectiveStudentId = student ? student.id : studentId;
+
+    const topic = this.prisma.topic?.findFirst
+      ? await this.prisma.topic.findFirst({
+          where: {
+            OR: [{ id: topicId }, { slug: topicId }],
+          },
+          include: { course: true },
+        })
+      : await this.prisma.topic?.findUnique({
+          where: { id: topicId },
+          include: { course: true },
+        });
 
     if (!topic) {
       throw new NotFoundException(`Topic with ID ${topicId} not found.`);
@@ -53,7 +77,7 @@ export class AdaptiveLearningService {
 
     const mastery = await this.prisma.skillMastery.findUnique({
       where: {
-        studentId_topicId: { studentId, topicId },
+        studentId_topicId: { studentId: effectiveStudentId, topicId: topic.id },
       },
     });
 
@@ -81,7 +105,7 @@ export class AdaptiveLearningService {
     const highConfidence = !hasAttempts ? 15 : Math.min(100, Math.round((currentMastery + 7.5) * 10) / 10);
 
     return {
-      topicId,
+      topicId: topic.id,
       topicName: topic.name,
       currentMastery,
       recommendedDifficulty,
@@ -99,13 +123,71 @@ export class AdaptiveLearningService {
     courseId?: string,
     preferredDifficulty?: QuestionDifficulty,
     excludeIds?: string[],
+    sessionId?: string,
   ) {
-    const calibration = await this.getCalibratedDifficulty(studentId, topicId);
+    const student = this.prisma.studentProfile?.findFirst
+      ? await this.prisma.studentProfile.findFirst({
+          where: {
+            OR: [{ id: studentId }, { userId: studentId }],
+          },
+        })
+      : null;
+    const effectiveStudentId = student ? student.id : studentId;
+
+    const topic = this.prisma.topic?.findFirst
+      ? await this.prisma.topic.findFirst({
+          where: {
+            OR: [{ id: topicId }, { slug: topicId }],
+          },
+          include: { course: true },
+        })
+      : await this.prisma.topic?.findUnique({
+          where: { id: topicId },
+          include: { course: true },
+        });
+
+    if (!topic) {
+      throw new NotFoundException(`Topic with ID ${topicId} not found.`);
+    }
+
+    if (courseId && this.prisma.course) {
+      const course = await this.prisma.course.findFirst({
+        where: {
+          OR: [{ id: courseId }, { code: courseId }],
+        },
+      });
+      if (course && topic.courseId !== course.id) {
+        throw new BadRequestException(
+          `Topic "${topic.name}" does not belong to the course "${course.name}".`,
+        );
+      }
+    }
+
+    // Authoritative Prerequisite Validation
+    const prereqCheck = await this.analyticsService.validateTopicPrerequisites(
+      effectiveStudentId,
+      topic.id,
+    );
+
+    if (!prereqCheck.isReady) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'PREREQUISITE_INCOMPLETE',
+        message: prereqCheck.recommendation,
+        topicId: topic.id,
+        topicSlug: topic.slug,
+        topicName: topic.name,
+        readinessScore: prereqCheck.readinessScore,
+        missingPrerequisites: prereqCheck.missingPrerequisites,
+      });
+    }
+
+    const calibration = await this.getCalibratedDifficulty(effectiveStudentId, topic.id);
     const targetDifficulty = preferredDifficulty || calibration.recommendedDifficulty;
 
     // 1. Fetch ALL question IDs previously attempted by this student across ALL sessions
     const previousAttempts = await this.prisma.questionAttempt.findMany({
-      where: { studentId },
+      where: { studentId: effectiveStudentId },
       select: { questionId: true },
     });
 
@@ -128,8 +210,7 @@ export class AdaptiveLearningService {
     // Tier 1: Search for unattempted questions in matching topic & exact target difficulty (Fast <5ms DB query)
     let candidateQuestions = await this.prisma.question.findMany({
       where: {
-        topicId,
-        ...(courseId ? { courseId } : {}),
+        topicId: topic.id,
         difficulty: targetDifficulty,
         ...(notInClause ? { id: notInClause } : {}),
       },
@@ -147,8 +228,7 @@ export class AdaptiveLearningService {
     if (candidateQuestions.length === 0) {
       candidateQuestions = await this.prisma.question.findMany({
         where: {
-          topicId,
-          ...(courseId ? { courseId } : {}),
+          topicId: topic.id,
           ...(notInClause ? { id: notInClause } : {}),
         },
         include: {
@@ -162,8 +242,8 @@ export class AdaptiveLearningService {
       });
     }
 
-    // Tier 3: If whole topic is exhausted by this student, search unattempted questions in the same course
-    if (candidateQuestions.length === 0 && courseId) {
+    // Tier 3: Only search whole course if NO specific topic was requested
+    if (candidateQuestions.length === 0 && courseId && !topicId) {
       candidateQuestions = await this.prisma.question.findMany({
         where: {
           courseId,
@@ -199,7 +279,10 @@ export class AdaptiveLearningService {
     if (candidateQuestions.length > 0) {
       const selected = candidateQuestions[Math.floor(Math.random() * candidateQuestions.length)];
       return {
-        question: selected,
+        question: {
+          ...selected,
+          options: shuffleQuestionOptions(selected.options, sessionId || studentId, selected.id),
+        },
         calibration: {
           ...calibration,
           activeDifficulty: selected.difficulty || targetDifficulty,
@@ -223,7 +306,10 @@ export class AdaptiveLearningService {
 
         if (aiResult?.question) {
           return {
-            question: aiResult.question,
+            question: {
+              ...aiResult.question,
+              options: shuffleQuestionOptions(aiResult.question.options, sessionId || studentId, aiResult.question.id),
+            },
             calibration: {
               ...calibration,
               activeDifficulty: targetDifficulty,
@@ -257,7 +343,12 @@ export class AdaptiveLearningService {
     });
 
     return {
-      question: fallback,
+      question: fallback
+        ? {
+            ...fallback,
+            options: shuffleQuestionOptions(fallback.options, sessionId || studentId, fallback.id),
+          }
+        : null,
       calibration: {
         ...calibration,
         activeDifficulty: targetDifficulty,
@@ -274,7 +365,44 @@ export class AdaptiveLearningService {
     topicName: string,
     courseId: string,
     difficulty?: QuestionDifficulty,
+    studentId?: string,
   ) {
+    if (studentId) {
+      const student = await this.prisma.studentProfile.findFirst({
+        where: { OR: [{ id: studentId }, { userId: studentId }] },
+      });
+      const effectiveStudentId = student ? student.id : studentId;
+
+      const targetTopic = await this.prisma.topic.findFirst({
+        where: {
+          courseId,
+          OR: [
+            { name: { equals: topicName } },
+            { slug: { equals: topicName.toLowerCase().replace(/\s+/g, '-') } },
+          ],
+        },
+      });
+
+      if (targetTopic) {
+        const prereqCheck = await this.analyticsService.validateTopicPrerequisites(
+          effectiveStudentId,
+          targetTopic.id,
+        );
+        if (!prereqCheck.isReady) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            error: 'PREREQUISITE_INCOMPLETE',
+            message: prereqCheck.recommendation,
+            topicId: targetTopic.id,
+            topicSlug: targetTopic.slug,
+            topicName: targetTopic.name,
+            readinessScore: prereqCheck.readinessScore,
+            missingPrerequisites: prereqCheck.missingPrerequisites,
+          });
+        }
+      }
+    }
+
     return this.aiQuestionGenerator.generateAndPersistQuestion({
       topicName,
       courseId,

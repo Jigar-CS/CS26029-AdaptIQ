@@ -83,7 +83,22 @@ export class CodeRunnerService {
     } else if (language === ProgrammingLanguage.JAVA) {
       return this.executeJava(sourceCode, testCases);
     } else {
-      return this.executeAlgorithmicFallback(language, sourceCode, testCases);
+      return {
+        status: 'COMPILATION_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: `Unsupported programming language: ${language}. Supported languages are Python, JavaScript, C++, and Java.`,
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: `Unsupported language: ${language}`,
+          executionTimeMs: 0,
+        })),
+      };
     }
   }
 
@@ -756,7 +771,22 @@ try {
   ): Promise<CodeRunnerVerdict> {
     const cppCmd = this.getCppCompilerCommand();
     if (!cppCmd) {
-      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+      return {
+        status: 'RUNTIME_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'C++ execution environment is not available on the server (g++ compiler is not found in PATH).',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'C++ compiler unavailable',
+          executionTimeMs: 0,
+        })),
+      };
     }
 
     const tmpDir = os.tmpdir();
@@ -841,6 +871,24 @@ using namespace std;
           testResults,
         };
       } catch (err: any) {
+        if (err.code === 'ETIMEDOUT' || err.killed || (err.message && err.message.includes('TIMEDOUT'))) {
+          return {
+            status: 'TIME_LIMIT_EXCEEDED',
+            totalTestCases: testCases.length,
+            testCasesPassed: 0,
+            executionTimeMs: 5000,
+            memoryKb: 0,
+            outputMessage: 'Time Limit Exceeded: Execution took longer than 5000ms.',
+            testResults: testCases.map((tc, idx) => ({
+              testCaseNumber: idx + 1,
+              status: 'FAILED',
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              actualOutput: 'Time Limit Exceeded',
+              executionTimeMs: 5000,
+            })),
+          };
+        }
         const stderr = err.stderr ? err.stderr.toString() : err.message;
         if (stderr.includes('error:') || stderr.includes('fatal error:')) {
           return {
@@ -860,7 +908,22 @@ using namespace std;
             })),
           };
         }
-        return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+        return {
+          status: 'RUNTIME_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Runtime Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Runtime error',
+            executionTimeMs: 0,
+          })),
+        };
       } finally {
         try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
         try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
@@ -878,7 +941,22 @@ using namespace std;
   ): CodeRunnerVerdict {
     const cppCmd = cppCompiler || this.getCppCompilerCommand();
     if (!cppCmd) {
-      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+      return {
+        status: 'RUNTIME_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'C++ execution environment is not available on the server (g++ compiler is not found in PATH).',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'C++ compiler unavailable',
+          executionTimeMs: 0,
+        })),
+      };
     }
 
     const tmpDir = os.tmpdir();
@@ -890,7 +968,22 @@ using namespace std;
     const fnName = this.extractCppFunctionName(sourceCode);
 
     if (!fnName) {
-      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+      return {
+        status: 'COMPILATION_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'Compilation Error: Could not detect entry function or Solution class in C++ source code.',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Function not found',
+          executionTimeMs: 0,
+        })),
+      };
     }
 
     const calls = testCases.map((tc, idx) => {
@@ -1025,6 +1118,24 @@ ${calls}
         testResults: results,
       };
     } catch (compileErr: any) {
+      if (compileErr.code === 'ETIMEDOUT' || compileErr.killed || (compileErr.message && compileErr.message.includes('TIMEDOUT'))) {
+        return {
+          status: 'TIME_LIMIT_EXCEEDED',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 5000,
+          memoryKb: 0,
+          outputMessage: 'Time Limit Exceeded: Execution took longer than 5000ms.',
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Time Limit Exceeded',
+            executionTimeMs: 5000,
+          })),
+        };
+      }
       const stderr = compileErr.stderr ? compileErr.stderr.toString() : compileErr.message;
       if (stderr.includes('error:') || stderr.includes('fatal error:')) {
         return {
@@ -1044,7 +1155,22 @@ ${calls}
           })),
         };
       }
-      return this.executeAlgorithmicFallback(ProgrammingLanguage.CPP, sourceCode, testCases);
+      return {
+        status: 'RUNTIME_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: `Runtime Error:\n${stderr.trim()}`,
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Runtime error',
+          executionTimeMs: 0,
+        })),
+      };
     } finally {
       try { if (fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch {}
       try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
@@ -1097,6 +1223,27 @@ ${calls}
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): Promise<CodeRunnerVerdict> {
+    const javacCmd = this.getJavacCommand();
+    const javaCmd = this.getJavaCommand();
+    if (!javacCmd || !javaCmd) {
+      return {
+        status: 'RUNTIME_ERROR',
+        totalTestCases: testCases.length,
+        testCasesPassed: 0,
+        executionTimeMs: 0,
+        memoryKb: 0,
+        outputMessage: 'Java execution environment is not available on the server (javac/java compiler is not found in PATH).',
+        testResults: testCases.map((tc, idx) => ({
+          testCaseNumber: idx + 1,
+          status: 'FAILED',
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: 'Java compiler unavailable',
+          executionTimeMs: 0,
+        })),
+      };
+    }
+
     if (sourceCode.includes('main(')) {
       return this.evaluateMainJava(sourceCode, testCases);
     }
@@ -1233,7 +1380,22 @@ ${calls}
         if (fullCode.includes('main(')) {
           return this.evaluateMainJava(fullCode, testCases);
         }
-        return this.executeAlgorithmicFallback(ProgrammingLanguage.JAVA, fullCode, testCases);
+        return {
+          status: 'COMPILATION_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: 'Compilation Error: Could not detect entry method or Solution class in Java source code.',
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Method not found',
+            executionTimeMs: 0,
+          })),
+        };
       }
 
       // Prepend standard imports if missing
@@ -1294,7 +1456,46 @@ ${calls}
         };
       }
 
-      const rawOut = execSync(`"${javaCmd}" -cp "${javaDir}" TestRunner`, { stdio: 'pipe', timeout: 4000 }).toString();
+      let rawOut = '';
+      try {
+        rawOut = execSync(`"${javaCmd}" -cp "${javaDir}" TestRunner`, { stdio: 'pipe', timeout: 5000 }).toString();
+      } catch (runErr: any) {
+        if (runErr.code === 'ETIMEDOUT' || runErr.killed || (runErr.message && runErr.message.includes('TIMEDOUT'))) {
+          return {
+            status: 'TIME_LIMIT_EXCEEDED',
+            totalTestCases: testCases.length,
+            testCasesPassed: 0,
+            executionTimeMs: 5000,
+            memoryKb: 0,
+            outputMessage: 'Time Limit Exceeded: Java execution took longer than 5000ms.',
+            testResults: testCases.map((tc, idx) => ({
+              testCaseNumber: idx + 1,
+              status: 'FAILED',
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              actualOutput: 'Time Limit Exceeded',
+              executionTimeMs: 5000,
+            })),
+          };
+        }
+        const stderr = runErr.stderr ? runErr.stderr.toString() : runErr.message;
+        return {
+          status: 'RUNTIME_ERROR',
+          totalTestCases: testCases.length,
+          testCasesPassed: 0,
+          executionTimeMs: 0,
+          memoryKb: 0,
+          outputMessage: `Java Runtime Error:\n${stderr.trim()}`,
+          testResults: testCases.map((tc, idx) => ({
+            testCaseNumber: idx + 1,
+            status: 'FAILED',
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            actualOutput: 'Runtime error',
+            executionTimeMs: 0,
+          })),
+        };
+      }
 
       let passed = 0;
       const results: CodeRunnerTestResult[] = [];
@@ -1341,56 +1542,21 @@ ${calls}
     sourceCode: string,
     testCases: CodeRunnerTestCase[],
   ): CodeRunnerVerdict {
-    const isBlank = sourceCode.trim().length < 20;
-    if (isBlank) {
-      return {
-        status: 'COMPILATION_ERROR',
-        totalTestCases: testCases.length,
-        testCasesPassed: 0,
-        executionTimeMs: 0,
-        memoryKb: 0,
-        outputMessage: 'Compilation error: code is empty or incomplete.',
-        testResults: testCases.map((tc, idx) => ({
-          testCaseNumber: idx + 1,
-          status: 'FAILED',
-          input: tc.input,
-          expectedOutput: tc.expectedOutput,
-          actualOutput: 'Empty solution',
-          executionTimeMs: 0,
-        })),
-      };
-    }
-
-    const stripped = sourceCode.replace(/\/\/.*|\/\*[\s\S]*?\*\/|\s+/g, '');
-    let defaultVal: string | null = null;
-    if (stripped.includes('return0;') || stripped.includes('return0')) defaultVal = '0';
-    else if (stripped.includes('returnfalse;') || stripped.includes('returnfalse')) defaultVal = 'false';
-    else if (stripped.includes('returntrue;') || stripped.includes('returntrue')) defaultVal = 'true';
-    else if (stripped.includes('return-1;') || stripped.includes('return-1')) defaultVal = '-1';
-
-    let passed = 0;
-    const testResults: CodeRunnerTestResult[] = testCases.map((tc, idx) => {
-      const isPass = defaultVal !== null && this.normalizeStr(defaultVal) === this.normalizeStr(tc.expectedOutput);
-      if (isPass) passed++;
-      return {
+    return {
+      status: 'COMPILATION_ERROR',
+      totalTestCases: testCases.length,
+      testCasesPassed: 0,
+      executionTimeMs: 0,
+      memoryKb: 0,
+      outputMessage: `Execution Error: Language '${language}' cannot be executed directly or requires missing toolchain.`,
+      testResults: testCases.map((tc, idx) => ({
         testCaseNumber: idx + 1,
-        status: isPass ? 'PASSED' : 'FAILED',
+        status: 'FAILED',
         input: tc.input,
         expectedOutput: tc.expectedOutput,
-        actualOutput: defaultVal !== null ? defaultVal : 'Algorithmic fallback evaluated',
-        executionTimeMs: 14 + idx * 2,
-      };
-    });
-
-    const status = passed === testCases.length && testCases.length > 0 ? 'ACCEPTED' : 'WRONG_ANSWER';
-    return {
-      status,
-      totalTestCases: testCases.length,
-      testCasesPassed: passed,
-      executionTimeMs: 30,
-      memoryKb: 14300,
-      outputMessage: `Evaluation completed: ${passed}/${testCases.length} test cases passed.`,
-      testResults,
+        actualOutput: 'Execution unavailable',
+        executionTimeMs: 0,
+      })),
     };
   }
 

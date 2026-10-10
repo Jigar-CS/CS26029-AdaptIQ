@@ -36,7 +36,9 @@ import {
   Cpu,
   Play,
   Copy,
+  Trophy,
 } from 'lucide-react';
+import { AssessmentLeaderboardModal } from '@/components/AssessmentLeaderboardModal';
 
 export default function FacultyAssessmentsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -54,6 +56,7 @@ export default function FacultyAssessmentsPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchStudent, setSearchStudent] = useState('');
   const [filterDiv, setFilterDiv] = useState<'ALL' | 'DIV 1' | 'DIV 2'>('ALL');
+  const [leaderboardModalData, setLeaderboardModalData] = useState<{ id: string; title: string } | null>(null);
 
   // Examination Mode & Coding Problem Engine State
   const [examMode, setExamMode] = useState<'OBJECTIVE' | 'CODING' | 'HYBRID'>('OBJECTIVE');
@@ -655,7 +658,7 @@ export default function FacultyAssessmentsPage() {
           subtitle="Author formal quizzes, scheduled mid-terms, and evaluate class performance"
         />
 
-        <main className="p-8 max-w-6xl w-full mx-auto space-y-6">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto space-y-6">
           {/* Header Action Bar */}
           <div className="bg-[#111827] rounded-2xl p-6 border border-slate-800 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -784,10 +787,19 @@ export default function FacultyAssessmentsPage() {
                     <button
                       type="button"
                       onClick={() => openAnalyticsModal(a.id)}
-                      className="flex-1 py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition flex items-center justify-center gap-1.5"
                     >
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>Cohort Analytics</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardModalData({ id: a.id, title: a.title })}
+                      className="py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
+                      title="View dynamic live ranking leaderboard"
+                    >
+                      <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Leaderboard</span>
                     </button>
                     {(a.isCodingExam || a.title?.includes('[CODING]') || a.description?.toLowerCase().includes('coding')) && (
                       <button
@@ -2054,7 +2066,22 @@ export default function FacultyAssessmentsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                {activeAnalytics && (
+                  <button
+                    onClick={() =>
+                      setLeaderboardModalData({
+                        id: activeAnalytics.assessmentId,
+                        title: activeAnalytics.title,
+                      })
+                    }
+                    className="flex items-center gap-2 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition shadow-xs"
+                    title="Open full dynamic live ranking leaderboard"
+                  >
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <span>Live Leaderboard</span>
+                  </button>
+                )}
                 {activeAnalytics && activeAnalytics.submissions?.length > 0 && (
                   <button
                     onClick={() => exportMarksCsv(activeAnalytics)}
@@ -2293,6 +2320,17 @@ export default function FacultyAssessmentsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Dynamic Assessment Leaderboard Modal for Faculty */}
+      {leaderboardModalData && (
+        <AssessmentLeaderboardModal
+          assessmentId={leaderboardModalData.id}
+          assessmentTitle={leaderboardModalData.title}
+          isOpen={!!leaderboardModalData}
+          onClose={() => setLeaderboardModalData(null)}
+          isFacultyView={true}
+        />
       )}
     </div>
   );

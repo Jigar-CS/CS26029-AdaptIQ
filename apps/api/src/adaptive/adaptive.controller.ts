@@ -36,6 +36,7 @@ export class AdaptiveController {
     @Query('courseId') courseId?: string,
     @Query('difficulty') difficulty?: QuestionDifficulty,
     @Query('excludeIds') excludeIdsStr?: string,
+    @Query('sessionId') sessionId?: string,
   ) {
     // Validate difficulty enum to prevent unexpected values
     const safeDifficulty =
@@ -52,6 +53,7 @@ export class AdaptiveController {
       courseId,
       safeDifficulty,
       excludeIds,
+      sessionId,
     );
   }
 
@@ -76,6 +78,7 @@ export class AdaptiveController {
       safeTopicName,
       body.courseId,
       safeDifficulty,
+      resolveStudentId(req),
     );
   }
 

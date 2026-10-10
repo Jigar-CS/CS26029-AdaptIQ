@@ -42,12 +42,16 @@ export class AnalyticsController {
 
   @Get('student/me/learning-curve')
   @Roles(UserRole.STUDENT)
-  async getMyLearningCurve(@Request() req, @Query('topicId') topicId?: string) {
+  async getMyLearningCurve(
+    @Request() req,
+    @Query('topicId') topicId?: string,
+    @Query('source') source?: string,
+  ) {
     const studentId = resolveStudentId(req);
     if (!studentId) {
       throw new ForbiddenException('Authenticated user is not linked to a student profile');
     }
-    return this.analyticsService.getLearningCurve(studentId, topicId);
+    return this.analyticsService.getLearningCurve(studentId, topicId, source);
   }
 
   @Get('student/me/mastery')

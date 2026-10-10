@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CodeRunnerService } from './code-runner.service';
 import {
@@ -392,23 +392,40 @@ export class CodingService {
       mappedStatus = JudgeSubmissionStatus.RUNTIME_ERROR;
     }
 
-    const judgeDetails = result.testResults.map((tr, idx) => {
+    const totalCount = result.totalTestCases || problem.testCases.length;
+    const passedCount = result.testCasesPassed || 0;
+    const score = totalCount > 0 ? Number(((passedCount / totalCount) * 100).toFixed(1)) : 0;
+
+    // Strict hidden test case protection: NEVER expose input, expected output, or inner execution traces of hidden tests
+    const sanitizedTestResults = (result.testResults || []).map((tr, idx) => {
       const tc = problem.testCases[idx];
-      const isHidden = tc && tc.isHidden;
+      const isHidden = tc ? !!tc.isHidden : false;
       return {
-        testCase: tr.testCaseNumber,
-        testCaseNumber: tr.testCaseNumber,
+        testCaseNumber: tr.testCaseNumber || (idx + 1),
         status: tr.status,
         input: isHidden ? '[Hidden Testcase]' : tr.input,
-        expected: isHidden ? '[Hidden]' : tr.expectedOutput,
         expectedOutput: isHidden ? '[Hidden]' : tr.expectedOutput,
-        actual: isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
-        actualOutput: isHidden ? (tr.status === 'PASSED' ? '[Hidden]' : tr.actualOutput) : tr.actualOutput,
-        timeMs: tr.executionTimeMs,
+        actualOutput: isHidden
+          ? (tr.status === 'PASSED' ? '[Passed]' : '[Hidden - Output mismatch]')
+          : tr.actualOutput,
         executionTimeMs: tr.executionTimeMs,
         consoleOutput: isHidden ? undefined : tr.consoleOutput,
       };
     });
+
+    const judgeDetails = sanitizedTestResults.map((tr) => ({
+      testCase: tr.testCaseNumber,
+      testCaseNumber: tr.testCaseNumber,
+      status: tr.status,
+      input: tr.input,
+      expected: tr.expectedOutput,
+      expectedOutput: tr.expectedOutput,
+      actual: tr.actualOutput,
+      actualOutput: tr.actualOutput,
+      timeMs: tr.executionTimeMs,
+      executionTimeMs: tr.executionTimeMs,
+      consoleOutput: tr.consoleOutput,
+    }));
 
     const submission = await this.prisma.codeSubmission.create({
       data: {
@@ -417,14 +434,15 @@ export class CodingService {
         language: dto.language,
         sourceCode: dto.sourceCode,
         status: mappedStatus,
+        score,
         executionTimeMs: Math.round(result.executionTimeMs),
         memoryUsedKb: result.memoryKb || 14320,
-        testCasesPassed: result.testCasesPassed,
-        totalTestCases: result.totalTestCases,
+        testCasesPassed: passedCount,
+        totalTestCases: totalCount,
         judgeDetails: JSON.stringify(judgeDetails),
       },
       include: {
-        problem: { select: { title: true, slug: true } },
+        problem: { select: { title: true, slug: true, difficulty: true } },
       },
     });
 
@@ -432,33 +450,103 @@ export class CodingService {
       submission,
       verdict: {
         status: mappedStatus,
-        testCasesPassed: result.testCasesPassed,
-        totalTestCases: result.totalTestCases,
+        score,
+        testCasesPassed: passedCount,
+        totalTestCases: totalCount,
         executionTimeMs: result.executionTimeMs,
         memoryUsedKb: result.memoryKb || 14320,
         outputMessage: result.outputMessage,
         judgeDetails,
-        testResults: result.testResults,
+        testResults: sanitizedTestResults,
       },
     };
   }
 
   /**
    * Retrieves submissions for a student with problem information.
+   * Supports filtering by problem ID or slug.
    */
-  async getStudentSubmissions(rawStudentId: string, problemId?: string) {
-    const studentProfileId = await this.resolveStudentProfileId(rawStudentId);
+  async getStudentSubmissions(rawStudentId: string, problemIdOrSlug?: string) {
+    const studentProfile = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [{ id: rawStudentId }, { userId: rawStudentId }],
+      },
+    });
+
+    const studentIds = [rawStudentId];
+    if (studentProfile) {
+      studentIds.push(studentProfile.id, studentProfile.userId);
+    }
+    const uniqueStudentIds = Array.from(new Set(studentIds.filter(Boolean)));
+
+    let problemCondition: any = undefined;
+    if (problemIdOrSlug && problemIdOrSlug !== 'all') {
+      const prob = await this.prisma.codingProblem.findFirst({
+        where: { OR: [{ id: problemIdOrSlug }, { slug: problemIdOrSlug }] },
+        select: { id: true, slug: true },
+      });
+      if (prob) {
+        problemCondition = {
+          OR: [
+            { problemId: prob.id },
+            { problem: { slug: prob.slug } },
+          ],
+        };
+      } else {
+        problemCondition = {
+          OR: [
+            { problemId: problemIdOrSlug },
+            { problem: { slug: problemIdOrSlug } },
+          ],
+        };
+      }
+    }
 
     return this.prisma.codeSubmission.findMany({
       where: {
-        studentId: studentProfileId,
-        ...(problemId ? { problemId } : {}),
+        studentId: { in: uniqueStudentIds },
+        ...(problemCondition ? problemCondition : {}),
       },
       include: {
-        problem: { select: { title: true, slug: true, difficulty: true } },
+        problem: { select: { id: true, title: true, slug: true, difficulty: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Retrieves a single historical submission for read-only inspection.
+   * Enforces strict ownership checks to ensure a student can only view their own submissions.
+   */
+  async getSubmissionById(rawStudentId: string, submissionId: string) {
+    const studentProfile = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [{ id: rawStudentId }, { userId: rawStudentId }],
+      },
+    });
+
+    const studentIds = [rawStudentId];
+    if (studentProfile) {
+      studentIds.push(studentProfile.id, studentProfile.userId);
+    }
+    const uniqueStudentIds = Array.from(new Set(studentIds.filter(Boolean)));
+
+    const submission = await this.prisma.codeSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        problem: { select: { id: true, title: true, slug: true, difficulty: true } },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException(`Submission '${submissionId}' not found.`);
+    }
+
+    if (!uniqueStudentIds.includes(submission.studentId)) {
+      throw new ForbiddenException('You are not authorized to view this submission.');
+    }
+
+    return submission;
   }
 
   /**

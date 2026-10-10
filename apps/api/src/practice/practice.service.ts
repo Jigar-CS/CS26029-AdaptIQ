@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LearningAnalyticsService } from '../analytics/learning-analytics.service';
 import { StartPracticeSessionDto, SubmitAttemptDto } from './dto/practice.dto';
+import { shuffleQuestionOptions } from '../common/shuffle.util';
 
 @Injectable()
 export class PracticeService {
@@ -16,11 +17,66 @@ export class PracticeService {
   ) {}
 
   async startSession(studentId: string, dto: StartPracticeSessionDto) {
+    const student = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [{ id: studentId }, { userId: studentId }],
+      },
+    });
+    const effectiveStudentId = student ? student.id : studentId;
+
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [{ id: dto.courseId }, { code: dto.courseId }, { code: dto.courseId?.toUpperCase() }],
+      },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Course "${dto.courseId}" not found.`);
+    }
+
+    let targetTopic = null;
+    if (dto.topicId) {
+      targetTopic = await this.prisma.topic.findFirst({
+        where: {
+          OR: [{ id: dto.topicId }, { slug: dto.topicId }],
+        },
+      });
+
+      if (!targetTopic) {
+        throw new NotFoundException(`Topic "${dto.topicId}" not found.`);
+      }
+
+      if (targetTopic.courseId !== course.id) {
+        throw new BadRequestException(
+          `Topic "${targetTopic.name}" does not belong to the selected subject "${course.name}".`,
+        );
+      }
+
+      // Authoritative prerequisite check
+      const prereqCheck = await this.analyticsService.validateTopicPrerequisites(
+        effectiveStudentId,
+        targetTopic.id,
+      );
+
+      if (!prereqCheck.isReady) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'PREREQUISITE_INCOMPLETE',
+          message: prereqCheck.recommendation,
+          topicId: targetTopic.id,
+          topicSlug: targetTopic.slug,
+          topicName: targetTopic.name,
+          readinessScore: prereqCheck.readinessScore,
+          missingPrerequisites: prereqCheck.missingPrerequisites,
+        });
+      }
+    }
+
     const session = await this.prisma.practiceSession.create({
       data: {
-        studentId,
-        courseId: dto.courseId,
-        topicId: dto.topicId,
+        studentId: effectiveStudentId,
+        courseId: course.id,
+        topicId: targetTopic ? targetTopic.id : undefined,
         difficulty: dto.difficulty,
       },
       include: {
@@ -28,7 +84,7 @@ export class PracticeService {
       },
     });
 
-    const firstQuestion = await this.getNextQuestion(session.id, studentId);
+    const firstQuestion = await this.getNextQuestion(session.id, effectiveStudentId);
 
     return {
       session,
@@ -45,14 +101,21 @@ export class PracticeService {
       throw new NotFoundException('Practice session not found.');
     }
 
-    if (session.studentId !== studentId) {
+    const student = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [{ id: studentId }, { userId: studentId }],
+      },
+    });
+    const effectiveStudentId = student ? student.id : studentId;
+
+    if (session.studentId !== effectiveStudentId) {
       throw new ForbiddenException('Access denied to this practice session.');
     }
 
     // Find questions already attempted by this student across all sessions
     const studentAttempts = await this.prisma.questionAttempt
       .findMany({
-        where: { studentId },
+        where: { studentId: effectiveStudentId },
         select: { questionId: true },
       })
       .then((attempts) => attempts.map((a) => a.questionId));
@@ -98,7 +161,7 @@ export class PracticeService {
       },
     });
 
-    // Tier 2: If none at exact difficulty, try any difficulty in topic
+    // Tier 2: If none at exact difficulty, try any difficulty in same topic
     if (availableQuestions.length === 0 && session.topicId) {
       availableQuestions = await this.prisma.question.findMany({
         where: {
@@ -118,8 +181,8 @@ export class PracticeService {
       });
     }
 
-    // Tier 3: If topic exhausted, try other topics in course
-    if (availableQuestions.length === 0) {
+    // Tier 3: If whole topic exhausted, only expand to course if session was curriculum-wide (no specific topic)
+    if (availableQuestions.length === 0 && !session.topicId) {
       availableQuestions = await this.prisma.question.findMany({
         where: {
           courseId: session.courseId,
@@ -137,11 +200,12 @@ export class PracticeService {
       });
     }
 
-    // Absolute fallback: exclude at least current session attempts
+    // Absolute fallback: exclude at least current session attempts within the same topic constraint
     if (availableQuestions.length === 0) {
       availableQuestions = await this.prisma.question.findMany({
         where: {
           courseId: session.courseId,
+          ...(session.topicId ? { topicId: session.topicId } : {}),
           status: 'APPROVED',
           ...(sessionAttempts.length > 0 ? { id: { notIn: sessionAttempts } } : {}),
         },
@@ -170,7 +234,7 @@ export class PracticeService {
       difficulty: selected.difficulty,
       type: selected.type,
       questionText: selected.questionText,
-      options: selected.options,
+      options: shuffleQuestionOptions(selected.options, session.id, selected.id),
     };
   }
 

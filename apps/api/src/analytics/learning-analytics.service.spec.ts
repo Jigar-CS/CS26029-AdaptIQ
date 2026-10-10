@@ -27,24 +27,24 @@ describe('LearningAnalyticsService & Phase 2 Engines', () => {
   // 1. EWMA Mathematical Tests
   // ============================================================================
   describe('calculateNewMastery (EWMA)', () => {
-    it('should initialize baseline mastery for a first correct answer on Easy difficulty', () => {
+    it('should initialize baseline mastery for a first correct answer on Easy difficulty smoothly without jumping to 70%', () => {
       const score = service.calculateNewMastery({
         currentMastery: 0,
         isCorrect: true,
         difficulty: QuestionDifficulty.EASY,
       });
-      // Base Easy is 70 * 1.0 = 70
-      expect(score).toBe(70);
+      // Prior anchor 40: (1 - 0.25) * 40 + 0.25 * 70 = 47.5
+      expect(score).toBe(47.5);
     });
 
-    it('should initialize higher baseline mastery for a first correct answer on Hard difficulty', () => {
+    it('should initialize calibrated baseline for a first correct answer on Hard difficulty without spiking straight to 100%', () => {
       const score = service.calculateNewMastery({
         currentMastery: 0,
         isCorrect: true,
         difficulty: QuestionDifficulty.HARD,
       });
-      // Base Hard is min(100, 70 * 1.5) = 100
-      expect(score).toBe(100);
+      // Prior anchor 40: (1 - 0.25) * 40 + 0.25 * 100 = 55
+      expect(score).toBe(55);
     });
 
     it('should degrade mastery smoothly using EWMA when an incorrect answer is given', () => {
@@ -300,6 +300,140 @@ describe('LearningAnalyticsService & Phase 2 Engines', () => {
       expect(alerts).toHaveLength(1);
       expect(alerts[0].studentName).toBe('Rahul Patel');
       expect(alerts[0].severity).toBe('HIGH');
+    });
+  });
+
+  // ============================================================================
+  // 6. Knowledge Curve Progression & Dual-Stream Filtering Tests
+  // ============================================================================
+  describe('getLearningCurve', () => {
+    it('should return empty array for student with no historical records (insufficient data)', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.learningHistory = {
+        findMany: jest.fn().mockResolvedValue([]),
+      };
+
+      const result = await service.getLearningCurve('student-1');
+      expect(result).toEqual([]);
+      expect(mockPrisma.learningHistory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ studentId: 'student-1' }),
+        }),
+      );
+    });
+
+    it('should filter strictly by topicId when provided', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.learningHistory = {
+        findMany: jest.fn().mockResolvedValue([]),
+      };
+
+      await service.getLearningCurve('student-1', 'topic-arrays');
+      expect(mockPrisma.learningHistory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            studentId: 'student-1',
+            topicId: 'topic-arrays',
+          }),
+        }),
+      );
+    });
+
+    it('should isolate adaptive practice attempts when source=PRACTICE', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.learningHistory = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'h1',
+            recordedAt: new Date('2026-10-01'),
+            masteryScore: 80,
+            reason: 'PRACTICE_ATTEMPT',
+            topic: { name: 'Arrays', course: { code: 'DSA101', name: 'DSA' } },
+          },
+        ]),
+      };
+
+      const result = await service.getLearningCurve('student-1', undefined, 'PRACTICE');
+      expect(mockPrisma.learningHistory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            reason: 'PRACTICE_ATTEMPT',
+          }),
+        }),
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].source).toBe('PRACTICE');
+      expect(result[0].rawScore).toBe(80);
+      // Smoothed: (1 - 0.35) * 50 + 0.35 * 80 = 32.5 + 28 = 60.5
+      expect(result[0].masteryScore).toBe(60.5);
+    });
+
+    it('should isolate formal assessment attempts when source=ASSESSMENT', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      mockPrisma.learningHistory = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'h2',
+            recordedAt: new Date('2026-10-02'),
+            masteryScore: 90,
+            reason: 'TEST_RESULT',
+            topic: { name: 'Trees', course: { code: 'DSA101', name: 'DSA' } },
+          },
+        ]),
+      };
+
+      const result = await service.getLearningCurve('student-1', undefined, 'ASSESSMENT');
+      expect(result).toHaveLength(1);
+      expect(result[0].source).toBe('ASSESSMENT');
+      expect(result[0].rawScore).toBe(90);
+      // Smoothed: (1 - 0.35) * 50 + 0.35 * 90 = 32.5 + 31.5 = 64
+      expect(result[0].masteryScore).toBe(64);
+    });
+
+    it('should balance Practice and Assessment 50/50 in Overall Curve without allowing practice volume to dominate', async () => {
+      const mockPrisma: any = (service as any).prisma;
+      // 3 practice attempts with high score 90, followed by 1 assessment with score 40
+      mockPrisma.learningHistory = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'p1',
+            recordedAt: new Date('2026-10-01T10:00:00Z'),
+            masteryScore: 90,
+            reason: 'PRACTICE_ATTEMPT',
+            topic: { name: 'Graphs', course: { code: 'DSA101' } },
+          },
+          {
+            id: 'p2',
+            recordedAt: new Date('2026-10-01T11:00:00Z'),
+            masteryScore: 90,
+            reason: 'PRACTICE_ATTEMPT',
+            topic: { name: 'Graphs', course: { code: 'DSA101' } },
+          },
+          {
+            id: 'a1',
+            recordedAt: new Date('2026-10-02T10:00:00Z'),
+            masteryScore: 40,
+            reason: 'TEST_RESULT',
+            topic: { name: 'Graphs', course: { code: 'DSA101' } },
+          },
+        ]),
+      };
+
+      const result = await service.getLearningCurve('student-1', undefined, 'ALL');
+      expect(result).toHaveLength(3);
+
+      // Milestone 1 (Practice): Only practice exists so far
+      expect(result[0].source).toBe('PRACTICE');
+
+      // Milestone 3 (Assessment submitted):
+      // The overall mastery must combine Practice mastery and Assessment mastery equally
+      const milestone3 = result[2];
+      expect(milestone3.source).toBe('ASSESSMENT');
+      expect(milestone3.practiceMastery).toBeDefined();
+      expect(milestone3.assessmentMastery).toBeDefined();
+      // Combined = 0.5 * practiceMastery + 0.5 * assessmentMastery
+      const expectedCombined = Math.round((0.5 * milestone3.practiceMastery! + 0.5 * milestone3.assessmentMastery!) * 10) / 10;
+      expect(milestone3.masteryScore).toBe(expectedCombined);
     });
   });
 });

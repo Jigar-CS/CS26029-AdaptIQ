@@ -95,4 +95,10 @@ export class CodingController {
     const studentId = req.user?.studentId || req.user?.studentProfile?.id || req.user?.id;
     return this.codingService.getStudentSubmissions(studentId, problemId);
   }
+
+  @Get('submissions/:id')
+  async getSubmissionById(@Request() req, @Param('id') id: string) {
+    const studentId = req.user?.studentId || req.user?.studentProfile?.id || req.user?.id;
+    return this.codingService.getSubmissionById(studentId, id);
+  }
 }

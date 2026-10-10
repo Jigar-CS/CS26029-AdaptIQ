@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
@@ -49,6 +49,26 @@ export default function StudentDashboard() {
   const [remediationNudge, setRemediationNudge] = useState<any>(null);
   const [assignedAssessments, setAssignedAssessments] = useState<any[]>([]);
 
+  // Knowledge Curve filter state (Default: Overall Learning Curve + All Topics)
+  const [kcSource, setKcSource] = useState<string>('ALL');
+  const [kcTopic, setKcTopic] = useState<string>('ALL');
+  const [kcCurveData, setKcCurveData] = useState<any[]>([]);
+  const [kcLoading, setKcLoading] = useState<boolean>(false);
+
+  // Restore saved filter selection from localStorage across refreshes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedSource = localStorage.getItem('adaptiq_kc_source');
+      const savedTopic = localStorage.getItem('adaptiq_kc_topic');
+      if (savedSource && ['ALL', 'PRACTICE', 'ASSESSMENT'].includes(savedSource)) {
+        setKcSource(savedSource);
+      }
+      if (savedTopic) {
+        setKcTopic(savedTopic);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
@@ -60,23 +80,91 @@ export default function StudentDashboard() {
     }
   }, [user, authLoading]);
 
+  const fetchFilteredCurve = async (source: string, topicId: string) => {
+    setKcLoading(true);
+    try {
+      const q = new URLSearchParams();
+      if (source && source !== 'ALL') q.set('source', source);
+      if (topicId && topicId !== 'ALL') q.set('topicId', topicId);
+      const queryStr = q.toString() ? `?${q.toString()}` : '';
+
+      const curve: any = await api.get(`/analytics/student/me/learning-curve${queryStr}`);
+      if (Array.isArray(curve)) {
+        setKcCurveData(curve);
+      }
+    } catch (err) {
+      console.error('Failed to load filtered knowledge curve:', err);
+    } finally {
+      setKcLoading(false);
+    }
+  };
+
+  const handleSourceChange = (newSource: string) => {
+    setKcSource(newSource);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adaptiq_kc_source', newSource);
+    }
+    fetchFilteredCurve(newSource, kcTopic);
+  };
+
+  const handleTopicChange = (newTopic: string) => {
+    setKcTopic(newTopic);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adaptiq_kc_topic', newTopic);
+    }
+    fetchFilteredCurve(kcSource, newTopic);
+  };
+
+  const availableTopics = useMemo(() => {
+    const list: Array<{ id: string; name: string }> = [];
+    const seen = new Set<string>();
+
+    const addTopic = (id: string, name: string, code?: string) => {
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        list.push({ id, name: code ? `${code} - ${name}` : name });
+      }
+    };
+
+    if (Array.isArray(summary?.topicMasteries)) {
+      summary.topicMasteries.forEach((m: any) => addTopic(m.topicId, m.topicName, m.courseCode));
+    }
+    if (Array.isArray(summary?.weakTopics)) {
+      summary.weakTopics.forEach((m: any) => addTopic(m.topicId, m.topicName, m.courseCode));
+    }
+    if (Array.isArray(summary?.strongTopics)) {
+      summary.strongTopics.forEach((m: any) => addTopic(m.topicId, m.topicName, m.courseCode));
+    }
+    return list;
+  }, [summary?.topicMasteries, summary?.weakTopics, summary?.strongTopics]);
+
   const loadDashboardData = async () => {
     try {
       const data: any = await api.get('/analytics/student/me/summary');
       if (data && typeof data === 'object') {
+        const curveArray = Array.isArray(data.learningCurve) ? data.learningCurve : [];
         setSummary({
           overallMastery: typeof data.overallMastery === 'number' ? data.overallMastery : 0,
           questionsPracticed: typeof data.questionsPracticed === 'number' ? data.questionsPracticed : 0,
           accuracy: typeof data.accuracy === 'number' ? data.accuracy : 0,
           testsAttempted: typeof data.testsAttempted === 'number' ? data.testsAttempted : 0,
           streakDays: typeof data.streakDays === 'number' ? data.streakDays : 0,
-          learningCurve: Array.isArray(data.learningCurve) ? data.learningCurve : [],
+          learningCurve: curveArray,
           topicMasteries: Array.isArray(data.topicMasteries) ? data.topicMasteries : [],
           weakTopics: Array.isArray(data.weakTopics) ? data.weakTopics : [],
           strongTopics: Array.isArray(data.strongTopics) ? data.strongTopics : [],
           recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : [],
           cognitiveAdvice: data.cognitiveAdvice || null,
         });
+
+        // Initialize curve with default or saved filter
+        const savedSource = typeof window !== 'undefined' ? localStorage.getItem('adaptiq_kc_source') : null;
+        const savedTopic = typeof window !== 'undefined' ? localStorage.getItem('adaptiq_kc_topic') : null;
+        if ((!savedSource || savedSource === 'ALL') && (!savedTopic || savedTopic === 'ALL')) {
+          setKcCurveData(curveArray);
+        } else {
+          fetchFilteredCurve(savedSource || 'ALL', savedTopic || 'ALL');
+        }
       }
     } catch {
       // Keep real zero state
@@ -119,7 +207,7 @@ export default function StudentDashboard() {
           subtitle={`Knowledge Profile for ${user?.name || user?.email || 'Student'}`}
         />
 
-        <main className="p-8 max-w-7xl w-full mx-auto space-y-8 animate-in fade-in duration-200">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200">
           {/* Quick Practice Banner */}
           <div className="rounded-3xl p-6 md:p-8 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-xl shadow-indigo-950/20 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden border border-indigo-500/20">
             <div className="absolute right-0 top-0 w-96 h-full bg-gradient-to-l from-blue-500/20 to-transparent pointer-events-none" />
@@ -262,22 +350,82 @@ export default function StudentDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Learning Curve Progression */}
             <div id="curve" className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     Knowledge Curve Progression
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Longitudinal mastery milestones across practice attempts over time
+                    Longitudinal mastery trajectory with rolling calibration &amp; balanced assessment fusion
                   </p>
                 </div>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  {summary?.questionsPracticed > 0 ? 'Day-Wise Calibration' : 'Baseline (0% Activity)'}
-                </span>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Source Filter */}
+                  <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs font-semibold">
+                    <button
+                      type="button"
+                      id="kc-filter-overall"
+                      onClick={() => handleSourceChange('ALL')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        kcSource === 'ALL'
+                          ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Overall Curve
+                    </button>
+                    <button
+                      type="button"
+                      id="kc-filter-practice"
+                      onClick={() => handleSourceChange('PRACTICE')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        kcSource === 'PRACTICE'
+                          ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Adaptive Practice
+                    </button>
+                    <button
+                      type="button"
+                      id="kc-filter-assessments"
+                      onClick={() => handleSourceChange('ASSESSMENT')}
+                      className={`px-2.5 py-1 rounded-lg transition-all ${
+                        kcSource === 'ASSESSMENT'
+                          ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Assessments
+                    </button>
+                  </div>
+
+                  {/* Topic Filter */}
+                  <select
+                    id="kc-filter-topic"
+                    value={kcTopic}
+                    onChange={(e) => handleTopicChange(e.target.value)}
+                    aria-label="Filter by Topic"
+                    className="p-1.5 px-2.5 text-xs font-medium bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="ALL">All Topics</option>
+                    {availableTopics.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <LearningCurveChart data={summary?.learningCurve || []} />
+              <LearningCurveChart
+                data={kcCurveData}
+                sourceFilter={kcSource}
+                topicFilter={kcTopic}
+                isLoading={kcLoading}
+              />
             </div>
 
             {/* Strengths & Weaknesses Triage */}

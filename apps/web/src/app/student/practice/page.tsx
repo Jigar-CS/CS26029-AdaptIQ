@@ -11,12 +11,14 @@ import { SocraticAssistantDrawer } from '@/components/SocraticAssistantDrawer';
 import { AdaptiveCalibrationBanner } from '@/components/AdaptiveCalibrationBanner';
 import { MisconceptionAlertCard } from '@/components/MisconceptionAlertCard';
 import { SpacedRepetitionQueueDrawer } from '@/components/SpacedRepetitionQueueDrawer';
+import Link from 'next/link';
 import {
   BrainCircuit,
   CheckCircle2,
   XCircle,
   Clock,
   ArrowRight,
+  ArrowLeft,
   BookOpen,
   Loader2,
   AlertCircle,
@@ -174,7 +176,23 @@ export default function PracticePage() {
     return () => clearInterval(interval);
   }, [currentQuestion, attemptResult, sessionCompleted]);
 
+  // Error & Prerequisite Block states
+  const [prerequisiteError, setPrerequisiteError] = useState<{
+    message: string;
+    topicName?: string;
+    readinessScore?: number;
+    missingPrerequisites?: Array<{
+      prerequisiteSlug: string;
+      prerequisiteName: string;
+      currentMastery: number;
+      requiredMastery: number;
+      deficit: number;
+    }>;
+  } | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
   const [isRemediationMode, setIsRemediationMode] = useState<boolean>(false);
+  const [isLearningPathDrillMode, setIsLearningPathDrillMode] = useState<boolean>(false);
 
   const loadCourses = async () => {
     try {
@@ -183,23 +201,40 @@ export default function PracticePage() {
       if (data.length > 0) {
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         const queryCourseId = params?.get('courseId');
+        const queryCourseCode = params?.get('courseCode');
         const queryTopicId = params?.get('topicId');
+        const queryTopicSlug = params?.get('topicSlug');
+        const fromLearningPath = params?.get('from') === 'learning-path';
 
         const targetCourse =
-          (queryCourseId && data.find((c: any) => c.id === queryCourseId || c.code === queryCourseId)) || data[0];
+          (queryCourseId && data.find((c: any) => c.id === queryCourseId || c.code.toLowerCase() === queryCourseId.toLowerCase())) ||
+          (queryCourseCode && data.find((c: any) => c.code.toLowerCase() === queryCourseCode.toLowerCase())) ||
+          data[0];
 
         setSelectedCourseId(targetCourse.id);
 
+        let targetTopic = null;
         if (targetCourse.topics?.length > 0) {
-          const targetTopic =
+          targetTopic =
             (queryTopicId &&
               targetCourse.topics.find(
-                (t: any) => t.id === queryTopicId || t.name.toLowerCase() === queryTopicId.toLowerCase(),
+                (t: any) =>
+                  t.id === queryTopicId ||
+                  t.slug === queryTopicId ||
+                  t.name.toLowerCase() === queryTopicId.toLowerCase(),
               )) ||
+            (queryTopicSlug && targetCourse.topics.find((t: any) => t.slug === queryTopicSlug)) ||
             targetCourse.topics[0];
 
-          setSelectedTopicId(targetTopic.id);
-          if (queryTopicId) {
+          if (targetTopic) {
+            setSelectedTopicId(targetTopic.id);
+            setIsCustomTopicMode(false);
+            loadCalibration(targetTopic.id);
+          }
+          if (fromLearningPath) {
+            setIsLearningPathDrillMode(true);
+            setIsRemediationMode(false);
+          } else if (queryTopicId) {
             setIsRemediationMode(true);
           }
         }
@@ -209,11 +244,13 @@ export default function PracticePage() {
     }
   };
 
-  const handleStartSession = async (overrideTopicId?: string) => {
+  const handleStartSession = async (overrideTopicId?: string, overrideCourseId?: string) => {
     setLoadingQuestion(true);
     setAttemptResult(null);
     setDetectedMisconception(null);
     setSelectedOptionId(null);
+    setPrerequisiteError(null);
+    setSessionError(null);
     setTimerSeconds(0);
     setCurrentQuestionIndex(1);
     setSessionCompleted(false);
@@ -222,6 +259,7 @@ export default function PracticePage() {
     setSessionAttemptSummaries([]);
     setSummaryFilter('WRONG');
 
+    const targetCourseId = overrideCourseId || selectedCourseId;
     const targetTopicId = overrideTopicId || selectedTopicId;
 
     try {
@@ -234,7 +272,7 @@ export default function PracticePage() {
       if (targetTopicId) {
         // Fetch dynamically calibrated or manual difficulty question
         const adaptiveRes = await api.get(
-          `/adaptive/next-question?topicId=${targetTopicId}&courseId=${selectedCourseId}${diffQuery}`
+          `/adaptive/next-question?topicId=${targetTopicId}&courseId=${targetCourseId}${diffQuery}`
         );
         firstQ = adaptiveRes?.question;
         const targetDiff = !adaptiveMode
@@ -243,14 +281,14 @@ export default function PracticePage() {
 
         // Start session record in DB
         const sessionRes = await api.post('/practice/sessions', {
-          courseId: selectedCourseId,
+          courseId: targetCourseId,
           topicId: targetTopicId || undefined,
           difficulty: targetDiff,
         });
         session = sessionRes.session;
       } else {
         const res = await api.post('/practice/sessions', {
-          courseId: selectedCourseId,
+          courseId: targetCourseId,
           topicId: targetTopicId || undefined,
           difficulty: selectedDifficulty || undefined,
         });
@@ -263,8 +301,25 @@ export default function PracticePage() {
       if (firstQ?.id) {
         setAttemptedQuestionIds([firstQ.id]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start session', err);
+      const resData = err?.response?.data || err?.data || err;
+      if (
+        resData?.error === 'PREREQUISITE_INCOMPLETE' ||
+        resData?.statusCode === 403 ||
+        err?.status === 403
+      ) {
+        const course = courses.find((c) => c.id === targetCourseId);
+        const topic = course?.topics?.find((t: any) => t.id === targetTopicId);
+        setPrerequisiteError({
+          message: resData.message || 'Prerequisites are not yet satisfied for this topic.',
+          topicName: resData.topicName || topic?.name,
+          readinessScore: resData.readinessScore,
+          missingPrerequisites: resData.missingPrerequisites || [],
+        });
+      } else {
+        setSessionError(resData?.message || 'Failed to start practice session. Please try again.');
+      }
     } finally {
       setLoadingQuestion(false);
     }
@@ -451,8 +506,9 @@ export default function PracticePage() {
       const diffQuery = !adaptiveMode ? `&difficulty=${selectedDifficulty}` : '';
 
       if (selectedTopicId) {
+        const sessionQuery = activeSession?.id ? `&sessionId=${activeSession.id}` : '';
         const adaptRes = await api.get(
-          `/adaptive/next-question?topicId=${selectedTopicId}&courseId=${selectedCourseId}${diffQuery}${excludeQuery}`
+          `/adaptive/next-question?topicId=${selectedTopicId}&courseId=${selectedCourseId}${diffQuery}${excludeQuery}${sessionQuery}`
         );
         if (adaptRes?.question) {
           setCurrentQuestion(adaptRes.question);
@@ -489,7 +545,7 @@ export default function PracticePage() {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
       <Sidebar isLocked={isSessionActive} onLockedClick={() => setShowExitConfirmModal(true)} />
 
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'pl-64' : 'pl-[72px]'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'lg:pl-64' : 'lg:pl-[72px]'} pl-0`}>
         <Navbar
           title="Adaptive Practice Lab"
           subtitle="One-question-at-a-time targeted conceptual training"
@@ -497,7 +553,7 @@ export default function PracticePage() {
           onLockedClick={() => setShowExitConfirmModal(true)}
         />
 
-        <main className="p-6 md:p-8 max-w-5xl w-full mx-auto space-y-6">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl w-full mx-auto space-y-6">
           {/* Header Banner */}
           <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/20 p-6 sm:p-8 shadow-xs dark:shadow-2xl">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -534,8 +590,132 @@ export default function PracticePage() {
           {/* Practice Setup Header / Config Bar */}
           {!activeSession ? (
             <div className="bg-white dark:bg-slate-900/90 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+              {/* Back to Learning Path Shortcut */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <Link
+                  href={`/student/learning-path?courseCode=${selectedCourse?.code || 'CS301'}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 transition"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Return to Learning Path</span>
+                </Link>
+                {selectedCourse && (
+                  <span className="text-xs text-slate-500 font-mono">
+                    {selectedCourse.code} • {selectedCourse.name}
+                  </span>
+                )}
+              </div>
+
+              {/* Prerequisite Incomplete Error Alert Card */}
+              {prerequisiteError && (
+                <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-bold flex items-center gap-2">
+                        <span>Topic Locked by Prerequisite Policy</span>
+                        {prerequisiteError.topicName && (
+                          <span className="px-2 py-0.5 rounded text-[11px] bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold font-mono">
+                            {prerequisiteError.topicName}
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-xs mt-1 text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {prerequisiteError.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  {prerequisiteError.missingPrerequisites && prerequisiteError.missingPrerequisites.length > 0 && (
+                    <div className="pt-1 space-y-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
+                        Required Foundations:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {prerequisiteError.missingPrerequisites.map((prereq) => (
+                          <div
+                            key={prereq.prerequisiteSlug}
+                            className="p-2.5 rounded-xl bg-white/60 dark:bg-slate-950/40 border border-amber-500/20 text-xs flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-semibold text-slate-900 dark:text-white">{prereq.prerequisiteName}</div>
+                              <div className="text-[10px] text-slate-500">
+                                Current: <strong className="text-amber-600">{prereq.currentMastery}%</strong> / Req: {prereq.requiredMastery}%
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded">
+                              -{prereq.deficit}% Gap
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex flex-wrap items-center gap-3">
+                    <Link
+                      href={`/student/learning-path?courseCode=${selectedCourse?.code || 'CS301'}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-xs"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Return to Learning Path DAG</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setPrerequisiteError(null)}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition"
+                    >
+                      Select Different Topic
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* General Session Error */}
+              {sessionError && (
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center justify-between text-xs font-medium">
+                  <span>{sessionError}</span>
+                  <button onClick={() => setSessionError(null)} className="text-rose-400 hover:text-rose-200">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {/* Learning Path Concept Drill Pre-Configuration Banner */}
+              {isLearningPathDrillMode && (
+                <div className="p-4 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-300 dark:border-indigo-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-base shadow-xs shrink-0">
+                      🎯
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white uppercase tracking-wider">
+                          Learning Path Drill
+                        </span>
+                        <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                          Targeted Concept: {courses.find((c) => c.id === selectedCourseId)?.topics?.find((t: any) => t.id === selectedTopicId)?.name || 'Selected Concept'} ({courses.find((c) => c.id === selectedCourseId)?.code || 'Course'})
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Course and concept parameters are pre-configured. Review your desired question count or difficulty below and click <strong>Begin Standard Session</strong>.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleStartSession()}
+                    disabled={loadingQuestion}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition shrink-0 disabled:opacity-50"
+                  >
+                    {loadingQuestion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BrainCircuit className="w-3.5 h-3.5" />}
+                    <span>Begin Standard Session</span>
+                  </button>
+                </div>
+              )}
+
               {/* Faculty Remediation Nudge Active Banner */}
-              {isRemediationMode && (
+              {isRemediationMode && !isLearningPathDrillMode && (
                 <div className="p-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-300 dark:border-blue-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-base shadow-xs shrink-0">

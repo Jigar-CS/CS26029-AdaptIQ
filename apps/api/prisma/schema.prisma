@@ -909,6 +909,7 @@ model CodeSubmission {
   language              ProgrammingLanguage   @default(PYTHON)
   sourceCode            String                @db.Text
   status                JudgeSubmissionStatus @default(PENDING)
+  score                 Float                 @default(0.0)
   executionTimeMs       Int                   @default(0)
   memoryUsedKb          Int                   @default(0)
   testCasesPassed       Int                   @default(0)

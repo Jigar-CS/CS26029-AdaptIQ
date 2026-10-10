@@ -31,6 +31,7 @@ import {
   Trophy,
   ShieldAlert,
   Lock,
+  X,
 } from 'lucide-react';
 
 export interface SidebarProps {
@@ -41,7 +42,7 @@ export interface SidebarProps {
 export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { isPinned, togglePin } = useSidebar();
+  const { isPinned, togglePin, isMobileOpen, setIsMobileOpen } = useSidebar();
   const [isHovered, setIsHovered] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -51,15 +52,15 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
 
   if (!mounted || !user) return null;
 
-  // The sidebar is open either when pinned or when hovered over the short bar
-  const isExpanded = isPinned || isHovered;
+  // On mobile (when isMobileOpen is true), expand sidebar. On desktop, expand when pinned or hovered.
+  const isExpanded = isMobileOpen || isPinned || isHovered;
+
 
   const studentLinks = [
     { name: 'Learning Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
     { name: 'Semester Leaderboard', href: '/student/leaderboard', icon: Trophy },
     { name: 'Placement Readiness', href: '/student/placement', icon: Briefcase },
     { name: 'Coding Arena', href: '/student/coding', icon: Terminal },
-    { name: 'Adaptive Practice', href: '/student/practice', icon: BrainCircuit },
     { name: 'Assessments & Exams', href: '/student/assessments', icon: FileCheck },
     { name: 'Learning Path', href: '/student/learning-path', icon: GraduationCap },
     { name: 'My Profile', href: '/student/profile', icon: UserCircle },
@@ -115,62 +116,87 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`fixed left-0 top-0 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between text-slate-700 dark:text-slate-300 z-40 transition-all duration-300 ease-in-out shadow-xs ${
-        isExpanded ? 'w-64' : 'w-[72px]'
-      }`}
-    >
-      <div className="flex flex-col min-h-0">
-        {/* Brand Header */}
+    <>
+      {/* Mobile Drawer Backdrop */}
+      {isMobileOpen && (
         <div
-          className={`border-b border-slate-200 dark:border-slate-800 transition-all duration-300 ${
-            isExpanded
-              ? 'p-4 flex items-center justify-between gap-2'
-              : 'p-3.5 flex justify-center'
-          }`}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[#172554] flex items-center justify-center text-white shadow-xs shrink-0">
-              <BrainCircuit className="w-6 h-6 text-white" />
+          onClick={() => setIsMobileOpen(false)}
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-200"
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`fixed left-0 top-0 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between text-slate-700 dark:text-slate-300 z-50 transition-all duration-300 ease-in-out shadow-2xl lg:shadow-xs ${
+          isMobileOpen
+            ? 'translate-x-0 w-64'
+            : '-translate-x-full lg:translate-x-0'
+        } ${isExpanded ? 'lg:w-64' : 'lg:w-[72px]'}`}
+      >
+        <div className="flex flex-col min-h-0">
+          {/* Brand Header */}
+          <div
+            className={`border-b border-slate-200 dark:border-slate-800 transition-all duration-300 ${
+              isExpanded
+                ? 'p-4 flex items-center justify-between gap-2'
+                : 'p-3.5 flex justify-center'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#172554] flex items-center justify-center text-white shadow-xs shrink-0">
+                <BrainCircuit className="w-6 h-6 text-white" />
+              </div>
+
+              {isExpanded && (
+                <div className="truncate animate-in fade-in duration-200">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">CLIAS</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40 px-1.5 py-0.5 rounded">
+                      v1.0
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Learning Intelligence</p>
+                </div>
+              )}
             </div>
 
-            {isExpanded && (
-              <div className="truncate animate-in fade-in duration-200">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">CLIAS</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40 px-1.5 py-0.5 rounded">
-                    v1.0
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">Learning Intelligence</p>
-              </div>
-            )}
-          </div>
+            {/* Mobile Close Button (< lg) or Desktop Pin Toggle (>= lg) */}
+            <div className="flex items-center gap-1">
+              {/* Mobile Close (X) Button */}
+              <button
+                onClick={() => setIsMobileOpen(false)}
+                className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                title="Close Menu"
+                aria-label="Close Menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-          {/* Stick / Pin Toggle Button on Top Right (Appears when opened) */}
-          {isExpanded && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePin();
-              }}
-              title={isPinned ? 'Unpin Sidebar (Collapse to Icons)' : 'Pin Sidebar (Stick Open & Shift Screen)'}
-              className={`p-2 rounded-lg transition-all shrink-0 animate-in fade-in duration-200 ${
-                isPinned
-                  ? 'bg-blue-600 text-white shadow-xs border border-blue-500'
-                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60'
-              }`}
-            >
-              <Pin
-                className={`w-4 h-4 transition-transform duration-200 ${
-                  isPinned ? 'fill-white rotate-45' : 'text-slate-400 hover:rotate-12'
-                }`}
-              />
-            </button>
-          )}
-        </div>
+              {/* Desktop Pin Toggle */}
+              {isExpanded && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePin();
+                  }}
+                  title={isPinned ? 'Unpin Sidebar (Collapse to Icons)' : 'Pin Sidebar (Stick Open & Shift Screen)'}
+                  className={`hidden lg:block p-2 rounded-lg transition-all shrink-0 animate-in fade-in duration-200 ${
+                    isPinned
+                      ? 'bg-blue-600 text-white shadow-xs border border-blue-500'
+                      : 'text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60'
+                  }`}
+                >
+                  <Pin
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isPinned ? 'fill-white rotate-45' : 'text-slate-400 hover:rotate-12'
+                    }`}
+                  />
+                </button>
+              )}
+            </div>
+          </div>
 
         {/* Role Badge */}
         {isExpanded ? (
@@ -205,7 +231,9 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
                 e.preventDefault();
                 e.stopPropagation();
                 onLockedClick?.();
+                return;
               }
+              setIsMobileOpen(false);
             };
 
             if (isExpanded) {
@@ -365,5 +393,6 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
         )}
       </div>
     </aside>
+    </>
   );
 }

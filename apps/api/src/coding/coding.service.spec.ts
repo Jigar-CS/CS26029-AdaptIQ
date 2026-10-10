@@ -137,5 +137,52 @@ describe('CodingService', () => {
     });
     expect(result.submission).toBeDefined();
     expect(result.verdict.status).toEqual(JudgeSubmissionStatus.ACCEPTED);
+    expect(result.verdict.score).toEqual(100);
+  });
+
+  it('should protect hidden test cases from being leaked in verdict', async () => {
+    const result = await service.submitCode('student-1', 'prob-1', {
+      language: ProgrammingLanguage.PYTHON,
+      sourceCode: 'def twoSum(): pass',
+    });
+    // Check hidden test case 2
+    const hiddenResult = result.verdict.testResults[1];
+    expect(hiddenResult.input).toEqual('[Hidden Testcase]');
+    expect(hiddenResult.expectedOutput).toEqual('[Hidden]');
+  });
+
+  it('should retrieve student submission history in reverse chronological order', async () => {
+    const history = await service.getStudentSubmissions('student-1', 'two-sum');
+    expect(history).toBeDefined();
+    expect(prisma.codeSubmission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          studentId: expect.objectContaining({ in: expect.arrayContaining(['student-1']) }),
+        }),
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+  });
+
+  it('should inspect submission by id for authorized student', async () => {
+    prisma.codeSubmission.findUnique = jest.fn().mockResolvedValue({
+      id: 'sub-1',
+      studentId: 'student-1',
+      sourceCode: 'def twoSum(): pass',
+    });
+    const sub = await service.getSubmissionById('student-1', 'sub-1');
+    expect(sub.id).toEqual('sub-1');
+  });
+
+  it('should block unauthorized student from viewing another student submission', async () => {
+    prisma.codeSubmission.findUnique = jest.fn().mockResolvedValue({
+      id: 'sub-1',
+      studentId: 'other-student',
+      sourceCode: 'secret code',
+    });
+    await expect(service.getSubmissionById('student-1', 'sub-1')).rejects.toThrow(
+      'You are not authorized to view this submission.',
+    );
   });
 });
+

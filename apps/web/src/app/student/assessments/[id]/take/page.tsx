@@ -40,7 +40,10 @@ import {
   Layers,
   Users,
   UserX,
+  Trophy,
+  FileText,
 } from 'lucide-react';
+import { AssessmentLeaderboardView } from '@/components/AssessmentLeaderboardModal';
 
 interface FaceFeatureProfile {
   grid: number[][]; // 8x8 normalized [r, g, b] cells
@@ -167,6 +170,7 @@ export default function TakeAssessmentPage() {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [resultTab, setResultTab] = useState<'leaderboard' | 'review'>('leaderboard');
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
 
   // ---------------------------------------------------------------------------
@@ -208,7 +212,13 @@ export default function TakeAssessmentPage() {
   } | null>(null);
 
   const [tabSwitchTerminated, setTabSwitchTerminated] = useState(false);
-  const [mobileAlertModal, setMobileAlertModal] = useState(false);
+  const [mobileAlertModal, setMobileAlertModal] = useState<{
+    show: boolean;
+    strike: number;
+    isTerminated: boolean;
+  } | null>(null);
+  const mobileStrikeCountRef = useRef<number>(0);
+  const lastMobileStrikeTimeRef = useRef<number>(0);
 
   // Baseline Identity Verification & Continuous Multi-Person Detection States
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
@@ -245,6 +255,7 @@ export default function TakeAssessmentPage() {
   useEffect(() => {
     if (assessmentId) {
       startAssessment();
+      requestDevicePermissions();
     }
   }, [assessmentId]);
 
@@ -304,8 +315,6 @@ export default function TakeAssessmentPage() {
         });
         setCodingAnswers(initialCoding);
       }
-      // Initialize devices right away
-      requestDevicePermissions();
     } catch (err: any) {
       alert(err.message || 'Failed to start assessment');
       router.push('/student/assessments');
@@ -475,11 +484,20 @@ export default function TakeAssessmentPage() {
           s.src = urls[index++];
           s.crossOrigin = 'anonymous';
           s.async = true;
-          s.onload = () => resolve();
+          let timer: any = null;
+          s.onload = () => {
+            if (timer) clearTimeout(timer);
+            resolve();
+          };
           s.onerror = () => {
+            if (timer) clearTimeout(timer);
             s.remove();
             tryNext();
           };
+          timer = setTimeout(() => {
+            s.remove();
+            tryNext();
+          }, 3500);
           document.head.appendChild(s);
         };
         tryNext();
@@ -696,28 +714,31 @@ export default function TakeAssessmentPage() {
               consecutiveMobileDetectionRef.current = 0;
             }
 
-            // 2. Person & Continuous Facial Identity Verification
+            // 2. Strict Person & Facial Identity Matching
             const persons = predictions.filter((p: any) => {
               return (p.class || '').toLowerCase() === 'person' && p.score >= 0.38;
             });
 
-            if (persons.length > 0) {
-              isPersonFound = true;
-            }
-
-            if (persons.length > 1) {
-              // Multiple people in camera frame -> Flag and blur immediately!
-              consecutiveUnauthorizedRef.current += 1;
-              if (consecutiveUnauthorizedRef.current >= 1) {
-                updateUnauthorizedPerson('MULTIPLE_FACES');
-                reportViolation(
-                  'MULTIPLE_FACES',
-                  'HIGH',
-                  `Multiple individuals (${persons.length}) detected within primary examination workspace.`
-                );
+            if (persons.length === 0) {
+              // 0 persons detected -> Registered candidate is not in frame
+              isPersonFound = false;
+              consecutiveUnauthorizedRef.current = 0;
+              consecutiveMismatchRef.current = 0;
+              if (unauthorizedPersonRef.current !== null) {
+                updateUnauthorizedPerson(null);
               }
+            } else if (persons.length > 1) {
+              // Multiple people in camera frame -> Candidate not solely present
+              isPersonFound = false;
+              consecutiveUnauthorizedRef.current += 1;
+              updateUnauthorizedPerson('MULTIPLE_FACES');
+              reportViolation(
+                'MULTIPLE_FACES',
+                'HIGH',
+                `Multiple individuals (${persons.length}) detected within primary examination workspace.`
+              );
             } else if (persons.length === 1) {
-              // Exactly 1 person. Verify that it is the ENROLLED student!
+              // Exactly 1 person. Verify against the screenshotted baseline face!
               if (baselineFaceProfileRef.current) {
                 try {
                   canvas.width = 160;
@@ -737,47 +758,41 @@ export default function TakeAssessmentPage() {
                       sx = Math.max(0, Math.floor(p0.bbox[0] * scaleX));
                       sy = Math.max(0, Math.floor(p0.bbox[1] * scaleY));
                       sw = Math.min(160 - sx, Math.floor(p0.bbox[2] * scaleX));
-                      sh = Math.min(120 - sy, Math.floor(p0.bbox[3] * scaleY * 0.65)); // upper 65% for face/head
+                      sh = Math.min(120 - sy, Math.floor(p0.bbox[3] * scaleY * 0.65));
                     }
 
                     const currentProfile = extractFaceProfileFromCanvas(canvas, sx, sy, sw, sh);
                     if (currentProfile) {
                       const sim = compareFaceProfiles(baselineFaceProfileRef.current, currentProfile);
-                      if (sim < 0.48) {
-                        consecutiveMismatchRef.current += 1;
-                        if (consecutiveMismatchRef.current >= 2) {
-                          updateUnauthorizedPerson('IDENTITY_MISMATCH');
-                          reportViolation(
-                            'IDENTITY_MISMATCH',
-                            'HIGH',
-                            'Identity mismatch: Different person detected in front of camera.'
-                          );
-                        }
-                      } else {
-                        // Confirmed match with baseline reference
+                      if (sim >= 0.50) {
+                        // Registered enrolled face verified!
+                        isPersonFound = true;
                         consecutiveMismatchRef.current = 0;
                         consecutiveUnauthorizedRef.current = 0;
                         if (unauthorizedPersonRef.current !== null) {
                           updateUnauthorizedPerson(null);
                         }
+                      } else {
+                        // Anything other than registered face -> Report strictly as Face Not Visible
+                        isPersonFound = false;
+                        consecutiveMismatchRef.current += 1;
+                        updateUnauthorizedPerson('IDENTITY_MISMATCH');
+                        reportViolation(
+                          'NO_FACE',
+                          'HIGH',
+                          'Face not visible: Registered candidate face is not recognized in camera view.'
+                        );
                       }
+                    } else {
+                      isPersonFound = false;
                     }
                   }
                 } catch (profileErr) {
                   console.warn('Face comparison cycle error:', profileErr);
+                  isPersonFound = false;
                 }
               } else {
-                consecutiveUnauthorizedRef.current = 0;
-                if (unauthorizedPersonRef.current === 'MULTIPLE_FACES') {
-                  updateUnauthorizedPerson(null);
-                }
-              }
-            } else {
-              // 0 persons detected -> Absence strike policy handles this
-              consecutiveUnauthorizedRef.current = 0;
-              consecutiveMismatchRef.current = 0;
-              if (unauthorizedPersonRef.current !== null) {
-                updateUnauthorizedPerson(null);
+                isPersonFound = true;
               }
             }
           } catch (modelErr) {
@@ -821,56 +836,70 @@ export default function TakeAssessmentPage() {
             isPersonFound = false;
           } else if (!visionModelRef.current) {
             // Fallback face presence when AI model is loading
-            if (skinRatio >= 0.035) {
-              isPersonFound = true;
-              if (baselineFaceProfileRef.current) {
-                const currentProfile = extractFaceProfileFromCanvas(canvas, 20, 15, 88, 70);
-                if (currentProfile) {
-                  const sim = compareFaceProfiles(baselineFaceProfileRef.current, currentProfile);
-                  if (sim < 0.45) {
-                    consecutiveMismatchRef.current += 1;
-                    if (consecutiveMismatchRef.current >= 3) {
-                      updateUnauthorizedPerson('IDENTITY_MISMATCH');
-                      reportViolation(
-                        'IDENTITY_MISMATCH',
-                        'HIGH',
-                        'Identity mismatch: Visual feature deviation detected.'
-                      );
-                    }
-                  } else {
-                    consecutiveMismatchRef.current = 0;
-                    if (unauthorizedPersonRef.current !== null) {
-                      updateUnauthorizedPerson(null);
-                    }
+            if (baselineFaceProfileRef.current) {
+              const currentProfile = extractFaceProfileFromCanvas(canvas, 20, 15, 88, 70);
+              if (currentProfile) {
+                const sim = compareFaceProfiles(baselineFaceProfileRef.current, currentProfile);
+                if (sim >= 0.50 && skinRatio >= 0.035) {
+                  isPersonFound = true;
+                  consecutiveMismatchRef.current = 0;
+                  if (unauthorizedPersonRef.current !== null) {
+                    updateUnauthorizedPerson(null);
                   }
+                } else {
+                  isPersonFound = false;
+                  updateUnauthorizedPerson('IDENTITY_MISMATCH');
                 }
+              } else {
+                isPersonFound = false;
               }
+            } else if (skinRatio >= 0.035) {
+              isPersonFound = true;
             }
           }
         }
 
         // -------------------------------------------------------------
-        // C. Trigger Mobile Violation & Modal if Detected
+        // C. 2-Strike Mobile Phone Policy & Automatic Test Termination
         // -------------------------------------------------------------
         if (isMobileDetected) {
-          let snapshotUri = '';
-          try {
-            canvas.width = 320;
-            canvas.height = 240;
-            const snapCtx = canvas.getContext('2d');
-            if (snapCtx) {
-              snapCtx.drawImage(video, 0, 0, 320, 240);
-              snapshotUri = canvas.toDataURL('image/jpeg', 0.6);
-            }
-          } catch {}
+          const now = Date.now();
+          if (now - lastMobileStrikeTimeRef.current >= 4500 && !isAutoSubmittingRef.current) {
+            lastMobileStrikeTimeRef.current = now;
+            const nextStrike = mobileStrikeCountRef.current + 1;
+            mobileStrikeCountRef.current = nextStrike;
 
-          reportViolation(
-            'MOBILE_PHONE_DETECTED',
-            'SEVERE',
-            detectionDetails || `Mobile phone detected in workstation view (${mobileConfidence}% confidence).`,
-            snapshotUri
-          );
-          setMobileAlertModal(true);
+            let snapshotUri = '';
+            try {
+              canvas.width = 320;
+              canvas.height = 240;
+              const snapCtx = canvas.getContext('2d');
+              if (snapCtx) {
+                snapCtx.drawImage(video, 0, 0, 320, 240);
+                snapshotUri = canvas.toDataURL('image/jpeg', 0.6);
+              }
+            } catch {}
+
+            if (nextStrike === 1) {
+              reportViolation(
+                'MOBILE_PHONE_DETECTED',
+                'SEVERE',
+                detectionDetails || 'Mobile device detected in examination workstation (Warning 1 of 2).',
+                snapshotUri
+              );
+              setMobileAlertModal({ show: true, strike: 1, isTerminated: false });
+            } else if (nextStrike >= 2) {
+              reportViolation(
+                'MOBILE_PHONE_DETECTED',
+                'SEVERE',
+                'Exam terminated: Maximum mobile phone warning limit (2/2) exceeded.',
+                snapshotUri
+              );
+              setMobileAlertModal({ show: true, strike: 2, isTerminated: true });
+              isAutoSubmittingRef.current = true;
+              handleAutoSubmit('MOBILE_VIOLATIONS_EXCEEDED');
+            }
+          }
         }
 
         // -------------------------------------------------------------
@@ -955,7 +984,7 @@ export default function TakeAssessmentPage() {
   };
 
   const dismissMobileAlert = () => {
-    setMobileAlertModal(false);
+    setMobileAlertModal(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -1346,70 +1375,118 @@ export default function TakeAssessmentPage() {
               </div>
             </div>
 
-            <div className="mt-8 flex justify-center gap-4">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setResultTab('leaderboard')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition ${
+                  resultTab === 'leaderboard'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>🏆 Class Leaderboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResultTab('review')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition ${
+                  resultTab === 'review'
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>📝 Question Explanations ({result.answers?.length || 0})</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => router.push('/student/assessments')}
-                className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-lg transition"
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-slate-700 transition"
               >
                 Return to Assessments
               </button>
             </div>
           </div>
 
-          {/* Itemized Question Review */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-slate-200">Question Itemization & Explanations</h3>
-            {result.answers?.map((ans: any, idx: number) => (
-              <div
-                key={ans.questionId}
-                className={`rounded-2xl border p-6 ${
-                  ans.isCorrect
-                    ? 'bg-slate-900/90 border-emerald-500/30'
-                    : 'bg-slate-900/90 border-rose-500/30'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-400">
-                    Question {idx + 1} • {ans.topicName}
-                  </span>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      ans.isCorrect
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-rose-500/20 text-rose-300'
-                    }`}
-                  >
-                    {ans.isCorrect ? `+${ans.pointsAwarded} pts (Correct)` : '0 pts (Incorrect)'}
-                  </span>
+          {/* Tab 1: Live Assessment Leaderboard */}
+          {resultTab === 'leaderboard' && (
+            <div className="rounded-3xl border border-slate-800 overflow-hidden shadow-2xl bg-slate-900">
+              <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-base font-bold text-white">Live Cohort Leaderboard</h3>
                 </div>
+                <span className="text-xs text-slate-400 font-medium">
+                  Rankings dynamically calculated from student scores
+                </span>
+              </div>
+              <AssessmentLeaderboardView
+                assessmentId={examData?.assessment?.id || assessmentId}
+                assessmentTitle={result.assessmentTitle}
+                showHeader={false}
+              />
+            </div>
+          )}
 
-                <p className="text-sm font-semibold text-white leading-relaxed mb-4">
-                  {ans.questionText}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
-                  <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-400 block font-medium mb-1">Your Selection:</span>
-                    <span className={ans.isCorrect ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                      {ans.selectedOptionText}
+          {/* Tab 2: Itemized Question Review */}
+          {resultTab === 'review' && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-slate-200">Question Itemization & Explanations</h3>
+              {result.answers?.map((ans: any, idx: number) => (
+                <div
+                  key={ans.questionId}
+                  className={`rounded-2xl border p-6 ${
+                    ans.isCorrect
+                      ? 'bg-slate-900/90 border-emerald-500/30'
+                      : 'bg-slate-900/90 border-rose-500/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-400">
+                      Question {idx + 1} • {ans.topicName}
+                    </span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        ans.isCorrect
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-rose-500/20 text-rose-300'
+                      }`}
+                    >
+                      {ans.isCorrect ? `+${ans.pointsAwarded} pts (Correct)` : '0 pts (Incorrect)'}
                     </span>
                   </div>
-                  <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-400 block font-medium mb-1">Correct Solution:</span>
-                    <span className="text-emerald-400 font-bold">{ans.correctOptionText}</span>
-                  </div>
-                </div>
 
-                {ans.explanation && (
-                  <div className="bg-indigo-950/30 p-4 rounded-xl border border-indigo-500/20 text-xs text-indigo-200">
-                    <strong className="text-white block mb-1">Pedagogical Explanation:</strong>
-                    {ans.explanation}
+                  <p className="text-sm font-semibold text-white leading-relaxed mb-4">
+                    {ans.questionText}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 block font-medium mb-1">Your Selection:</span>
+                      <span className={ans.isCorrect ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                        {ans.selectedOptionText}
+                      </span>
+                    </div>
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 block font-medium mb-1">Correct Solution:</span>
+                      <span className="text-emerald-400 font-bold">{ans.correctOptionText}</span>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+
+                  {ans.explanation && (
+                    <div className="bg-indigo-950/30 p-4 rounded-xl border border-indigo-500/20 text-xs text-indigo-200">
+                      <strong className="text-white block mb-1">Pedagogical Explanation:</strong>
+                      {ans.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1564,7 +1641,7 @@ export default function TakeAssessmentPage() {
       )}
 
       {/* 3. Mobile Device / Phone Detected Modal */}
-      {mobileAlertModal && (
+      {mobileAlertModal?.show && (
         <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="max-w-lg w-full bg-slate-900 border-2 border-rose-500 rounded-3xl p-8 text-center space-y-6 shadow-2xl shadow-rose-950/80 animate-pulse">
             <div className="w-20 h-20 rounded-3xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto">
@@ -1573,26 +1650,45 @@ export default function TakeAssessmentPage() {
 
             <div className="space-y-3">
               <span className="px-3 py-1 text-xs font-mono font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
-                Integrity Violation Detected
+                {mobileAlertModal.isTerminated
+                  ? 'Exam Terminated • Strike 2 of 2'
+                  : 'Critical Warning • Mobile Strike 1 of 2'}
               </span>
-              <h2 className="text-2xl font-black text-white">Mobile Device Detected!</h2>
+              <h2 className="text-2xl font-black text-white">
+                {mobileAlertModal.isTerminated
+                  ? 'Exam Terminated: Mobile Limit Exceeded'
+                  : 'Mobile Device Detected (Warning 1/2)'}
+              </h2>
               <p className="text-sm text-slate-300 leading-relaxed">
-                The AI proctoring system detected a <strong className="text-rose-400">cell phone / mobile device</strong> in camera view. Taking photographs of exam questions, scanning screens, or using secondary devices is strictly prohibited.
+                {mobileAlertModal.isTerminated ? (
+                  'A mobile phone was detected in camera view for the 2nd time. In accordance with strict examination regulations, your assessment has been automatically terminated and submitted.'
+                ) : (
+                  <>
+                    The AI proctoring system detected a <strong className="text-rose-400">cell phone / mobile device</strong> in camera view. Secondary electronic devices are strictly prohibited. <strong className="text-rose-300 block mt-1.5">THIS IS YOUR 1ST WARNING. If a mobile device is detected again, your exam will be automatically terminated immediately!</strong>
+                  </>
+                )}
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-300 font-medium">
-              ⚠️ This incident has been logged with camera telemetry and timestamp in the Faculty Proctoring Audit Console (-35% Trust Score).
+              ⚠️ This incident has been logged with camera telemetry and timestamp in the Faculty Proctoring Audit Console.
             </div>
 
-            <button
-              type="button"
-              onClick={dismissMobileAlert}
-              className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>I Have Removed the Mobile Device</span>
-            </button>
+            {mobileAlertModal.isTerminated ? (
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Finalizing automatic exam submission...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={dismissMobileAlert}
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>I Have Put Away the Mobile Device (Warning 1/2)</span>
+              </button>
+            )}
           </div>
         </div>
       )}

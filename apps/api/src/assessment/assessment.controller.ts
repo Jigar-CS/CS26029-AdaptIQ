@@ -118,4 +118,18 @@ export class AssessmentController {
   async getFacultyAnalytics(@Param('id') assessmentId: string) {
     return this.assessmentService.getFacultyAnalytics(assessmentId);
   }
+
+  /**
+   * Student & Faculty: View dynamic assessment leaderboard sorted by score & time
+   */
+  @Get(':id/leaderboard')
+  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  async getAssessmentLeaderboard(@Req() req: any, @Param('id') assessmentId: string) {
+    const studentProfileId =
+      req.user?.studentId ||
+      req.user?.studentProfile?.id ||
+      req.user?.id;
+    return this.assessmentService.getAssessmentLeaderboard(assessmentId, studentProfileId);
+  }
 }
+

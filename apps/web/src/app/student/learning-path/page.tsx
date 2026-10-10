@@ -65,6 +65,16 @@ export default function StudentLearningPath() {
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<KnowledgeGraphNode | null>(null);
 
+  const handleCourseChange = (newCode: string) => {
+    setSelectedCourseCode(newCode);
+    setGraph(null);
+    setSelectedNode(null);
+    setError(null);
+    try {
+      localStorage.setItem('adaptiq_selected_course_code', newCode);
+    } catch {}
+  };
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
@@ -72,12 +82,35 @@ export default function StudentLearningPath() {
     }
 
     if (user) {
-      api.get('/courses').then((courseList: any) => {
-        if (Array.isArray(courseList) && courseList.length > 0) {
-          setCourses(courseList);
-          setSelectedCourseCode(courseList[0].code || 'CS301');
-        }
-      }).catch(() => {});
+      api
+        .get('/courses')
+        .then((courseList: any) => {
+          if (Array.isArray(courseList) && courseList.length > 0) {
+            setCourses(courseList);
+
+            // Read URL params first, then localStorage, else fallback to default course
+            const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+            const queryCode = params?.get('courseCode') || params?.get('subjectCode');
+            const queryId = params?.get('courseId');
+            let savedCode: string | null = null;
+            try {
+              savedCode = localStorage.getItem('adaptiq_selected_course_code');
+            } catch {}
+
+            const matched =
+              (queryCode && courseList.find((c: any) => c.code.toLowerCase() === queryCode.toLowerCase())) ||
+              (queryId && courseList.find((c: any) => c.id === queryId)) ||
+              (savedCode && courseList.find((c: any) => c.code.toLowerCase() === savedCode.toLowerCase())) ||
+              courseList[0];
+
+            if (matched && matched.code) {
+              setSelectedCourseCode(matched.code);
+            }
+          }
+        })
+        .catch((err: any) => {
+          setError(err?.message || 'Failed to load courses.');
+        });
     }
   }, [user, authLoading]);
 
@@ -90,9 +123,13 @@ export default function StudentLearningPath() {
   const loadLearningPath = async (courseCode: string) => {
     setLoading(true);
     setError(null);
+    setGraph(null);
+    setSelectedNode(null);
     try {
       const [graphData, queueData, miscData] = await Promise.all([
-        api.get(`/analytics/student/me/knowledge-graph?courseCode=${encodeURIComponent(courseCode)}`).catch(() => null),
+        api.get(`/analytics/student/me/knowledge-graph?courseCode=${encodeURIComponent(courseCode)}`).catch((e) => {
+          throw e;
+        }),
         api.get('/adaptive/spaced-queue').catch(() => []),
         api.get('/adaptive/misconceptions').catch(() => []),
       ]);
@@ -111,7 +148,9 @@ export default function StudentLearningPath() {
       setSpacedQueue(Array.isArray(queueData) ? queueData : []);
       setMisconceptions(Array.isArray(miscData) ? miscData : []);
     } catch (err: any) {
-      setError(err.message || 'Failed to initialize cognitive learning pathway.');
+      setError(err?.message || 'Failed to initialize cognitive learning pathway.');
+      setGraph(null);
+      setSelectedNode(null);
     } finally {
       setLoading(false);
     }
@@ -150,10 +189,10 @@ export default function StudentLearningPath() {
     <div className="flex bg-[#F8FAFC] dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 font-sans">
       <Sidebar />
 
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'pl-64' : 'pl-[72px]'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isPinned ? 'lg:pl-64' : 'lg:pl-[72px]'} pl-0`}>
         <Navbar />
 
-        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           {/* Header & Course Context */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-6">
             <div>
@@ -164,7 +203,7 @@ export default function StudentLearningPath() {
                 {courses.length > 1 ? (
                   <select
                     value={selectedCourseCode}
-                    onChange={(e) => setSelectedCourseCode(e.target.value)}
+                    onChange={(e) => handleCourseChange(e.target.value)}
                     className="text-xs text-indigo-700 dark:text-indigo-300 font-mono bg-indigo-50/50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 outline-none cursor-pointer"
                   >
                     {courses.map((c) => (
@@ -190,7 +229,7 @@ export default function StudentLearningPath() {
 
             <div className="flex items-center gap-3">
               <Link
-                href="/student/practice"
+                href={`/student/practice?courseId=${courses.find((c) => c.code === (graph?.courseCode || selectedCourseCode))?.id || ''}&courseCode=${encodeURIComponent(graph?.courseCode || selectedCourseCode)}&from=learning-path`}
                 className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-600/20 transition flex items-center gap-2"
               >
                 <Play className="w-4 h-4 fill-white" />
@@ -435,7 +474,7 @@ export default function StudentLearningPath() {
 
                       {/* Remedial & Drill CTA */}
                       <div className="pt-2">
-                        {selectedNode.status === 'BLOCKED' ? (
+                        {selectedNode.status === 'BLOCKED' || selectedNode.status === 'NEEDS_PREREQUISITE' || !selectedNode.isPrerequisiteSatisfied ? (
                           <button
                             disabled
                             className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-semibold text-xs cursor-not-allowed flex items-center justify-center gap-2"
@@ -445,7 +484,7 @@ export default function StudentLearningPath() {
                           </button>
                         ) : (
                           <Link
-                            href={`/student/practice?topicId=${selectedNode.slug}`}
+                            href={`/student/practice?courseId=${courses.find((c) => c.code === (graph?.courseCode || selectedCourseCode))?.id || ''}&courseCode=${encodeURIComponent(graph?.courseCode || selectedCourseCode)}&topicId=${selectedNode.id}&topicSlug=${encodeURIComponent(selectedNode.slug)}&from=learning-path`}
                             className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-xs transition flex items-center justify-center gap-2 text-center"
                           >
                             <Play className="w-3.5 h-3.5 fill-white" />

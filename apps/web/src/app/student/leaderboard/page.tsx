@@ -183,7 +183,7 @@ export default function StudentLeaderboardPage() {
           subtitle="Cohort Peer Rankings, Assessment Mark Standings & Practice Mastery"
         />
 
-        <main className="p-8 max-w-7xl w-full mx-auto space-y-8 animate-in fade-in duration-200">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200">
           {/* Header Action Banner */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
             <div>

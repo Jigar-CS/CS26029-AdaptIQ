@@ -16,7 +16,11 @@ describe('AuthService — Institutional Validation', () => {
           provide: PrismaService,
           useValue: {
             user: { findUnique: jest.fn() },
-            authorizedStudent: { findUnique: jest.fn() },
+            authorizedStudent: {
+              findUnique: jest.fn(),
+              create: jest.fn().mockResolvedValue({ id: 'authed-1', name: 'Test Student' }),
+              update: jest.fn().mockResolvedValue({ id: 'authed-1', name: 'Test Student' }),
+            },
           },
         },
         {
@@ -40,12 +44,12 @@ describe('AuthService — Institutional Validation', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should reject email if not found in AuthorizedStudent roster', async () => {
+  it('should auto-provision and dispatch OTP for valid institutional student email', async () => {
     jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null as any);
     jest.spyOn(prisma.authorizedStudent, 'findUnique').mockResolvedValue(null as any);
 
-    await expect(
-      service.requestOtp({ email: 'unauthorized@charusat.edu.in' }),
-    ).rejects.toThrow(NotFoundException);
+    const res = await service.requestOtp({ email: 'newstudent@charusat.edu.in' });
+    expect(res.success).toBe(true);
+    expect(res.expiresInMinutes).toBe(10);
   });
 });

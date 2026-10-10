@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { QuestionDifficulty, QuestionStatus } from '@prisma/client';
 import { AiClientService } from './ai-client.service';
+import { randomShuffle } from '../common/shuffle.util';
 
 export interface GeneratedOption {
   optionText: string;
@@ -100,7 +101,7 @@ export class AiQuestionGeneratorService {
         sourceType: 'AI_GENERATED',
         status: QuestionStatus.APPROVED,
         options: {
-          create: payload.options.map((opt, index) => ({
+          create: randomShuffle(payload.options).map((opt, index) => ({
             optionText: opt.optionText,
             isCorrect: opt.isCorrect,
             order: index,
@@ -200,7 +201,11 @@ export class AiQuestionGeneratorService {
     }
 
     // Attempt 3: Deterministic Curriculum Knowledge Base (100% Guaranteed Reliability)
-    return this.getCurriculumGroundedQuestion(topicName, difficulty);
+    const fallback = this.getCurriculumGroundedQuestion(topicName, difficulty);
+    return {
+      ...fallback,
+      options: randomShuffle(fallback.options),
+    };
   }
 
   /**
@@ -213,13 +218,15 @@ export class AiQuestionGeneratorService {
     const prompt = `You are a distinguished university professor in Computer Science.
 Generate exactly one multiple choice question on the topic "${topicName}" calibrated strictly to "${difficulty}" difficulty.
 
-ANTI-HALLUCINATION & RELIABILITY RULES:
+ANTI-HALLUCINATION & ANTI-BIAS RULES:
 1. Ground the question strictly in established computer science fundamentals, exact data structure invariants, and time/space complexity bounds.
-2. Formulate 4 mutually exclusive options labeled A, B, C, D.
+2. Formulate 4 mutually exclusive options.
 3. Exactly ONE option must be mathematically and conceptually correct.
-4. The remaining 3 options must be realistic distractors representing common student misconceptions.
-5. Provide a thorough, step-by-step technical explanation proving why the correct option is true and analyzing why each distractor is wrong.
-6. Return purely valid JSON with no markdown formatting or extra text.
+4. The remaining 3 options must be realistic, plausible distractors representing common student misconceptions.
+5. ANTI-LENGTH BIAS: All 4 options MUST be reasonably comparable in length, grammar, technical precision, and level of detail. Never make the correct answer substantially longer or more qualified than the distractors.
+6. ANTI-POSITION BIAS: Distribute the correct answer naturally across any option position. Do NOT default to putting the correct answer first.
+7. Provide a thorough, step-by-step technical explanation proving why the correct option is true and analyzing why each distractor is wrong.
+8. Return purely valid JSON with no markdown formatting or extra text.
 
 JSON Schema:
 {
@@ -227,10 +234,10 @@ JSON Schema:
   "difficulty": "${difficulty}",
   "cognitiveLevel": "${difficulty === 'HARD' ? 'EVALUATE' : difficulty === 'MEDIUM' ? 'ANALYZE' : 'APPLY'}",
   "options": [
-    { "optionText": "Correct option text", "isCorrect": true, "misconception": null },
-    { "optionText": "Distractor 1 text", "isCorrect": false, "misconception": "Why a student picks this" },
-    { "optionText": "Distractor 2 text", "isCorrect": false, "misconception": "Why a student picks this" },
-    { "optionText": "Distractor 3 text", "isCorrect": false, "misconception": "Why a student picks this" }
+    { "optionText": "Plausible technical distractor", "isCorrect": false, "misconception": "Why a student picks this" },
+    { "optionText": "Accurate correct solution", "isCorrect": true, "misconception": null },
+    { "optionText": "Plausible alternative distractor", "isCorrect": false, "misconception": "Why a student picks this" },
+    { "optionText": "Realistic edge-case distractor", "isCorrect": false, "misconception": "Why a student picks this" }
   ],
   "explanation": "Detailed theoretical proof and distractor breakdown",
   "pedagogicalRationale": "Target concept being assessed"
@@ -272,7 +279,7 @@ JSON Schema:
             questionText: parsed.questionText,
             difficulty: parsed.difficulty || difficulty,
             cognitiveLevel: parsed.cognitiveLevel || 'APPLY',
-            options: parsed.options,
+            options: randomShuffle(parsed.options),
             explanation: parsed.explanation,
             pedagogicalRationale: parsed.pedagogicalRationale,
           };
@@ -444,25 +451,25 @@ JSON Schema:
         options: [
           {
             optionText:
-              'Reset one pointer to the list head and advance both pointers one step at a time; their collision point is the cycle start',
+              'Reset one pointer to list head and advance both pointers one step at a time until their collision',
             isCorrect: true,
             misconception: null,
           },
           {
             optionText:
-              'Continue moving the fast pointer at 2x speed while holding the slow pointer stationary',
+              'Keep the slow pointer stationary at collision while advancing fast pointer at 2x speed until arrival',
             isCorrect: false,
             misconception: 'Stationary pointer will simply be re-intersected periodically without finding entry',
           },
           {
             optionText:
-              'Reverse the entire linked list from the collision node backwards',
+              'Reverse the entire linked list from collision node backwards to iteratively locate cycle head',
             isCorrect: false,
             misconception: 'Reversing a cyclic graph causes infinite loops and destroys list structure',
           },
           {
             optionText:
-              'Advance the fast pointer C steps forward while keeping the slow pointer at head',
+              'Advance the fast pointer by calculated cycle length C while keeping slow pointer stationary at head',
             isCorrect: false,
             misconception: 'Cycle length C is not directly known without an extra traversal loop',
           },
@@ -491,12 +498,12 @@ JSON Schema:
             misconception: null,
           },
           {
-            optionText: 'A single Right rotation on node X',
+            optionText: 'A single Right rotation on node X to pull up the unbalanced left subtree directly',
             isCorrect: false,
             misconception: 'A single right rotation only resolves Left-Left (LL) imbalances',
           },
           {
-            optionText: 'A single Left rotation on node X',
+            optionText: 'A single Left rotation on node X to pivot the unbalanced tree structure towards the right',
             isCorrect: false,
             misconception: 'Left rotation operates on Right-Right (RR) imbalances',
           },
@@ -523,25 +530,25 @@ JSON Schema:
         options: [
           {
             optionText:
-              'To ensure that each item is included at most once by referencing state values from the previous item iteration',
+              'To reference subproblem state values from the previous item iteration without reusing the same item',
             isCorrect: true,
             misconception: null,
           },
           {
             optionText:
-              'Because array index memory caches perform faster during descending reads',
+              'To leverage CPU cache prefetching optimizations by reading contiguous array addresses sequentially',
             isCorrect: false,
             misconception: 'Hardware cache direction is irrelevant to algorithmic correctness',
           },
           {
             optionText:
-              'To guarantee that the knapsack capacity constraint is never mathematically exceeded',
+              'To ensure that total accumulated knapsack weight capacity bounds are maintained and never exceeded',
             isCorrect: false,
             misconception: 'Loop bounds enforce capacity, not the iteration direction',
           },
           {
             optionText:
-              'Ascending iteration causes infinite recursive call-stack overflow',
+              'To prevent recursive call-stack overflow exceptions when executing dynamic state transition trees',
             isCorrect: false,
             misconception: 'Iterative tabulation uses no call stack',
           },

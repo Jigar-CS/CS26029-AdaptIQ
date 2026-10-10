@@ -8,12 +8,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CodingService, CreateCodingProblemDto } from '../coding/coding.service';
 import { CodeRunnerService } from '../coding/code-runner.service';
+import { LearningAnalyticsService } from '../analytics/learning-analytics.service';
+import { shuffleQuestionOptions, seededShuffle } from '../common/shuffle.util';
 import {
   AssessmentStatus,
   AssessmentType,
   SubmissionStatus,
   QuestionType,
   ProgrammingLanguage,
+  LearningHistoryReason,
 } from '@prisma/client';
 
 export interface CreateAssessmentDto {
@@ -53,6 +56,7 @@ export class AssessmentService {
     private readonly prisma: PrismaService,
     private readonly codingService: CodingService,
     private readonly codeRunner: CodeRunnerService,
+    private readonly analyticsService: LearningAnalyticsService,
   ) {}
 
   /**
@@ -348,25 +352,44 @@ export class AssessmentService {
    * Student: Start an assessment attempt
    */
   async startAttempt(assessmentId: string, studentProfileId: string) {
-    const assessment = await this.prisma.assessment.findUnique({
-      where: { id: assessmentId },
-      include: {
-        questions: {
-          include: {
-            question: {
-              include: {
-                options: {
-                  select: { id: true, optionText: true, order: true },
-                  orderBy: { order: 'asc' },
+    const [assessment, student, existingSubmissions] = await Promise.all([
+      this.prisma.assessment.findUnique({
+        where: { id: assessmentId },
+        include: {
+          questions: {
+            include: {
+              question: {
+                include: {
+                  options: {
+                    select: { id: true, optionText: true, order: true },
+                    orderBy: { order: 'asc' },
+                  },
+                  topic: true,
                 },
-                topic: true,
               },
             },
+            orderBy: { order: 'asc' },
           },
-          orderBy: { order: 'asc' },
         },
-      },
-    });
+      }),
+      this.prisma.studentProfile.findFirst({
+        where: {
+          OR: [
+            { id: studentProfileId },
+            { userId: studentProfileId },
+          ],
+        },
+        include: { authorizedStudent: true },
+      }),
+      this.prisma.assessmentSubmission.findMany({
+        where: {
+          assessmentId,
+          OR: [
+            { studentId: studentProfileId },
+          ],
+        },
+      }),
+    ]);
 
     if (!assessment) {
       throw new NotFoundException('Assessment not found');
@@ -376,15 +399,6 @@ export class AssessmentService {
       throw new BadRequestException('This assessment is not currently accepting attempts.');
     }
 
-    const student = await this.prisma.studentProfile.findFirst({
-      where: {
-        OR: [
-          { id: studentProfileId },
-          { userId: studentProfileId },
-        ],
-      },
-      include: { authorizedStudent: true },
-    });
     const effectiveProfileId = student ? student.id : studentProfileId;
     const studentDiv = student?.authorizedStudent?.division;
 
@@ -399,22 +413,47 @@ export class AssessmentService {
       }
     }
 
-    // Check existing submissions
-    const existingSubmissions = await this.prisma.assessmentSubmission.findMany({
-      where: { assessmentId, studentId: effectiveProfileId },
-    });
+    // Filter submissions belonging to resolved effective profile
+    const studentSubmissions = existingSubmissions.filter((s) => s.studentId === effectiveProfileId || s.studentId === studentProfileId);
 
-    // If an in-progress attempt already exists, return it
-    const active = existingSubmissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
+    // If an in-progress attempt already exists, return it immediately
+    const active = studentSubmissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
     if (active) {
       const proc = await this.ensureProctoringSession(active.id, effectiveProfileId);
       return await this.formatAttemptPayload(assessment, active, proc);
     }
 
-    if (existingSubmissions.length >= assessment.allowedAttempts) {
+    if (studentSubmissions.length >= assessment.allowedAttempts) {
       throw new BadRequestException(
         `Maximum allowed attempts (${assessment.allowedAttempts}) for this assessment reached.`,
       );
+    }
+
+    // Validate prerequisites across topics in this assessment
+    const topicIds = Array.from(
+      new Set(
+        assessment.questions
+          .map((aq) => aq.question?.topicId)
+          .filter((t): t is string => !!t),
+      ),
+    );
+
+    for (const tId of topicIds) {
+      const check = await this.analyticsService.validateTopicPrerequisites(
+        effectiveProfileId,
+        tId,
+      );
+      if (!check.isReady) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'PREREQUISITE_INCOMPLETE',
+          message: `Cannot start assessment "${assessment.title}". Prerequisite incomplete: ${check.recommendation}`,
+          topicId: tId,
+          topicSlug: check.topicSlug,
+          readinessScore: check.readinessScore,
+          missingPrerequisites: check.missingPrerequisites,
+        });
+      }
     }
 
     // Create new submission
@@ -422,7 +461,7 @@ export class AssessmentService {
       data: {
         assessmentId,
         studentId: effectiveProfileId,
-        attemptNumber: existingSubmissions.length + 1,
+        attemptNumber: studentSubmissions.length + 1,
         startedAt: new Date(),
         status: SubmissionStatus.IN_PROGRESS,
       },
@@ -447,42 +486,56 @@ export class AssessmentService {
   }
 
   private async formatAttemptPayload(assessment: any, submission: any, proctoring?: any) {
-    let questions = await Promise.all(
-      assessment.questions.map(async (aq: any) => {
-        const isCoding = aq.question.type === QuestionType.CODING;
-        let codingProblem: any = null;
+    // High-performance batch prefetch for any coding problems
+    const codingQuestions = assessment.questions.filter((aq: any) => aq.question.type === QuestionType.CODING);
+    const problemMap = new Map<string, any>();
 
-        if (isCoding) {
-          let meta: any = null;
-          try {
-            meta = JSON.parse(aq.question.explanation);
-          } catch (_) {}
+    if (codingQuestions.length > 0) {
+      const problemIds: string[] = [];
+      const slugs: string[] = [];
+      for (const aq of codingQuestions) {
+        try {
+          const meta = JSON.parse(aq.question.explanation);
+          if (meta?.codingProblemId) problemIds.push(meta.codingProblemId);
+          if (meta?.slug) slugs.push(meta.slug);
+        } catch (_) {}
+      }
 
-          let problem = meta?.codingProblemId
-            ? await this.prisma.codingProblem.findUnique({
-                where: { id: meta.codingProblemId },
-                include: {
-                  testCases: {
-                    where: { isHidden: false },
-                    orderBy: { order: 'asc' },
-                  },
-                },
-              })
-            : null;
+      if (problemIds.length > 0 || slugs.length > 0) {
+        const found = await this.prisma.codingProblem.findMany({
+          where: {
+            OR: [
+              ...(problemIds.length > 0 ? [{ id: { in: problemIds } }] : []),
+              ...(slugs.length > 0 ? [{ slug: { in: slugs } }] : []),
+            ],
+          },
+          include: {
+            testCases: {
+              where: { isHidden: false },
+              orderBy: { order: 'asc' },
+            },
+          },
+        });
+        for (const p of found) {
+          problemMap.set(p.id, p);
+          problemMap.set(p.slug, p);
+        }
+      }
+    }
 
-          if (!problem && meta?.slug) {
-            problem = await this.prisma.codingProblem.findUnique({
-              where: { slug: meta.slug },
-              include: {
-                testCases: {
-                  where: { isHidden: false },
-                  orderBy: { order: 'asc' },
-                },
-              },
-            });
-          }
+    let questions = assessment.questions.map((aq: any) => {
+      const isCoding = aq.question.type === QuestionType.CODING;
+      let codingProblem: any = null;
 
-          if (problem) {
+      if (isCoding) {
+        let meta: any = null;
+        try {
+          meta = JSON.parse(aq.question.explanation);
+        } catch (_) {}
+
+        const problem = meta?.codingProblemId ? problemMap.get(meta.codingProblemId) : (meta?.slug ? problemMap.get(meta.slug) : null);
+
+        if (problem) {
             let starterCodes: any = {
               PYTHON: 'def solution(*args):\n    # Write your algorithmic solution here\n    pass\n',
               JAVASCRIPT: 'function solution(...args) {\n    // Write your algorithmic solution here\n}\n',
@@ -541,14 +594,13 @@ export class AssessmentService {
           points: aq.points,
           topicName: aq.question.topic?.name,
           difficulty: aq.question.difficulty,
-          options: aq.question.options,
+          options: shuffleQuestionOptions(aq.question.options, submission.id, aq.question.id),
           codingProblem,
         };
-      }),
-    );
+      });
 
     if (assessment.randomizeQuestions) {
-      questions = questions.sort(() => Math.random() - 0.5);
+      questions = seededShuffle(questions, `${submission.id}:question_order`);
     }
 
     const elapsedMs = Date.now() - new Date(submission.startedAt).getTime();
@@ -782,6 +834,42 @@ export class AssessmentService {
       },
     });
 
+    // Record topic-level performance to LearningHistory for Knowledge Curve tracking
+    const topicAggregates = new Map<string, { totalPoints: number; earnedPoints: number }>();
+    for (const ans of answerRecords) {
+      const q = questionMap.get(ans.questionId);
+      if (q && q.topicId) {
+        const current = topicAggregates.get(q.topicId) || { totalPoints: 0, earnedPoints: 0 };
+        const qPoints = questionPointsMap.get(ans.questionId) || 0;
+        current.totalPoints += qPoints;
+        current.earnedPoints += ans.pointsAwarded || 0;
+        topicAggregates.set(q.topicId, current);
+      }
+    }
+
+    const historyEntries: any[] = [];
+    const submissionTimestamp = evaluatedSubmission.submittedAt || new Date();
+
+    for (const [topicId, stats] of topicAggregates.entries()) {
+      const topicPercentage = stats.totalPoints > 0
+        ? Number(((stats.earnedPoints / stats.totalPoints) * 100).toFixed(1))
+        : percentage;
+
+      historyEntries.push({
+        studentId: submission.studentId,
+        topicId,
+        masteryScore: topicPercentage,
+        reason: LearningHistoryReason.TEST_RESULT,
+        recordedAt: submissionTimestamp,
+      });
+    }
+
+    if (historyEntries.length > 0) {
+      await this.prisma.learningHistory.createMany({
+        data: historyEntries,
+      });
+    }
+
     // Update linked proctoring session completion status
     const existingProc = await this.prisma.proctoringSession.findUnique({
       where: { submissionId: submission.id },
@@ -970,4 +1058,177 @@ export class AssessmentService {
       })),
     };
   }
+
+  /**
+   * Dynamic Assessment Leaderboard:
+   * Dynamically calculated based on student scores (deduplicating multiple attempts
+   * to each student's personal best, breaking ties with completion time / submission timestamp).
+   */
+  async getAssessmentLeaderboard(assessmentId: string, currentStudentProfileId?: string) {
+    const assessment = await this.prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      include: {
+        course: true,
+        submissions: {
+          where: {
+            status: { in: [SubmissionStatus.EVALUATED, SubmissionStatus.SUBMITTED] },
+          },
+          include: {
+            student: {
+              include: {
+                authorizedStudent: true,
+                user: { select: { email: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!assessment) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    // Deduplicate by student: select each student's best attempt
+    // Prioritize highest totalScore, then earlier submittedAt / shortest duration
+    const studentBestMap = new Map<string, typeof assessment.submissions[0]>();
+
+    for (const sub of assessment.submissions) {
+      const existing = studentBestMap.get(sub.studentId);
+      if (!existing) {
+        studentBestMap.set(sub.studentId, sub);
+      } else {
+        if (sub.totalScore > existing.totalScore) {
+          studentBestMap.set(sub.studentId, sub);
+        } else if (sub.totalScore === existing.totalScore) {
+          const subDuration =
+            sub.submittedAt && sub.startedAt
+              ? sub.submittedAt.getTime() - sub.startedAt.getTime()
+              : Infinity;
+          const existDuration =
+            existing.submittedAt && existing.startedAt
+              ? existing.submittedAt.getTime() - existing.startedAt.getTime()
+              : Infinity;
+
+          if (subDuration < existDuration) {
+            studentBestMap.set(sub.studentId, sub);
+          } else if (subDuration === existDuration) {
+            const subTime = sub.submittedAt ? sub.submittedAt.getTime() : Infinity;
+            const existTime = existing.submittedAt ? existing.submittedAt.getTime() : Infinity;
+            if (subTime < existTime) {
+              studentBestMap.set(sub.studentId, sub);
+            }
+          }
+        }
+      }
+    }
+
+    const bestSubmissions = Array.from(studentBestMap.values());
+
+    // Sort: 1) totalScore descending, 2) duration ascending, 3) submittedAt ascending
+    bestSubmissions.sort((a, b) => {
+      if (b.totalScore !== a.totalScore) {
+        return b.totalScore - a.totalScore;
+      }
+      const aDuration =
+        a.submittedAt && a.startedAt
+          ? a.submittedAt.getTime() - a.startedAt.getTime()
+          : Infinity;
+      const bDuration =
+        b.submittedAt && b.startedAt
+          ? b.submittedAt.getTime() - b.startedAt.getTime()
+          : Infinity;
+      if (aDuration !== bDuration) {
+        return aDuration - bDuration;
+      }
+      const aTime = a.submittedAt ? a.submittedAt.getTime() : 0;
+      const bTime = b.submittedAt ? b.submittedAt.getTime() : 0;
+      return aTime - bTime;
+    });
+
+    // Assign dynamic ranks (1-indexed)
+    const rankedEntries = bestSubmissions.map((sub, idx) => {
+      const durationSeconds =
+        sub.submittedAt && sub.startedAt
+          ? Math.max(0, Math.round((sub.submittedAt.getTime() - sub.startedAt.getTime()) / 1000))
+          : null;
+
+      const rank = idx + 1;
+      const isCurrentUser =
+        !!currentStudentProfileId &&
+        (sub.studentId === currentStudentProfileId ||
+          sub.student?.id === currentStudentProfileId ||
+          sub.student?.userId === currentStudentProfileId);
+
+      return {
+        rank,
+        submissionId: sub.id,
+        studentId: sub.studentId,
+        studentName:
+          sub.student?.authorizedStudent?.name ||
+          sub.student?.user?.email?.split('@')[0] ||
+          'Student',
+        enrollmentNumber: sub.student?.authorizedStudent?.enrollmentNumber || '24CS001',
+        division: sub.student?.authorizedStudent?.division || assessment.division || 'DIV 1',
+        score: sub.totalScore,
+        totalMarks: assessment.totalMarks,
+        percentage: Number(sub.percentage.toFixed(1)),
+        passed: sub.passed,
+        durationSeconds,
+        attemptNumber: sub.attemptNumber,
+        submittedAt: sub.submittedAt || sub.createdAt,
+        isCurrentUser,
+      };
+    });
+
+    const totalParticipants = rankedEntries.length;
+    const scores = rankedEntries.map((e) => e.score);
+    const averageScore =
+      totalParticipants > 0
+        ? Number((scores.reduce((a, b) => a + b, 0) / totalParticipants).toFixed(1))
+        : 0;
+    const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
+    const passedCount = rankedEntries.filter((e) => e.passed).length;
+    const passRate =
+      totalParticipants > 0
+        ? Number(((passedCount / totalParticipants) * 100).toFixed(1))
+        : 0;
+
+    const userEntry = rankedEntries.find((e) => e.isCurrentUser);
+    const userRank = userEntry ? userEntry.rank : null;
+    const userPercentile =
+      userRank && totalParticipants > 0
+        ? Number((((totalParticipants - userRank + 1) / totalParticipants) * 100).toFixed(1))
+        : null;
+
+    return {
+      assessmentId: assessment.id,
+      title: assessment.title,
+      code: assessment.code,
+      division: assessment.division || 'ALL',
+      courseCode: assessment.course.code,
+      courseName: assessment.course.name,
+      totalQuestions: assessment.totalQuestions,
+      totalMarks: assessment.totalMarks,
+      passingMarks: assessment.passingMarks,
+      totalParticipants,
+      averageScore,
+      highestScore,
+      lowestScore,
+      passRate,
+      currentUser: userEntry
+        ? {
+            rank: userRank,
+            score: userEntry.score,
+            percentage: userEntry.percentage,
+            percentile: userPercentile,
+            durationSeconds: userEntry.durationSeconds,
+            passed: userEntry.passed,
+          }
+        : null,
+      rankings: rankedEntries,
+    };
+  }
 }
+

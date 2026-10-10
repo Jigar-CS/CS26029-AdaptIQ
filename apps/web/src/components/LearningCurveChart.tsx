@@ -10,127 +10,147 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { TrendingUp, AlertCircle } from 'lucide-react';
 
-interface CurvePoint {
+export interface CurvePoint {
+  id?: string;
   recordedAt: string | Date;
   masteryScore: number;
+  rawScore?: number;
   topicName?: string;
   courseCode?: string;
+  source?: 'PRACTICE' | 'ASSESSMENT' | string;
+  reason?: string;
+  practiceMastery?: number;
+  assessmentMastery?: number;
 }
 
 interface LearningCurveChartProps {
   data: CurvePoint[];
   topicFilter?: string;
+  sourceFilter?: string;
+  isLoading?: boolean;
 }
 
-export function LearningCurveChart({ data }: LearningCurveChartProps) {
+export function LearningCurveChart({
+  data,
+  sourceFilter = 'ALL',
+  isLoading = false,
+}: LearningCurveChartProps) {
   const chartData = useMemo(() => {
-    // 1. If data is provided, group attempts by calendar date (YYYY-MM-DD)
-    const attemptsByDay = new Map<string, { latestMastery: number; topics: Set<string>; course?: string }>();
-    let earliestDate: Date | null = null;
+    if (!Array.isArray(data) || data.length === 0) {
+      return [];
+    }
 
-    if (Array.isArray(data) && data.length > 0) {
-      // Sort ascending by recordedAt
-      const sorted = [...data].sort(
-        (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
-      );
+    // Sort ascending by recordedAt strictly chronologically
+    const sorted = [...data]
+      .filter((item) => item && item.recordedAt)
+      .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
 
-      for (const item of sorted) {
-        const d = new Date(item.recordedAt);
-        if (isNaN(d.getTime())) continue;
+    if (sorted.length === 0) {
+      return [];
+    }
 
-        if (!earliestDate || d < earliestDate) {
-          earliestDate = d;
-        }
-
-        const dateKey = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
-        const existing = attemptsByDay.get(dateKey);
-        const score = Math.round(item.masteryScore);
-
-        if (existing) {
-          existing.latestMastery = score;
-          if (item.topicName) existing.topics.add(item.topicName);
-          if (item.courseCode) existing.course = item.courseCode;
-        } else {
-          attemptsByDay.set(dateKey, {
-            latestMastery: score,
-            topics: new Set(item.topicName ? [item.topicName] : []),
-            course: item.courseCode,
-          });
-        }
+    // Detect if multiple attempts occur on the same day
+    const dayCounts = new Map<string, number>();
+    for (const item of sorted) {
+      const d = new Date(item.recordedAt);
+      if (!isNaN(d.getTime())) {
+        const dayKey = d.toISOString().slice(0, 10);
+        dayCounts.set(dayKey, (dayCounts.get(dayKey) || 0) + 1);
       }
     }
 
-    // 2. Build continuous day-wise timeline:
-    // At minimum last 7 days ending today (or from earliest activity date up to today)
-    const now = new Date();
-    const minDays = 7;
-    let daysCount = minDays;
+    const daySeenCounts = new Map<string, number>();
 
-    if (earliestDate) {
-      const diffTime = Math.abs(now.getTime() - earliestDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      daysCount = Math.max(minDays, Math.min(diffDays, 30)); // Cap at 30 days for clarity
-    }
+    return sorted.map((item, idx) => {
+      const d = new Date(item.recordedAt);
+      const isDateValid = !isNaN(d.getTime());
+      const dayKey = isDateValid ? d.toISOString().slice(0, 10) : `item-${idx}`;
+      const totalOnDay = dayCounts.get(dayKey) || 1;
+      const seenSoFar = (daySeenCounts.get(dayKey) || 0) + 1;
+      daySeenCounts.set(dayKey, seenSoFar);
 
-    const points = [];
-    let lastKnownMastery = 0;
-    let hasHadFirstActivity = false;
+      const baseDateLabel = isDateValid
+        ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : `Point ${idx + 1}`;
 
-    for (let i = daysCount - 1; i >= 0; i--) {
-      const targetDate = new Date(now);
-      targetDate.setDate(now.getDate() - i);
-      const dateKey = targetDate.toISOString().slice(0, 10);
-      const dateLabel = targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const fullDateLabel = targetDate.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
+      const timeLabel = isDateValid
+        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : '';
 
-      const dayActivity = attemptsByDay.get(dateKey);
+      const displayDate =
+        totalOnDay > 1 && isDateValid
+          ? `${baseDateLabel} ${timeLabel}`
+          : baseDateLabel;
 
-      if (dayActivity) {
-        hasHadFirstActivity = true;
-        lastKnownMastery = dayActivity.latestMastery;
-        const topicsList = Array.from(dayActivity.topics);
-        points.push({
-          date: dateLabel,
-          fullDate: fullDateLabel,
-          mastery: dayActivity.latestMastery,
-          topic: topicsList.length > 0 ? topicsList.join(', ') : 'Practice Session',
-          course: dayActivity.course || '',
-          hasActivity: true,
-        });
-      } else {
-        // No activity on this day
-        if (hasHadFirstActivity) {
-          // If the student already started on an earlier day, keep their current level
-          points.push({
-            date: dateLabel,
-            fullDate: fullDateLabel,
-            mastery: lastKnownMastery,
-            topic: 'Mastery maintained',
-            course: '',
-            hasActivity: false,
-          });
-        } else {
-          // For a new user or days prior to any activity: mastery is 0 (straight line on X axis)
-          points.push({
-            date: dateLabel,
-            fullDate: fullDateLabel,
-            mastery: 0,
-            topic: 'No activity logged',
-            course: '',
-            hasActivity: false,
-          });
-        }
-      }
-    }
+      const fullDateLabel = isDateValid
+        ? d.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Milestone';
 
-    return points;
+      const resolvedSource =
+        item.source ||
+        (item.reason === 'TEST_RESULT' || item.reason === 'REASSESSMENT'
+          ? 'ASSESSMENT'
+          : 'PRACTICE');
+
+      return {
+        id: item.id || `pt-${idx}`,
+        displayDate,
+        fullDate: fullDateLabel,
+        mastery: Math.round(item.masteryScore * 10) / 10,
+        rawScore: typeof item.rawScore === 'number' ? Math.round(item.rawScore * 10) / 10 : undefined,
+        source: resolvedSource,
+        topic: item.topicName || 'General Topic',
+        course: item.courseCode || '',
+        practiceMastery: item.practiceMastery,
+        assessmentMastery: item.assessmentMastery,
+      };
+    });
   }, [data]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="w-full h-72 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          Calibrating Knowledge Curve...
+        </div>
+      </div>
+    );
+  }
+
+  // Insufficient data state (without inventing artificial trend data)
+  if (chartData.length === 0) {
+    const sourceLabel =
+      sourceFilter === 'PRACTICE'
+        ? 'adaptive practice'
+        : sourceFilter === 'ASSESSMENT'
+        ? 'formal assessment'
+        : 'learning';
+
+    return (
+      <div className="w-full h-72 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+        <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center mb-2.5">
+          <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+          Insufficient Historical Data
+        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1 leading-relaxed">
+          No {sourceLabel} attempts have been logged for this selection yet. Complete practice sessions or tests to calibrate your progressive learning trajectory.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-72">
@@ -144,7 +164,7 @@ export function LearningCurveChart({ data }: LearningCurveChartProps) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
           <XAxis
-            dataKey="date"
+            dataKey="displayDate"
             tickLine={false}
             axisLine={{ stroke: '#e2e8f0' }}
             tick={{ fill: '#64748b', fontSize: 11 }}
@@ -160,19 +180,39 @@ export function LearningCurveChart({ data }: LearningCurveChartProps) {
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 const p = payload[0].payload;
+                const isAssess = p.source === 'ASSESSMENT';
+
                 return (
-                  <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl border border-slate-700 text-xs space-y-1">
-                    <p className="font-bold text-slate-300">{p.fullDate}</p>
-                    <p className="text-white flex items-center justify-between gap-4">
-                      <span className="text-slate-400">Mastery Score:</span>
-                      <span className="font-extrabold text-indigo-400 text-sm">{p.mastery}%</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 border-t border-slate-800 pt-1 mt-1">
-                      {p.hasActivity ? (
-                        <span className="text-emerald-400">● {p.topic}</span>
-                      ) : (
-                        <span className="text-slate-500 italic">No practice activity on this day</span>
+                  <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl border border-slate-700 text-xs space-y-1.5 min-w-[200px]">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+                      <p className="font-semibold text-slate-300 text-[11px]">{p.fullDate}</p>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          isAssess
+                            ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                            : 'bg-blue-950 text-blue-300 border border-blue-800'
+                        }`}
+                      >
+                        {isAssess ? 'Assessment' : 'Practice'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-white flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Smoothed Mastery:</span>
+                        <span className="font-extrabold text-indigo-400 text-sm">{p.mastery}%</span>
+                      </div>
+                      {typeof p.rawScore === 'number' && (
+                        <div className="text-white flex items-center justify-between gap-4 text-[11px]">
+                          <span className="text-slate-400">Attempt Score:</span>
+                          <span className="font-medium text-slate-200">{p.rawScore}%</span>
+                        </div>
                       )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 border-t border-slate-800 pt-1 mt-1 flex items-center gap-1.5">
+                      <span className="text-emerald-400">●</span>
+                      <span className="truncate">{p.topic}{p.course ? ` (${p.course})` : ''}</span>
                     </p>
                   </div>
                 );
@@ -185,7 +225,7 @@ export function LearningCurveChart({ data }: LearningCurveChartProps) {
             dataKey="mastery"
             stroke="#4f46e5"
             strokeWidth={3}
-            dot={{ r: 3, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
+            dot={{ r: chartData.length === 1 ? 5 : 3, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 1.5 }}
             activeDot={{ r: 6, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2 }}
             fillOpacity={1}
             fill="url(#curveGradient)"

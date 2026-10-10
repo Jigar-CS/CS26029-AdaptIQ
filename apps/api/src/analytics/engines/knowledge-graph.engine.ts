@@ -159,10 +159,37 @@ export const CURRICULUM_DEPENDENCIES: TopicDependency[] = [
  */
 export class KnowledgeGraphEngine {
   /**
+   * Normalizes topic slugs across database variations and canonical curriculum dependencies.
+   */
+  static canonicalizeSlug(slug: string): string {
+    const s = (slug || '').toLowerCase().trim();
+    if (s.startsWith('array')) return 'arrays-dynamic-arrays';
+    if (s.startsWith('linked-list')) return 'linked-lists-pointers';
+    if (s === 'stacks' || s === 'queues' || s.includes('stack') || s.includes('queue')) return 'stacks-queues';
+    if (s.startsWith('trees') || s === 'bst' || s.includes('binary-search-tree')) return 'trees-binary-search-trees';
+    if (s.startsWith('graph')) return 'graph-algorithms-traversals';
+    if (s.includes('dynamic-prog') || s === 'dp') return 'dynamic-programming';
+    if (s.includes('hash')) return 'hash-tables-collision-resolution';
+    if (s.includes('process') || s.includes('thread') || s.includes('pcb')) return 'process-concept-pcb';
+    if (s.includes('cpu') || s.includes('schedul')) return 'cpu-scheduling-algorithms';
+    if (s.includes('synch') || s.includes('semaphore')) return 'process-synchronization-semaphores';
+    if (s.includes('deadlock') || s.includes('banker')) return 'deadlocks-handling-bankers';
+    if (s.includes('memory') || s.includes('paging')) return 'memory-management-paging';
+    if (s.includes('relation') || s.includes('key')) return 'relational-model-keys';
+    if (s.includes('join') || s.includes('query')) return 'sql-queries-joins';
+    if (s.includes('normal') || s.includes('functional-depend')) return 'normalization-functional-dependencies';
+    if (s.includes('transact') || s.includes('acid') || s.includes('concurren')) return 'transactions-acid-concurrency';
+    return s;
+  }
+
+  /**
    * Retrieves all direct prerequisites for a given topic slug
    */
   static getPrerequisitesForTopic(topicSlug: string): TopicDependency[] {
-    return CURRICULUM_DEPENDENCIES.filter((dep) => dep.targetSlug === topicSlug);
+    const canonical = this.canonicalizeSlug(topicSlug);
+    return CURRICULUM_DEPENDENCIES.filter(
+      (dep) => this.canonicalizeSlug(dep.targetSlug) === canonical,
+    );
   }
 
   /**
@@ -172,13 +199,14 @@ export class KnowledgeGraphEngine {
     targetSlug: string,
     topicMasteries: Record<string, { name: string; masteryScore: number }>,
   ): PrerequisiteCheckResult {
+    const canonicalTarget = this.canonicalizeSlug(targetSlug);
     const dependencies = this.getPrerequisitesForTopic(targetSlug);
-    const targetTopicData = topicMasteries[targetSlug];
+    const targetTopicData = topicMasteries[targetSlug] || topicMasteries[canonicalTarget];
     const currentTargetMastery = targetTopicData?.masteryScore || 0;
 
     if (dependencies.length === 0) {
       // Foundational topic with no prerequisites
-      let status: 'MASTERED' | 'READY_FOR_PRACTICE' =
+      const status: 'MASTERED' | 'READY_FOR_PRACTICE' =
         currentTargetMastery >= 75 ? 'MASTERED' : 'READY_FOR_PRACTICE';
 
       return {
@@ -199,7 +227,12 @@ export class KnowledgeGraphEngine {
     let totalAchieved = 0;
 
     for (const dep of dependencies) {
-      const prereqData = topicMasteries[dep.sourceSlug];
+      const canonicalSource = this.canonicalizeSlug(dep.sourceSlug);
+      const prereqData =
+        topicMasteries[dep.sourceSlug] ||
+        topicMasteries[canonicalSource] ||
+        Object.entries(topicMasteries).find(([key]) => this.canonicalizeSlug(key) === canonicalSource)?.[1];
+
       const prereqScore = prereqData ? prereqData.masteryScore : 0;
       const prereqName = prereqData ? prereqData.name : dep.sourceSlug;
 
@@ -276,11 +309,17 @@ export class KnowledgeGraphEngine {
     // Build fast lookup
     const masteryLookup: Record<string, { name: string; masteryScore: number }> = {};
     for (const t of topics) {
-      const data = topicMasteries[t.slug] || topicMasteries[t.id];
-      masteryLookup[t.slug] = {
+      const data =
+        topicMasteries[t.slug] ||
+        topicMasteries[t.id] ||
+        topicMasteries[KnowledgeGraphEngine.canonicalizeSlug(t.slug)];
+      const entry = {
         name: t.name,
         masteryScore: data ? data.rawMastery : 0,
       };
+      masteryLookup[t.slug] = entry;
+      masteryLookup[KnowledgeGraphEngine.canonicalizeSlug(t.slug)] = entry;
+      masteryLookup[t.id] = entry;
     }
 
     let unlockedCount = 0;
@@ -289,11 +328,14 @@ export class KnowledgeGraphEngine {
 
     const nodes: KnowledgeGraphNode[] = topics.map((t) => {
       const prereqCheck = this.checkPrerequisites(t.slug, masteryLookup);
-      const data = topicMasteries[t.slug] || topicMasteries[t.id] || {
-        rawMastery: 0,
-        decayedMastery: 0,
-        bktProbability: 0.2,
-      };
+      const data =
+        topicMasteries[t.slug] ||
+        topicMasteries[t.id] ||
+        topicMasteries[KnowledgeGraphEngine.canonicalizeSlug(t.slug)] || {
+          rawMastery: 0,
+          decayedMastery: 0,
+          bktProbability: 0.2,
+        };
 
       if (prereqCheck.isReady) {
         unlockedCount++;
@@ -303,8 +345,13 @@ export class KnowledgeGraphEngine {
       totalReadiness += prereqCheck.readinessScore;
 
       const directPrereqs = relevantDeps
-        .filter((d) => d.targetSlug === t.slug)
-        .map((d) => d.sourceSlug);
+        .filter((d) => this.canonicalizeSlug(d.targetSlug) === this.canonicalizeSlug(t.slug))
+        .map((d) => {
+          const match = topics.find(
+            (top) => this.canonicalizeSlug(top.slug) === this.canonicalizeSlug(d.sourceSlug),
+          );
+          return match ? match.name : d.sourceSlug;
+        });
 
       return {
         id: t.id,
@@ -320,11 +367,22 @@ export class KnowledgeGraphEngine {
       };
     });
 
-    const edges: KnowledgeGraphEdge[] = relevantDeps.map((d) => ({
-      from: d.sourceSlug,
-      to: d.targetSlug,
-      minRequiredMastery: d.minMasteryRequired,
-    }));
+    const edges: KnowledgeGraphEdge[] = [];
+    for (const d of relevantDeps) {
+      const fromTopic = topics.find(
+        (top) => this.canonicalizeSlug(top.slug) === this.canonicalizeSlug(d.sourceSlug),
+      );
+      const toTopic = topics.find(
+        (top) => this.canonicalizeSlug(top.slug) === this.canonicalizeSlug(d.targetSlug),
+      );
+      if (fromTopic && toTopic) {
+        edges.push({
+          from: fromTopic.slug,
+          to: toTopic.slug,
+          minRequiredMastery: d.minMasteryRequired,
+        });
+      }
+    }
 
     const overallCurriculumReadiness =
       topics.length > 0 ? Math.round(totalReadiness / topics.length) : 0;
