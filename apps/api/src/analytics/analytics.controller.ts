@@ -133,6 +133,15 @@ export class AnalyticsController {
     return this.analyticsService.getCounsellorMenteesCohortAnalytics(req.user.id);
   }
 
+  @Post('counsellor/advisory')
+  @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
+  async recordCounsellorAdvisory(
+    @Request() req,
+    @Body() body: { studentId: string; notes: string; targetArea?: string },
+  ) {
+    return this.analyticsService.recordCounsellorAdvisory(req.user.id, body);
+  }
+
   @Get('department/:departmentId/summary')
   @Roles(UserRole.HOD, UserRole.SUPER_ADMIN)
   async getDepartmentCohortAnalytics(@Param('departmentId') departmentId: string) {

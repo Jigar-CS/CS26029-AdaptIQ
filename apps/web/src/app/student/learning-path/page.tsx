@@ -56,6 +56,8 @@ export default function StudentLearningPath() {
   const router = useRouter();
   const { isPinned } = useSidebar();
 
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseCode, setSelectedCourseCode] = useState<string>('CS301');
   const [graph, setGraph] = useState<CourseKnowledgeGraph | null>(null);
   const [spacedQueue, setSpacedQueue] = useState<any[]>([]);
   const [misconceptions, setMisconceptions] = useState<any[]>([]);
@@ -70,16 +72,27 @@ export default function StudentLearningPath() {
     }
 
     if (user) {
-      loadLearningPath();
+      api.get('/courses').then((courseList: any) => {
+        if (Array.isArray(courseList) && courseList.length > 0) {
+          setCourses(courseList);
+          setSelectedCourseCode(courseList[0].code || 'CS301');
+        }
+      }).catch(() => {});
     }
   }, [user, authLoading]);
 
-  const loadLearningPath = async () => {
+  useEffect(() => {
+    if (user && selectedCourseCode) {
+      loadLearningPath(selectedCourseCode);
+    }
+  }, [user, selectedCourseCode]);
+
+  const loadLearningPath = async (courseCode: string) => {
     setLoading(true);
     setError(null);
     try {
       const [graphData, queueData, miscData] = await Promise.all([
-        api.get('/analytics/student/me/knowledge-graph?courseCode=CS301').catch(() => null),
+        api.get(`/analytics/student/me/knowledge-graph?courseCode=${encodeURIComponent(courseCode)}`).catch(() => null),
         api.get('/adaptive/spaced-queue').catch(() => []),
         api.get('/adaptive/misconceptions').catch(() => []),
       ]);
@@ -148,7 +161,23 @@ export default function StudentLearningPath() {
                 <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
                   Adaptive Learning Roadmap
                 </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">CS301 • Sem 5</span>
+                {courses.length > 1 ? (
+                  <select
+                    value={selectedCourseCode}
+                    onChange={(e) => setSelectedCourseCode(e.target.value)}
+                    className="text-xs text-indigo-700 dark:text-indigo-300 font-mono bg-indigo-50/50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 outline-none cursor-pointer"
+                  >
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.code} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                        {c.code} • {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                    {graph?.courseCode || selectedCourseCode} • {graph?.courseName || courses[0]?.name || 'Curriculum'}
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
                 <GraduationCap className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />

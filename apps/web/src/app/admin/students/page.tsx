@@ -81,6 +81,8 @@ export default function AdminStudentsPage() {
     }
   };
 
+  const availableDivisions = ['ALL', ...Array.from(new Set(students.map((s) => s.division).filter(Boolean))).sort()];
+
   const filteredStudents = students.filter((s) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -162,7 +164,7 @@ export default function AdminStudentsPage() {
             />
             <MetricCard
               title="Total Questions"
-              value={stats?.totalQuestionsInBank || 25}
+              value={stats?.totalQuestionsInBank ?? 0}
               subtitle="Approved Item Bank"
               icon={BookOpen}
               color="purple"
@@ -203,21 +205,23 @@ export default function AdminStudentsPage() {
                 ))}
               </div>
 
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
-                {['ALL', 'A', 'B'].map((div) => (
-                  <button
-                    key={div}
-                    onClick={() => setDivisionFilter(div)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                      divisionFilter === div
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {div === 'ALL' ? 'All Div' : `Div ${div}`}
-                  </button>
-                ))}
-              </div>
+              {availableDivisions.length > 1 && (
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs overflow-x-auto">
+                  {availableDivisions.map((div) => (
+                    <button
+                      key={div}
+                      onClick={() => setDivisionFilter(div)}
+                      className={`px-2.5 py-1 rounded-lg font-medium transition whitespace-nowrap ${
+                        divisionFilter === div
+                          ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {div === 'ALL' ? 'All Div' : `Div ${div}`}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

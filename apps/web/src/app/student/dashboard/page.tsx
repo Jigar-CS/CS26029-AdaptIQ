@@ -142,7 +142,7 @@ export default function StudentDashboard() {
               </h2>
               <p className="text-xs md:text-sm text-indigo-200 mt-2 leading-relaxed">
                 {remediationNudge
-                  ? `Prof. Dhara Solanki has dispatched an automated remediation practice session for ${remediationNudge.meta?.topicName || 'this topic'} (${remediationNudge.meta?.courseCode || 'CS301'}). Complete this session to reinforce core invariants and elevate your mastery score.`
+                  ? `${remediationNudge.meta?.facultyName || 'Your course instructor'} has dispatched an automated remediation practice session for ${remediationNudge.meta?.topicName || 'this topic'} (${remediationNudge.meta?.courseCode || 'Course'}). Complete this session to reinforce core invariants and elevate your mastery score.`
                   : summary?.weakTopics && summary.weakTopics.length > 0
                   ? `Your current mastery in ${summary.weakTopics[0].topicName} is ${summary.weakTopics[0].masteryScore}%. Completing targeted practice questions will reinforce key concepts.`
                   : summary?.questionsPracticed > 0

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { MetricCard } from '@/components/MetricCard';
@@ -45,203 +46,94 @@ interface InstituteItem {
   departments: DepartmentItem[];
 }
 
-const INSTITUTES_DATA: InstituteItem[] = [
-  {
-    id: 'inst-1',
-    code: 'CSPIT',
-    name: 'Chandubhai S Patel Institute of Technology',
-    deanName: 'Dr. Vijay Sen (Dean of Technology)',
-    establishedYear: 2000,
-    campusLocation: 'Changa Academic Zone A',
-    departments: [
-      {
-        id: 'dep-1',
-        code: 'CSE',
-        name: 'Computer Science & Engineering',
-        hodName: 'Dr. N. P. Patel',
-        hodEmail: 'hod.cse@charusat.edu.in',
-        studentCount: 340,
-        facultyCount: 24,
-        curriculumModules: 42,
-        accreditation: 'NBA Tier-1 Validated (2024-2027)',
-      },
-      {
-        id: 'dep-2',
-        code: 'CE',
-        name: 'Computer Engineering',
-        hodName: 'Dr. R. M. Shah',
-        hodEmail: 'hod.ce@charusat.edu.in',
-        studentCount: 280,
-        facultyCount: 19,
-        curriculumModules: 38,
-        accreditation: 'NBA Tier-1 Validated',
-      },
-      {
-        id: 'dep-3',
-        code: 'IT',
-        name: 'Information Technology',
-        hodName: 'Dr. K. S. Trivedi',
-        hodEmail: 'hod.it@charusat.edu.in',
-        studentCount: 210,
-        facultyCount: 16,
-        curriculumModules: 34,
-        accreditation: 'NBA Tier-1 Validated',
-      },
-      {
-        id: 'dep-4',
-        code: 'EC',
-        name: 'Electronics & Communication Engineering',
-        hodName: 'Dr. M. A. Vora',
-        hodEmail: 'hod.ec@charusat.edu.in',
-        studentCount: 160,
-        facultyCount: 14,
-        curriculumModules: 30,
-        accreditation: 'NBA Accredited',
-      },
-      {
-        id: 'dep-5',
-        code: 'ME',
-        name: 'Mechanical Engineering',
-        hodName: 'Dr. D. V. Bhatt',
-        hodEmail: 'hod.me@charusat.edu.in',
-        studentCount: 140,
-        facultyCount: 12,
-        curriculumModules: 28,
-        accreditation: 'NBA Accredited',
-      },
-    ],
-  },
-  {
-    id: 'inst-2',
-    code: 'DEPSTAR',
-    name: 'Devang Patel Institute of Advance Technology and Research',
-    deanName: 'Dr. S. K. Joshi',
-    establishedYear: 2017,
-    campusLocation: 'Changa Academic Zone B',
-    departments: [
-      {
-        id: 'dep-6',
-        code: 'DEP-CSE',
-        name: 'Advanced Computer Science',
-        hodName: 'Dr. H. B. Desai',
-        hodEmail: 'hod.depstar.cse@charusat.edu.in',
-        studentCount: 240,
-        facultyCount: 16,
-        curriculumModules: 32,
-        accreditation: 'NAAC A+ Aligned',
-      },
-      {
-        id: 'dep-7',
-        code: 'DEP-IT',
-        name: 'Information Technology (AI / ML Focus)',
-        hodName: 'Dr. P. T. Mehta',
-        hodEmail: 'hod.depstar.it@charusat.edu.in',
-        studentCount: 180,
-        facultyCount: 14,
-        curriculumModules: 28,
-        accreditation: 'NAAC A+ Aligned',
-      },
-    ],
-  },
-  {
-    id: 'inst-3',
-    code: 'CMPICA',
-    name: 'Smt. Chandaben Mohanbhai Patel Institute of Computer Applications',
-    deanName: 'Dr. Atul Patel',
-    establishedYear: 1999,
-    campusLocation: 'Changa Management & Computer Quad',
-    departments: [
-      {
-        id: 'dep-8',
-        code: 'MCA',
-        name: 'Master of Computer Applications',
-        hodName: 'Dr. J. K. Sharma',
-        hodEmail: 'hod.cmpica@charusat.edu.in',
-        studentCount: 220,
-        facultyCount: 15,
-        curriculumModules: 30,
-        accreditation: 'NBA Accredited',
-      },
-      {
-        id: 'dep-9',
-        code: 'BCA',
-        name: 'Bachelor of Computer Applications',
-        hodName: 'Dr. V. N. Dave',
-        hodEmail: 'hod.bca@charusat.edu.in',
-        studentCount: 300,
-        facultyCount: 18,
-        curriculumModules: 36,
-        accreditation: 'NAAC A+ Aligned',
-      },
-    ],
-  },
-];
-
 export default function AdminInstitutesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [selectedInstituteId, setSelectedInstituteId] = useState<string>('inst-1');
+  const [selectedInstituteId, setSelectedInstituteId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newDepCode, setNewDepCode] = useState('');
   const [newDepName, setNewDepName] = useState('');
   const [newHodName, setNewHodName] = useState('');
-  const [institutes, setInstitutes] = useState<InstituteItem[]>(INSTITUTES_DATA);
+  const [institutes, setInstitutes] = useState<InstituteItem[]>([]);
+  const [loadingInstitutes, setLoadingInstitutes] = useState<boolean>(true);
+
+  const loadInstitutes = async () => {
+    setLoadingInstitutes(true);
+    try {
+      const data: any = await api.get('/admin/institutes');
+      if (Array.isArray(data) && data.length > 0) {
+        setInstitutes(data);
+        setSelectedInstituteId((prev) => (prev && data.some((i: any) => i.id === prev) ? prev : data[0].id));
+      } else {
+        setInstitutes([]);
+      }
+    } catch (err) {
+      console.error('Failed to load institutes:', err);
+      setInstitutes([]);
+    } finally {
+      setLoadingInstitutes(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== UserRole.SUPER_ADMIN)) {
       router.push('/auth/login');
+      return;
+    }
+
+    if (user && user.role === UserRole.SUPER_ADMIN) {
+      loadInstitutes();
     }
   }, [user, authLoading]);
 
-  const currentInstitute = institutes.find((i) => i.id === selectedInstituteId) || institutes[0];
+  const currentInstitute = institutes.find((i) => i.id === selectedInstituteId) || institutes[0] || {
+    id: '',
+    code: '',
+    name: 'No Institute Selected',
+    deanName: '',
+    establishedYear: 2000,
+    campusLocation: '',
+    departments: [],
+  };
 
   const totalStudents = institutes.reduce(
-    (acc, inst) => acc + inst.departments.reduce((dAcc, dep) => dAcc + dep.studentCount, 0),
+    (acc, inst) => acc + (inst.departments?.reduce((dAcc, dep) => dAcc + (dep.studentCount || 0), 0) || 0),
     0
   );
   const totalFaculty = institutes.reduce(
-    (acc, inst) => acc + inst.departments.reduce((dAcc, dep) => dAcc + dep.facultyCount, 0),
+    (acc, inst) => acc + (inst.departments?.reduce((dAcc, dep) => dAcc + (dep.facultyCount || 0), 0) || 0),
     0
   );
-  const totalDepartments = institutes.reduce((acc, inst) => acc + inst.departments.length, 0);
+  const totalDepartments = institutes.reduce((acc, inst) => acc + (inst.departments?.length || 0), 0);
 
-  const filteredDepartments = currentInstitute.departments.filter(
+  const filteredDepartments = (currentInstitute.departments || []).filter(
     (d) =>
       d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       d.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       d.hodName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddDepartment = (e: React.FormEvent) => {
+  const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDepCode || !newDepName) return;
+    if (!newDepCode || !newDepName || !selectedInstituteId) return;
 
-    const newDep: DepartmentItem = {
-      id: `dep-${Date.now()}`,
-      code: newDepCode.toUpperCase(),
-      name: newDepName,
-      hodName: newHodName || 'Pending Appointment',
-      hodEmail: `hod.${newDepCode.toLowerCase()}@charusat.edu.in`,
-      studentCount: 60,
-      facultyCount: 4,
-      curriculumModules: 8,
-      accreditation: 'Affiliated & Pending Cycle',
-    };
+    try {
+      await api.post('/admin/departments', {
+        instituteId: selectedInstituteId,
+        code: newDepCode,
+        name: newDepName,
+      });
 
-    setInstitutes((prev) =>
-      prev.map((inst) =>
-        inst.id === selectedInstituteId
-          ? { ...inst, departments: [...inst.departments, newDep] }
-          : inst
-      )
-    );
-
-    setShowAddModal(false);
-    setNewDepCode('');
-    setNewDepName('');
-    setNewHodName('');
+      await loadInstitutes();
+      setShowAddModal(false);
+      setNewDepCode('');
+      setNewDepName('');
+      setNewHodName('');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to create department');
+    }
   };
 
   return (

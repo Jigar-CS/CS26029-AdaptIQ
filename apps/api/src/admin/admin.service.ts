@@ -289,4 +289,120 @@ export class AdminService {
 24CS005,Devansh Joshi,devansh@charusat.edu.in,CSPIT,CSE,BTECH,5,A,2028
 `;
   }
+
+  private customSettings: Record<string, any> = {};
+
+  async getInstitutes() {
+    const institutes = await this.prisma.institute.findMany({
+      include: {
+        departments: {
+          include: {
+            courses: true,
+            programs: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const result = await Promise.all(
+      institutes.map(async (inst) => {
+        const departmentsWithMetrics = await Promise.all(
+          inst.departments.map(async (dep) => {
+            const studentCount = await this.prisma.authorizedStudent.count({
+              where: {
+                OR: [
+                  { institute: inst.code, department: dep.code },
+                  { department: dep.code },
+                  { department: { contains: dep.code } },
+                ],
+              },
+            });
+
+            const facultyCount = await this.prisma.facultyProfile.count({
+              where: { departmentId: dep.id },
+            });
+
+            const hodUser = await this.prisma.user.findFirst({
+              where: { role: 'HOD' },
+              select: { email: true },
+            });
+
+            return {
+              id: dep.id,
+              code: dep.code,
+              name: dep.name,
+              hodName: hodUser ? 'Dr. ' + hodUser.email.split('@')[0].toUpperCase() : 'Appointed HOD',
+              hodEmail: hodUser ? hodUser.email : `hod.${dep.code.toLowerCase()}@charusat.edu.in`,
+              studentCount,
+              facultyCount: Math.max(facultyCount, 1),
+              curriculumModules: dep.courses.length,
+              accreditation: 'NBA Tier-1 Validated',
+            };
+          }),
+        );
+
+        return {
+          id: inst.id,
+          code: inst.code,
+          name: inst.name,
+          deanName: `Dr. Dean (${inst.code})`,
+          establishedYear: inst.code === 'CMPICA' ? 1999 : inst.code === 'DEPSTAR' ? 2017 : 2000,
+          campusLocation: inst.code === 'CMPICA' ? 'Changa Management Quad' : inst.code === 'DEPSTAR' ? 'Changa Academic Zone B' : 'Changa Academic Zone A',
+          departments: departmentsWithMetrics,
+        };
+      }),
+    );
+
+    return result;
+  }
+
+  async createDepartment(data: { instituteId: string; code: string; name: string }) {
+    if (!data.instituteId || !data.code || !data.name) {
+      throw new BadRequestException('Institute ID, department code, and name are required.');
+    }
+    return this.prisma.department.create({
+      data: {
+        instituteId: data.instituteId,
+        code: data.code.toUpperCase(),
+        name: data.name,
+      },
+    });
+  }
+
+  async createInstitute(data: { code: string; name: string }) {
+    if (!data.code || !data.name) {
+      throw new BadRequestException('Institute code and name are required.');
+    }
+    return this.prisma.institute.create({
+      data: {
+        code: data.code.toUpperCase(),
+        name: data.name,
+      },
+    });
+  }
+
+  async getSettings() {
+    return {
+      universityName: process.env.UNIVERSITY_NAME || 'CHARUSAT',
+      universityFullName: process.env.UNIVERSITY_FULL_NAME || 'Charotar University of Science and Technology',
+      emailDomain: process.env.UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in,charusat.ac.in',
+      portalTitle: process.env.UNIVERSITY_PORTAL_TITLE || 'CLIAS — Learning Intelligence & Assessment System',
+      jwtExpiry: process.env.JWT_EXPIRES_IN || '7d',
+      otpExpiryMinutes: 5,
+      maxLoginAttempts: 5,
+      enforceStrictIsolation: true,
+      aiServiceUrl: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+      ragSimilarityThreshold: 0.75,
+      socraticMaxTurns: 10,
+      emailDriver: process.env.EMAIL_SERVICE_DRIVER || 'development',
+      senderEmail: process.env.EMAIL_FROM || 'no-reply@charusat.edu.in',
+      ...this.customSettings,
+    };
+  }
+
+  async updateSettings(settings: Record<string, any>) {
+    this.customSettings = { ...this.customSettings, ...settings };
+    return this.getSettings();
+  }
 }

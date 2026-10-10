@@ -113,11 +113,32 @@ export default function CounsellorAssignedStudentsPage() {
     }
   };
 
-  const handleSaveAdvisory = () => {
-    if (!selectedStudent) return;
-    alert(`Academic advisory session recorded for ${selectedStudent.name}. Log entry persisted.`);
-    setShowAdvisoryModal(false);
-    setAdvisoryNote('');
+  const availableDivisions = ['ALL', ...Array.from(new Set(students.map((s) => s.division).filter(Boolean)))];
+
+  const handleSaveAdvisory = async () => {
+    if (!selectedStudent || !advisoryNote.trim()) return;
+    try {
+      await api.post('/analytics/counsellor/advisory', {
+        studentId: selectedStudent.id,
+        notes: advisoryNote,
+        targetArea: selectedStudent.primaryWeakness,
+      });
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === selectedStudent.id
+            ? {
+                ...s,
+                lastAdvisoryDate: new Date().toISOString().split('T')[0],
+                status: s.status === 'INTERVENTION_REQUIRED' ? 'WATCHLIST' : s.status,
+              }
+            : s
+        )
+      );
+      setShowAdvisoryModal(false);
+      setAdvisoryNote('');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to record advisory session.');
+    }
   };
 
   return (
@@ -139,7 +160,7 @@ export default function CounsellorAssignedStudentsPage() {
                   Assigned Student Roster
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  Batch 2024-2028
+                  {students.length > 0 ? `Active Mentee Cohort (${students.length})` : 'Mentee Cohort'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -212,7 +233,7 @@ export default function CounsellorAssignedStudentsPage() {
                 <span>Division:</span>
               </div>
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
-                {['ALL', 'DIV 1', 'DIV 2'].map((div) => (
+                {availableDivisions.map((div) => (
                   <button
                     key={div}
                     onClick={() => setDivisionFilter(div)}
@@ -222,7 +243,7 @@ export default function CounsellorAssignedStudentsPage() {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {div === 'ALL' ? 'All Divisions' : div}
+                    {div === 'ALL' ? 'All Divisions' : `Div ${div}`}
                   </button>
                 ))}
               </div>

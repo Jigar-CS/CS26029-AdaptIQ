@@ -107,28 +107,28 @@ export default function AdminDashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Authorized Roster"
-              value={(stats?.totalAuthorizedStudents ?? 119).toString()}
+              value={stats ? stats.totalAuthorizedStudents?.toString() : '...'}
               subtitle="Whitelisted Student Records"
               icon={Users}
               color="indigo"
             />
             <MetricCard
               title="Activated Accounts"
-              value={(stats?.activatedStudents ?? 3).toString()}
+              value={stats ? stats.activatedStudents?.toString() : '...'}
               subtitle="Registered & Verified"
               icon={CheckCircle2}
               color="emerald"
             />
             <MetricCard
               title="Activation Rate"
-              value={`${stats?.activationRate ?? 3}%`}
+              value={stats ? `${stats.activationRate}%` : '...'}
               subtitle="Student Onboarding Progress"
               icon={ShieldCheck}
               color="blue"
             />
             <MetricCard
               title="Calibrated Questions"
-              value={(stats?.totalQuestionsInBank ?? 31).toString()}
+              value={stats ? stats.totalQuestionsInBank?.toString() : '...'}
               subtitle="Active Across Item Banks"
               icon={BookOpen}
               color="purple"

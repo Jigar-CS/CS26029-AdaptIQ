@@ -98,20 +98,40 @@ export default function FacultyDashboard() {
           {/* Action Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                  {selectedCourse ? `${selectedCourse.name} (${selectedCourse.code})` : 'Curriculum Console'}
-                </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                {courses.length > 1 ? (
+                  <select
+                    value={selectedCourse?.id || ''}
+                    onChange={(e) => {
+                      const c = courses.find((item: any) => item.id === e.target.value);
+                      if (c) {
+                        setSelectedCourse(c);
+                        loadCourseDetails(c);
+                      }
+                    }}
+                    className="text-xl font-bold text-slate-900 tracking-tight bg-transparent border-b border-dashed border-slate-300 pb-0.5 outline-none cursor-pointer hover:border-indigo-500 transition"
+                  >
+                    {courses.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                    {selectedCourse ? `${selectedCourse.name} (${selectedCourse.code})` : 'Curriculum Console'}
+                  </h2>
+                )}
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {user?.name || 'Prof. Dhara Solanki'}
+                  {user?.name || 'Faculty Member'}
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Fixed Teaching Subject
+                  Teaching Subject
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Department of Computer Science & Engineering • CSPIT CHARUSAT
+                {(selectedCourse as any)?.department?.name || (user as any)?.department?.name || 'Department of Computer Science & Engineering'} • {(selectedCourse as any)?.department?.institute?.name || (user as any)?.institute?.name || 'CHARUSAT'}
               </p>
             </div>
 
@@ -229,7 +249,7 @@ export default function FacultyDashboard() {
             <div className="text-xs space-y-1">
               <h4 className="font-bold text-indigo-950">Faculty Console: Active & Synchronized</h4>
               <p className="text-indigo-800/80 leading-relaxed">
-                Curriculum orchestration, AI question synthesis, automated rubric scoring, and proctoring surveillance are operational for <strong>Prof. Dhara Solanki</strong>.
+                Curriculum orchestration, AI question synthesis, automated rubric scoring, and proctoring surveillance are operational for <strong>{user?.name || 'Faculty Member'}</strong>.
               </p>
             </div>
           </div>

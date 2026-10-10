@@ -167,7 +167,7 @@ export default function CounsellorDashboard() {
               </p>
             </div>
             <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-900 text-indigo-300 border border-slate-800">
-              {menteesSummary?.totalAssignedMentees ? `Assigned Mentees: ${menteesSummary.totalAssignedMentees} Students (DIV 1 & DIV 2)` : 'Assigned Mentee Batch (DIV 1 & DIV 2)'}
+              {menteesSummary?.totalAssignedMentees ? `Assigned Mentees: ${menteesSummary.totalAssignedMentees} Students` : 'Assigned Mentee Batch'}
             </span>
           </div>
 

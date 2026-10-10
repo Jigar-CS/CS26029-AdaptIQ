@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   Get,
   Query,
@@ -25,6 +26,31 @@ export class AdminController {
   @Get('dashboard')
   async getDashboardStats() {
     return this.adminService.getDashboardStats();
+  }
+
+  @Get('institutes')
+  async getInstitutes() {
+    return this.adminService.getInstitutes();
+  }
+
+  @Post('departments')
+  async createDepartment(@Body() body: { instituteId: string; code: string; name: string }) {
+    return this.adminService.createDepartment(body);
+  }
+
+  @Post('institutes')
+  async createInstitute(@Body() body: { code: string; name: string }) {
+    return this.adminService.createInstitute(body);
+  }
+
+  @Get('settings')
+  async getSettings() {
+    return this.adminService.getSettings();
+  }
+
+  @Patch('settings')
+  async updateSettings(@Body() body: any) {
+    return this.adminService.updateSettings(body);
   }
 
   @Post('students/preview-csv')

@@ -53,20 +53,16 @@ export default function HeadDashboard() {
   };
 
   const universityName = process.env.NEXT_PUBLIC_UNIVERSITY_NAME || 'CHARUSAT';
-  const activePrograms = summaryData?.programs && summaryData.programs.length > 0
-    ? summaryData.programs
-    : [
-        {
-          code: 'CSE',
-          name: 'Computer Science & Engineering',
-          enrolledStudents: summaryData?.totalStudentsEnrolled ?? 119,
-          coursesCount: coursesList.length || 5,
-          avgMastery: summaryData?.institutionalMastery ?? 54,
-          status: 'ACTIVE',
-        },
-      ];
+  const activePrograms = summaryData?.programs && summaryData.programs.length > 0 ? summaryData.programs : [];
 
-  const currentProgram = activePrograms.find((p: any) => p.code === selectedBranch) || activePrograms[0];
+  const currentProgram = activePrograms.find((p: any) => p.code === selectedBranch) || activePrograms[0] || {
+    code: '',
+    name: 'Academic Discipline',
+    enrolledStudents: 0,
+    coursesCount: 0,
+    avgMastery: 0,
+    status: 'ACTIVE',
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex text-slate-900 dark:text-slate-100 font-sans">
@@ -85,7 +81,7 @@ export default function HeadDashboard() {
                 Institutional Academic Overview
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Chandubhai S Patel Institute of Technology (CSPIT) Cross-Disciplinary Metrics
+                Cross-Disciplinary Telemetry &amp; Department Analytics
               </p>
             </div>
             <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
@@ -96,15 +92,15 @@ export default function HeadDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Total Enrolled"
-              value={(summaryData?.totalStudentsEnrolled ?? 119).toString()}
-              subtitle="CSPIT Active Roster"
+              value={(summaryData?.totalStudentsEnrolled ?? 0).toString()}
+              subtitle="Enrolled Active Roster"
               icon={GraduationCap}
               color="blue"
             />
             <MetricCard
               title="Active Departments"
-              value={(summaryData?.departmentCount ?? 1).toString()}
-              subtitle="CSE Department Active"
+              value={(summaryData?.departmentCount ?? 0).toString()}
+              subtitle={`${summaryData?.departmentCount ?? 0} Departments Active`}
               icon={Building}
               color="indigo"
             />

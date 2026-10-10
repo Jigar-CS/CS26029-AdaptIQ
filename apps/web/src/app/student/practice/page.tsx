@@ -508,7 +508,7 @@ export default function PracticePage() {
                         </h4>
                       </div>
                       <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
-                        Prof. Dhara Solanki dispatched this practice session to strengthen your conceptual grasp on {courses.find((c) => c.id === selectedCourseId)?.topics?.find((t: any) => t.id === selectedTopicId)?.name || 'this topic'}.
+                        Your course instructor dispatched this practice session to strengthen your conceptual grasp on {courses.find((c) => c.id === selectedCourseId)?.topics?.find((t: any) => t.id === selectedTopicId)?.name || 'this topic'}.
                       </p>
                     </div>
                   </div>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { UserRole } from '@clias/shared-types';
@@ -28,11 +29,12 @@ export default function AdminSettingsPage() {
   const router = useRouter();
 
   const [savedNotification, setSavedNotification] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Form states
-  const [universityName, setUniversityName] = useState(process.env.NEXT_PUBLIC_UNIVERSITY_NAME || 'CHARUSAT');
+  const [universityName, setUniversityName] = useState('CHARUSAT');
   const [universityFullName, setUniversityFullName] = useState('Charotar University of Science and Technology');
-  const [emailDomain, setEmailDomain] = useState(process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in');
+  const [emailDomain, setEmailDomain] = useState('charusat.edu.in');
   const [portalTitle, setPortalTitle] = useState('CLIAS — Learning Intelligence & Assessment System');
 
   const [jwtExpiry, setJwtExpiry] = useState('7d');
@@ -50,18 +52,68 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (!authLoading && (!user || user.role !== UserRole.SUPER_ADMIN)) {
       router.push('/auth/login');
+      return;
+    }
+
+    const loadSettings = async () => {
+      try {
+        const config: any = await api.get('/admin/settings');
+        if (config) {
+          if (config.universityName) setUniversityName(config.universityName);
+          if (config.universityFullName) setUniversityFullName(config.universityFullName);
+          if (config.emailDomain) setEmailDomain(config.emailDomain);
+          if (config.portalTitle) setPortalTitle(config.portalTitle);
+          if (config.jwtExpiry) setJwtExpiry(config.jwtExpiry);
+          if (config.otpExpiryMinutes) setOtpExpiryMinutes(config.otpExpiryMinutes);
+          if (config.maxLoginAttempts) setMaxLoginAttempts(config.maxLoginAttempts);
+          if (typeof config.enforceStrictIsolation === 'boolean') setEnforceStrictIsolation(config.enforceStrictIsolation);
+          if (config.aiServiceUrl) setAiServiceUrl(config.aiServiceUrl);
+          if (typeof config.ragSimilarityThreshold === 'number') setRagSimilarityThreshold(config.ragSimilarityThreshold);
+          if (config.socraticMaxTurns) setSocraticMaxTurns(config.socraticMaxTurns);
+          if (config.emailDriver) setEmailDriver(config.emailDriver);
+          if (config.senderEmail) setSenderEmail(config.senderEmail);
+        }
+      } catch (err) {
+        console.warn('Could not load dynamic settings:', err);
+      }
+    };
+
+    if (user && user.role === UserRole.SUPER_ADMIN) {
+      loadSettings();
     }
   }, [user, authLoading]);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedNotification(true);
-    setTimeout(() => {
-      setSavedNotification(false);
-    }, 4000);
+    setSaving(true);
+    try {
+      await api.patch('/admin/settings', {
+        universityName,
+        universityFullName,
+        emailDomain,
+        portalTitle,
+        jwtExpiry,
+        otpExpiryMinutes,
+        maxLoginAttempts,
+        enforceStrictIsolation,
+        aiServiceUrl,
+        ragSimilarityThreshold,
+        socraticMaxTurns,
+        emailDriver,
+        senderEmail,
+      });
+      setSavedNotification(true);
+      setTimeout(() => {
+        setSavedNotification(false);
+      }, 4000);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update system settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     setUniversityName('CHARUSAT');
     setUniversityFullName('Charotar University of Science and Technology');
     setEmailDomain('charusat.edu.in');
@@ -75,6 +127,26 @@ export default function AdminSettingsPage() {
     setSocraticMaxTurns(10);
     setEmailDriver('development');
     setSenderEmail('no-reply@charusat.edu.in');
+
+    try {
+      await api.patch('/admin/settings', {
+        universityName: 'CHARUSAT',
+        universityFullName: 'Charotar University of Science and Technology',
+        emailDomain: 'charusat.edu.in',
+        portalTitle: 'CLIAS — Learning Intelligence & Assessment System',
+        jwtExpiry: '7d',
+        otpExpiryMinutes: 5,
+        maxLoginAttempts: 5,
+        enforceStrictIsolation: true,
+        aiServiceUrl: 'http://localhost:8000',
+        ragSimilarityThreshold: 0.75,
+        socraticMaxTurns: 10,
+        emailDriver: 'development',
+        senderEmail: 'no-reply@charusat.edu.in',
+      });
+      setSavedNotification(true);
+      setTimeout(() => setSavedNotification(false), 3000);
+    } catch {}
   };
 
   return (

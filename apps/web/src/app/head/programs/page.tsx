@@ -66,36 +66,28 @@ export default function HeadProgramComparisonPage() {
         api.get('/courses').catch(() => []),
       ]);
 
-      const totalEnrolled = sumRes?.totalStudentsEnrolled ?? 119;
-      const mastery = sumRes?.institutionalMastery ?? 54;
-      const coursesCount = coursesRes?.length || 5;
+      const programs: ProgramDetail[] = (sumRes?.programs && sumRes.programs.length > 0)
+        ? sumRes.programs.map((p: any) => ({
+            code: p.code,
+            name: p.name,
+            department: p.department || `Department of ${p.code}`,
+            enrolledStudents: p.enrolledStudents || 0,
+            activeFaculty: p.activeFaculty || 1,
+            curriculumCount: p.curriculumCount || 0,
+            avgMastery: p.avgMastery || 0,
+            passRate: p.passRate || 0,
+            placementRate: p.placementRate || 0,
+            status: p.status || 'ACTIVE',
+            topTopics: p.topTopics || [],
+            weakTopics: p.weakTopics || [],
+            accreditationScore: p.accreditationScore || 'Accreditation Review in Progress',
+          }))
+        : [];
 
-      const dynamicPrograms: ProgramDetail[] = [
-        {
-          code: 'CSE',
-          name: 'Computer Science & Engineering',
-          department: 'CSPIT Department of CSE',
-          enrolledStudents: totalEnrolled,
-          activeFaculty: 24,
-          curriculumCount: coursesCount,
-          avgMastery: mastery,
-          passRate: 91.5,
-          placementRate: 88.4,
-          status: 'ACTIVE',
-          topTopics: [
-            { name: 'Linear Data Structures', score: 82 },
-            { name: 'Database Management Systems', score: 78 },
-            { name: 'Object-Oriented Programming', score: 75 },
-          ],
-          weakTopics: [
-            { name: 'Dynamic Programming', score: 46 },
-            { name: 'Graphs & Shortest Path Trees', score: 48 },
-          ],
-          accreditationScore: 'Tier-1 NBA Accredited (Criteria 3 & 4 Validated)',
-        },
-      ];
-
-      setProgramsList(dynamicPrograms);
+      setProgramsList(programs);
+      if (programs.length > 0) {
+        setSelectedBranch((prev) => (programs.some((p) => p.code === prev) ? prev : programs[0].code));
+      }
     } catch (e) {
       console.error('Error fetching programs telemetry:', e);
     } finally {
@@ -104,19 +96,19 @@ export default function HeadProgramComparisonPage() {
   };
 
   const currentProgram = programsList.find((p) => p.code === selectedBranch) || programsList[0] || {
-    code: 'CSE',
-    name: 'Computer Science & Engineering',
-    department: 'CSPIT Department of CSE',
-    enrolledStudents: 119,
-    activeFaculty: 24,
-    curriculumCount: 5,
-    avgMastery: 54,
-    passRate: 91.5,
-    placementRate: 88.4,
+    code: '',
+    name: 'Academic Discipline',
+    department: 'Department',
+    enrolledStudents: 0,
+    activeFaculty: 0,
+    curriculumCount: 0,
+    avgMastery: 0,
+    passRate: 0,
+    placementRate: 0,
     status: 'ACTIVE' as const,
     topTopics: [],
     weakTopics: [],
-    accreditationScore: 'Tier-1 NBA Accredited',
+    accreditationScore: 'Accreditation Live',
   };
 
   return (
