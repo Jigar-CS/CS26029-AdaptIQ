@@ -17,6 +17,7 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:clean-seed": "ts-node prisma/clean-seed.ts",
     "db:clean-activity": "ts-node prisma/clear-activity.ts",
+    "db:migrate-divisions": "ts-node prisma/migrate-divisions.ts",
     "test": "jest --config ./jest.config.js"
   },
   "dependencies": {

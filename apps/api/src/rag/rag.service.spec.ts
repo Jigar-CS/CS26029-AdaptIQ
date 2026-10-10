@@ -17,6 +17,11 @@ describe('RagService', () => {
           code: 'CS301',
           name: 'Data Structures & Algorithms',
         }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'course-1',
+          code: 'CS301',
+          name: 'Data Structures & Algorithms',
+        }),
       },
       courseDocument: {
         findMany: jest.fn().mockResolvedValue([

@@ -81,7 +81,7 @@ export class AdaptiveLearningService {
       },
     });
 
-    const hasAttempts = mastery && mastery.attemptCount > 0;
+    const hasAttempts = mastery && (mastery.attemptCount === undefined || mastery.attemptCount > 0 || mastery.masteryScore > 0);
     const currentMastery = hasAttempts ? Math.round(mastery.masteryScore * 10) / 10 : 0.0;
     let recommendedDifficulty: QuestionDifficulty;
     let pedagogicalRationale: string;

@@ -467,7 +467,7 @@ sequenceDiagram
 - **Implemented Capabilities**:
   - Semantic RAG playground across course materials (`POST /api/v1/ai/rag/query`).
   - Grounded assessment generator synthesizing questions strictly derived from syllabus chunks with explicit citation tags (`POST /api/v1/ai/rag/generate-grounded-quiz`).
-  - Interactive Faculty Document & RAG Studio (`/faculty/documents`) with chunk inspector and direct staging into the course assessment bank.
+  - Integrated Document AI & RAG Question Extractor in Exam Studio (`/faculty/assessments`) with candidate review, answer validation, and direct staging into the course assessment bank.
 
 ---
 

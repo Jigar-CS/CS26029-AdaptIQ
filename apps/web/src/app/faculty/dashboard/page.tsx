@@ -187,25 +187,9 @@ export default function FacultyDashboard() {
 
           {/* Curriculum Health Breakdown */}
           <div id="bank" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Curriculum Topic Health</h3>
-                <p className="text-xs text-slate-500">Live knowledge distribution across class cohort</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/faculty/questions"
-                  className="text-xs font-bold text-indigo-600 hover:underline"
-                >
-                  Open Item Bank →
-                </Link>
-                <Link
-                  href="/faculty/analytics"
-                  className="text-xs font-bold text-slate-600 hover:underline"
-                >
-                  Detailed Class Analytics →
-                </Link>
-              </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Curriculum Topic Health</h3>
+              <p className="text-xs text-slate-500">Live knowledge distribution across class cohort</p>
             </div>
 
             {topicList.length > 0 ? (

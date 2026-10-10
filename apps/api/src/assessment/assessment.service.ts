@@ -60,8 +60,8 @@ export function normalizeDivision(div?: string | null): string {
   if (!div) return 'ALL';
   const cleaned = div.trim().toUpperCase();
   if (['ALL', 'ALL DIVISIONS', 'BOTH', 'BOTH DIVISIONS'].includes(cleaned)) return 'ALL';
-  if (['A', '1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'DIV A'].includes(cleaned)) return 'DIV 1';
-  if (['B', '2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'DIV B'].includes(cleaned)) return 'DIV 2';
+  if (['A', '1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'DIV A', 'CS DIV 1', 'CS DIV-1', 'CS DIV1'].includes(cleaned)) return 'CS Div 1';
+  if (['B', '2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'DIV B', 'CS DIV 2', 'CS DIV-2', 'CS DIV2'].includes(cleaned)) return 'CS Div 2';
   return cleaned;
 }
 
@@ -76,11 +76,11 @@ export function isDivisionCompatible(assessmentDiv?: string | null, studentDiv?:
 export function getAllowedAssessmentDivisions(studentDiv?: string | null): string[] {
   if (!studentDiv) return [];
   const norm = normalizeDivision(studentDiv);
-  if (norm === 'DIV 1') {
-    return ['ALL', 'All Divisions', 'A', '1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'Division A', 'Division 1', 'DIV A'];
+  if (norm === 'CS Div 1') {
+    return ['ALL', 'All Divisions', 'CS Div 1', 'DIV 1', 'A', '1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'Division A', 'Division 1', 'DIV A'];
   }
-  if (norm === 'DIV 2') {
-    return ['ALL', 'All Divisions', 'B', '2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'Division B', 'Division 2', 'DIV B'];
+  if (norm === 'CS Div 2') {
+    return ['ALL', 'All Divisions', 'CS Div 2', 'DIV 2', 'B', '2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'Division B', 'Division 2', 'DIV B'];
   }
   return ['ALL', studentDiv];
 }
@@ -137,26 +137,30 @@ export class AssessmentService {
     // Verify if faculty is restricted to their assigned subject
     let targetCourseId = dto.courseId;
 
-    const resolvedCourse = await this.prisma.course.findFirst({
-      where: {
-        OR: [
-          { id: dto.courseId },
-          { code: dto.courseId },
-          { code: dto.courseId?.toUpperCase() },
-        ],
-      },
-    });
+    const resolvedCourse = this.prisma.course?.findFirst
+      ? await this.prisma.course.findFirst({
+          where: {
+            OR: [
+              { id: dto.courseId },
+              { code: dto.courseId },
+              { code: dto.courseId?.toUpperCase() },
+            ],
+          },
+        })
+      : null;
     if (resolvedCourse) {
       targetCourseId = resolvedCourse.id;
     }
 
-    let faculty = await this.prisma.facultyProfile.findFirst({
-      where: {
-        OR: [{ id: facultyProfileId }, { userId: facultyProfileId }],
-      },
-      include: { course: true },
-    });
-    if (!faculty) {
+    let faculty = this.prisma.facultyProfile?.findFirst
+      ? await this.prisma.facultyProfile.findFirst({
+          where: {
+            OR: [{ id: facultyProfileId }, { userId: facultyProfileId }],
+          },
+          include: { course: true },
+        })
+      : null;
+    if (!faculty && this.prisma.facultyProfile?.findFirst) {
       faculty = await this.prisma.facultyProfile.findFirst({
         include: { course: true },
       });
@@ -1150,6 +1154,49 @@ export class AssessmentService {
         reason: LearningHistoryReason.TEST_RESULT,
         recordedAt: submissionTimestamp,
       });
+
+      // Synchronize SkillMastery dynamically from assessment answers
+      const attemptsInTest = answerRecords.filter((a) => {
+        const q = questionMap.get(a.questionId);
+        return q && q.topicId === topicId;
+      });
+      const correctInTest = attemptsInTest.filter((a) => a.isCorrect).length;
+
+      const existingMastery = await this.prisma.skillMastery.findUnique({
+        where: {
+          studentId_topicId: {
+            studentId: submission.studentId,
+            topicId,
+          },
+        },
+      });
+
+      const newScore = existingMastery
+        ? Math.round(((existingMastery.masteryScore * 0.7) + (topicPercentage * 0.3)) * 10) / 10
+        : topicPercentage;
+
+      await this.prisma.skillMastery.upsert({
+        where: {
+          studentId_topicId: {
+            studentId: submission.studentId,
+            topicId,
+          },
+        },
+        update: {
+          masteryScore: newScore,
+          attemptCount: { increment: attemptsInTest.length },
+          correctCount: { increment: correctInTest },
+          lastPracticedAt: submissionTimestamp,
+        },
+        create: {
+          studentId: submission.studentId,
+          topicId,
+          masteryScore: newScore,
+          attemptCount: attemptsInTest.length,
+          correctCount: correctInTest,
+          lastPracticedAt: submissionTimestamp,
+        },
+      });
     }
 
     if (historyEntries.length > 0) {
@@ -1157,6 +1204,9 @@ export class AssessmentService {
         data: historyEntries,
       });
     }
+
+    // Invalidate cohort analytics cache so faculty analytics immediately reflect this assessment activity
+    this.analyticsService?.invalidateCohortCache?.(submission.assessment.courseId);
 
     // Update linked proctoring session completion status
     const existingProc = await this.prisma.proctoringSession.findUnique({

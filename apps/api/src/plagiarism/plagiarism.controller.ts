@@ -26,35 +26,35 @@ export class PlagiarismController {
 
   @Get('assessments')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
-  async getAssessments() {
-    return this.plagiarismService.getCodingAssessments();
+  async getAssessments(@Request() req) {
+    return this.plagiarismService.getCodingAssessments(req.user.id);
   }
 
   @Post('scan')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
   async startScan(@Request() req, @Body() dto: StartScanDto) {
-    const facultyId = req.user.facultyId || req.user.facultyProfile?.id || req.user.id;
-    return this.plagiarismService.startScan(dto, facultyId);
+    return this.plagiarismService.startScan(dto, req.user.id);
   }
 
   @Get('scans')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
-  async getScans(@Query('problemId') problemId?: string) {
-    return this.plagiarismService.getScans(problemId);
+  async getScans(@Request() req, @Query('problemId') problemId?: string) {
+    return this.plagiarismService.getScans(req.user.id, problemId);
   }
 
   @Get('scans/:id')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
-  async getScanDetails(@Param('id') id: string) {
-    return this.plagiarismService.getScanDetails(id);
+  async getScanDetails(@Request() req, @Param('id') id: string) {
+    return this.plagiarismService.getScanDetails(id, req.user.id);
   }
 
   @Patch('matches/:id')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
   async updateMatchVerdict(
+    @Request() req,
     @Param('id') id: string,
     @Body() dto: UpdateVerdictDto,
   ) {
-    return this.plagiarismService.updateMatchVerdict(id, dto);
+    return this.plagiarismService.updateMatchVerdict(id, req.user.id, dto);
   }
 }

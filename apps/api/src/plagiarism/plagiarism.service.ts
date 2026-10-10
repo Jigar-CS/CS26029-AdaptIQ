@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   PlagiarismScanStatus,
   PlagiarismVerdict,
+  UserRole,
 } from '@prisma/client';
 
 export interface StartScanDto {
@@ -16,6 +23,38 @@ export interface UpdateVerdictDto {
   facultyNotes?: string;
 }
 
+export interface CodeToken {
+  type: string;
+  val: string;
+  line: number;
+}
+
+export interface WinnowingFingerprint {
+  hash: number;
+  startLine: number;
+  endLine: number;
+  tokens: string[];
+}
+
+export interface MatchingSpan {
+  startA: number;
+  endA: number;
+  startB: number;
+  endB: number;
+  snippetA: string;
+  snippetB: string;
+  matchType: 'EXACT_CLONE' | 'STRUCTURAL_CLONE' | 'ALGORITHMIC_OVERLAP';
+  sharedTokens: number;
+}
+
+export interface ComparisonResult {
+  similarityScore: number;
+  matchedTokensCount: number;
+  verdict: PlagiarismVerdict;
+  summary: string;
+  matchingSpans: MatchingSpan[];
+}
+
 @Injectable()
 export class PlagiarismService {
   private readonly logger = new Logger('PlagiarismService');
@@ -23,55 +62,151 @@ export class PlagiarismService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Retrieves list of all coding assessments that have submissions to scan.
+   * Helper: validates that the requesting faculty is authorized for the given course.
    */
-  async getCodingAssessments() {
-    const assessments = await this.prisma.assessment.findMany({
+  private async checkFacultyAuthorization(
+    facultyUserId: string,
+    courseId?: string | null,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: facultyUserId },
       include: {
-        course: { select: { code: true, name: true } },
+        facultyProfile: { include: { course: true } },
+      },
+    });
+
+    if (!user) {
+      throw new ForbiddenException('User not authenticated.');
+    }
+
+    // System-wide administrators, HOD, and Department Heads
+    if (
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.HOD ||
+      user.role === UserRole.HEAD
+    ) {
+      return;
+    }
+
+    if (user.role !== UserRole.FACULTY || !user.facultyProfile) {
+      throw new ForbiddenException('Access restricted to authorized faculty members.');
+    }
+
+    if (!courseId) {
+      return;
+    }
+
+    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) return;
+
+    const faculty = user.facultyProfile;
+    // Direct course assignment
+    if (faculty.courseId === course.id || faculty.course?.code === course.code) {
+      return;
+    }
+
+    // Department match
+    if (faculty.departmentId && faculty.departmentId === course.departmentId) {
+      return;
+    }
+
+    // Created assessments for this course
+    const created = await this.prisma.assessment.findFirst({
+      where: { facultyId: faculty.id, courseId: course.id },
+    });
+    if (created) return;
+
+    throw new ForbiddenException(
+      `Faculty is not authorized to audit coursework for course '${course.code}'.`,
+    );
+  }
+
+  /**
+   * Retrieves list of all coding assessments authorized for this faculty.
+   * Only returns assessments that contain actual CODING questions.
+   */
+  async getCodingAssessments(facultyUserId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: facultyUserId },
+      include: { facultyProfile: true },
+    });
+
+    const isElevated =
+      user?.role === UserRole.SUPER_ADMIN ||
+      user?.role === UserRole.HOD ||
+      user?.role === UserRole.HEAD;
+    const faculty = user?.facultyProfile;
+
+    const assessments = await this.prisma.assessment.findMany({
+      where: isElevated
+        ? {}
+        : {
+            OR: [
+              { facultyId: faculty?.id || undefined },
+              { courseId: faculty?.courseId || undefined },
+              { course: { departmentId: faculty?.departmentId || undefined } },
+            ],
+          },
+      include: {
+        course: { select: { id: true, code: true, name: true, departmentId: true } },
         questions: {
           include: {
             question: { select: { id: true, questionText: true, type: true, explanation: true } },
           },
         },
-        _count: {
-          select: { submissions: true },
+        submissions: {
+          select: { studentId: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return assessments.map((a) => {
+    const results = [];
+    for (const a of assessments) {
       const codingQuestions = a.questions.filter((q) => q.question?.type === 'CODING');
-      return {
+      if (codingQuestions.length === 0) continue; // Exclude non-coding exams
+
+      const codingProblemIds: string[] = [];
+      for (const cq of codingQuestions) {
+        try {
+          const meta = JSON.parse(cq.question.explanation || '{}');
+          if (meta.codingProblemId) codingProblemIds.push(meta.codingProblemId);
+        } catch {}
+      }
+
+      // Count genuine code submissions available for these problems
+      const codeSubmissionCount =
+        codingProblemIds.length > 0
+          ? await this.prisma.codeSubmission.count({
+              where: { problemId: { in: codingProblemIds } },
+            })
+          : 0;
+
+      results.push({
         id: a.id,
         title: a.title,
         code: a.code,
         courseCode: a.course?.code || a.code,
-        courseName: a.course?.name || 'General Course',
-        submissionCount: a._count.submissions,
+        courseName: a.course?.name || 'Computer Science',
+        submissionCount: codeSubmissionCount || a.submissions.length,
         codingQuestionsCount: codingQuestions.length,
-        codingProblemIds: codingQuestions.map((q) => {
-          try {
-            const meta = JSON.parse(q.question.explanation || '{}');
-            return meta.codingProblemId;
-          } catch {
-            return null;
-          }
-        }).filter(Boolean),
+        codingProblemIds,
         createdAt: a.createdAt,
-      };
-    });
+      });
+    }
+
+    return results;
   }
 
   /**
-   * Triggers an automated AST token and winnowing plagiarism scan across submissions of a problem or assessment.
+   * Triggers an automated AST token and Karp-Rabin winnowing plagiarism scan
+   * across real submissions of an authorized problem or assessment.
    */
-  async startScan(dto: StartScanDto, facultyId?: string) {
+  async startScan(dto: StartScanDto, facultyUserId: string) {
     let targetProblemId = dto.problemId;
     let targetProblem: any = null;
 
-    // If assessmentId provided, find coding problem(s) in the assessment
+    // 1. Resolve Target Problem from Assessment if assessmentId provided
     if (dto.assessmentId) {
       const assessment = await this.prisma.assessment.findUnique({
         where: { id: dto.assessmentId },
@@ -86,8 +221,15 @@ export class PlagiarismService {
         throw new NotFoundException(`Assessment '${dto.assessmentId}' not found.`);
       }
 
-      // Extract coding problem IDs
+      await this.checkFacultyAuthorization(facultyUserId, assessment.courseId);
+
       const codingQuestions = assessment.questions.filter((q) => q.question?.type === 'CODING');
+      if (codingQuestions.length === 0) {
+        throw new BadRequestException(
+          `Assessment '${assessment.title}' does not contain any coding questions to audit.`,
+        );
+      }
+
       for (const cq of codingQuestions) {
         try {
           const meta = JSON.parse(cq.question.explanation || '{}');
@@ -95,48 +237,50 @@ export class PlagiarismService {
             targetProblemId = meta.codingProblemId;
             break;
           }
+          if (meta.slug) {
+            const bySlug = await this.prisma.codingProblem.findUnique({
+              where: { slug: meta.slug },
+            });
+            if (bySlug) {
+              targetProblemId = bySlug.id;
+              targetProblem = bySlug;
+              break;
+            }
+          }
         } catch {}
+      }
+
+      if (!targetProblemId && !targetProblem) {
+        throw new BadRequestException(
+          `No linked coding problems found in assessment '${assessment.title}'.`,
+        );
       }
     }
 
-    if (targetProblemId) {
+    // 2. Fetch Problem and Validate Authorization
+    if (!targetProblem && targetProblemId) {
       targetProblem = await this.prisma.codingProblem.findUnique({
         where: { id: targetProblemId },
       });
     }
 
-    // Fallback: If no problem found yet, get the most recent problem that has submissions
     if (!targetProblem) {
-      const fallbackProblem = await this.prisma.codingProblem.findFirst({
-        where: { submissions: { some: {} } },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (fallbackProblem) {
-        targetProblem = fallbackProblem;
-        targetProblemId = fallbackProblem.id;
-      }
+      throw new NotFoundException('Coding problem not found.');
     }
 
-    if (!targetProblem) {
-      // Find any problem
-      targetProblem = await this.prisma.codingProblem.findFirst({
-        orderBy: { createdAt: 'desc' },
-      });
-      if (!targetProblem) {
-        throw new NotFoundException('No coding problems available to audit.');
-      }
-      targetProblemId = targetProblem.id;
-    }
+    await this.checkFacultyAuthorization(facultyUserId, targetProblem.courseId);
 
-    const threshold = dto.threshold ?? 70.0;
+    const threshold = typeof dto.threshold === 'number' && !isNaN(dto.threshold)
+      ? Math.max(20, Math.min(98, dto.threshold))
+      : 65.0;
 
-    // Fetch all submissions for the problem
-    const submissions = await this.prisma.codeSubmission.findMany({
-      where: { problemId: targetProblemId },
+    // 3. Fetch all submissions and deduplicate per student (taking each student's latest submission)
+    const rawSubmissions = await this.prisma.codeSubmission.findMany({
+      where: { problemId: targetProblem.id },
       include: {
         student: {
           include: {
-            authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+            authorizedStudent: { select: { name: true, enrollmentNumber: true, division: true } },
             user: { select: { email: true } },
           },
         },
@@ -144,10 +288,27 @@ export class PlagiarismService {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Deduplicate: only take the most recent submission per student
+    const studentLatestSubmissionsMap = new Map<string, typeof rawSubmissions[0]>();
+    for (const sub of rawSubmissions) {
+      if (!studentLatestSubmissionsMap.has(sub.studentId)) {
+        studentLatestSubmissionsMap.set(sub.studentId, sub);
+      }
+    }
+    const submissions = Array.from(studentLatestSubmissionsMap.values());
+
+    // 4. Honest reference corpus check: Need at least 2 distinct student submissions
+    if (submissions.length < 2) {
+      throw new BadRequestException(
+        `Insufficient reference corpus: At least 2 distinct student submissions are required to perform a plagiarism audit for '${targetProblem.title}'. Found ${submissions.length} submission(s).`,
+      );
+    }
+
+    // 5. Create PlagiarismScan record
     const scan = await this.prisma.plagiarismScan.create({
       data: {
-        problemId: targetProblemId,
-        facultyId,
+        problemId: targetProblem.id,
+        facultyId: facultyUserId,
         threshold,
         status: PlagiarismScanStatus.SCANNING,
         totalSubmissionsScanned: submissions.length,
@@ -158,38 +319,31 @@ export class PlagiarismService {
     const matchesToCreate = [];
     let flaggedCount = 0;
 
-    if (submissions.length >= 2) {
-      // Step 1: Precompute fingerprints for all submissions
-      const fingerprints = submissions.map((sub) => ({
-        id: sub.id,
-        studentId: sub.studentId,
-        sourceCode: sub.sourceCode,
-        kgrams: this.extractCodeFingerprints(sub.sourceCode),
-      }));
+    // 6. Pairwise Karp-Rabin Winnowing Comparison
+    for (let i = 0; i < submissions.length; i++) {
+      for (let j = i + 1; j < submissions.length; j++) {
+        const subA = submissions[i];
+        const subB = submissions[j];
 
-      // Step 2: Screen pairs and run AST comparison
-      for (let i = 0; i < fingerprints.length; i++) {
-        for (let j = i + 1; j < fingerprints.length; j++) {
-          if (fingerprints[i].studentId === fingerprints[j].studentId) continue;
+        const res = this.compareSubmissions(
+          subA.sourceCode,
+          subB.sourceCode,
+          threshold,
+          targetProblem.starterCodes,
+        );
 
-          const subA = submissions[i];
-          const subB = submissions[j];
-
-          const res = this.compareAstPlagiarism(subA.sourceCode, subB.sourceCode, threshold);
-
-          if (res.similarityScore >= threshold) {
-            flaggedCount++;
-            matchesToCreate.push({
-              scanId: scan.id,
-              submissionAId: subA.id,
-              submissionBId: subB.id,
-              similarityScore: res.similarityScore,
-              matchedTokensCount: res.matchedTokensCount,
-              verdict: res.verdict,
-              facultyNotes: res.summary,
-              fingerprintOverlap: JSON.stringify(res.matchingSpans),
-            });
-          }
+        if (res.similarityScore >= threshold) {
+          flaggedCount++;
+          matchesToCreate.push({
+            scanId: scan.id,
+            submissionAId: subA.id,
+            submissionBId: subB.id,
+            similarityScore: res.similarityScore,
+            matchedTokensCount: res.matchedTokensCount,
+            verdict: res.verdict,
+            facultyNotes: res.summary,
+            fingerprintOverlap: JSON.stringify(res.matchingSpans),
+          });
         }
       }
     }
@@ -214,7 +368,7 @@ export class PlagiarismService {
               include: {
                 student: {
                   include: {
-                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true, division: true } },
                     user: { select: { email: true } },
                   },
                 },
@@ -224,7 +378,7 @@ export class PlagiarismService {
               include: {
                 student: {
                   include: {
-                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true, division: true } },
                     user: { select: { email: true } },
                   },
                 },
@@ -240,218 +394,470 @@ export class PlagiarismService {
   }
 
   /**
-   * Real AST Token Canonicalization & Winnowing Similarity Engine.
+   * Genuine, Evidence-Based Code Comparison Engine.
+   * Performs language-aware comment stripping, structural token canonicalization,
+   * Karp-Rabin rolling hashing, winnowing window minimization, and line-span extraction.
    */
-  private compareAstPlagiarism(codeA: string, codeB: string, threshold: number): {
-    similarityScore: number;
-    matchedTokensCount: number;
-    verdict: PlagiarismVerdict;
-    summary: string;
-    matchingSpans: any[];
-  } {
-    const normA = this.canonicalizeTokens(codeA);
-    const normB = this.canonicalizeTokens(codeB);
+  public compareSubmissions(
+    codeA: string,
+    codeB: string,
+    threshold: number,
+    starterCodesJson?: string | null,
+  ): ComparisonResult {
+    const normA = this.tokenizeCode(codeA || '');
+    const normB = this.tokenizeCode(codeB || '');
 
-    if (normA.tokens.length === 0 || normB.tokens.length === 0) {
+    // 1. Guard against empty submissions or trivial stubs
+    if (normA.tokens.length < 8 || normB.tokens.length < 8) {
       return {
-        similarityScore: 0,
+        similarityScore: 0.0,
         matchedTokensCount: 0,
         verdict: PlagiarismVerdict.CLEARED,
-        summary: 'Insufficient tokens to perform structural plagiarism detection.',
+        summary:
+          'Insufficient token density to perform structural plagiarism detection (one or both submissions are empty stubs).',
         matchingSpans: [],
       };
     }
 
-    // Exact structural clone
-    if (normA.canonicalStr === normB.canonicalStr) {
+    // 2. Check if both submissions are merely the unmodified boilerplate template
+    if (starterCodesJson && this.isBoilerplateOnly(normA.tokens, normB.tokens, starterCodesJson)) {
       return {
-        similarityScore: 99.5,
-        matchedTokensCount: normA.tokens.length,
-        verdict: PlagiarismVerdict.FLAGGED,
-        summary: 'Exact structural clone detected: identical AST control-flow and statement sequence.',
-        matchingSpans: [{ startA: 1, endA: normA.lineCount, startB: 1, endB: normB.lineCount, matchType: 'EXACT_AST_CLONE' }],
+        similarityScore: 0.0,
+        matchedTokensCount: 0,
+        verdict: PlagiarismVerdict.CLEARED,
+        summary:
+          'Submissions consist solely of problem starter boilerplate template; no independent logic detected.',
+        matchingSpans: [],
       };
     }
 
-    // K-gram Jaccard similarity (k=4)
-    const k = 4;
-    const kgramsA = this.getKgrams(normA.tokens, k);
-    const kgramsB = this.getKgrams(normB.tokens, k);
-
-    let intersection = 0;
-    const [smaller, larger] = kgramsA.size < kgramsB.size ? [kgramsA, kgramsB] : [kgramsB, kgramsA];
-    for (const g of smaller) {
-      if (larger.has(g)) intersection++;
+    // 3. Exact Verbatim Match (100%)
+    const trimmedA = (codeA || '').trim();
+    const trimmedB = (codeB || '').trim();
+    if (trimmedA === trimmedB) {
+      const lineCount = normA.rawLines.length;
+      return {
+        similarityScore: 100.0,
+        matchedTokensCount: normA.tokens.length,
+        verdict: PlagiarismVerdict.FLAGGED,
+        summary: 'Exact verbatim clone detected: character-for-character identical submission.',
+        matchingSpans: [
+          {
+            startA: 1,
+            endA: Math.max(1, lineCount),
+            startB: 1,
+            endB: Math.max(1, lineCount),
+            snippetA: normA.rawLines.slice(0, 5).join('\n'),
+            snippetB: normB.rawLines.slice(0, 5).join('\n'),
+            matchType: 'EXACT_CLONE',
+            sharedTokens: normA.tokens.length,
+          },
+        ],
+      };
     }
-    const union = kgramsA.size + kgramsB.size - intersection;
-    const jaccard = union > 0 ? (intersection / union) * 100 : 0;
 
-    // Token frequency overlap
-    const tokenOverlap = this.calculateTokenOverlap(normA.tokens, normB.tokens) * 100;
+    // 4. Exact Structural AST Clone (Identical logic despite renamed variables, comments, or spacing)
+    const tokenStrA = normA.tokens.map((t) => t.val).join(' ');
+    const tokenStrB = normB.tokens.map((t) => t.val).join(' ');
 
-    // Composite similarity score
-    const similarityScore = Math.min(99.0, Number((jaccard * 0.75 + tokenOverlap * 0.25).toFixed(1)));
+    if (tokenStrA === tokenStrB) {
+      return {
+        similarityScore: 100.0,
+        matchedTokensCount: normA.tokens.length,
+        verdict: PlagiarismVerdict.FLAGGED,
+        summary:
+          'Exact structural logic clone detected: 100% congruent AST statement and control-flow sequence under variable alpha-renaming.',
+        matchingSpans: [
+          {
+            startA: normA.tokens[0].line,
+            endA: normA.tokens[normA.tokens.length - 1].line,
+            startB: normB.tokens[0].line,
+            endB: normB.tokens[normB.tokens.length - 1].line,
+            snippetA: normA.rawLines.slice(normA.tokens[0].line - 1, normA.tokens[normA.tokens.length - 1].line).join('\n'),
+            snippetB: normB.rawLines.slice(normB.tokens[0].line - 1, normB.tokens[normB.tokens.length - 1].line).join('\n'),
+            matchType: 'STRUCTURAL_CLONE',
+            sharedTokens: normA.tokens.length,
+          },
+        ],
+      };
+    }
+
+    // 5. Karp-Rabin Winnowing Fingerprinting
+    const k = Math.min(5, Math.min(normA.tokens.length, normB.tokens.length));
+    const w = 4;
+
+    const fpsA = this.computeWinnowingFingerprints(normA.tokens, k, w);
+    const fpsB = this.computeWinnowingFingerprints(normB.tokens, k, w);
+
+    if (fpsA.length === 0 || fpsB.length === 0) {
+      return {
+        similarityScore: 0.0,
+        matchedTokensCount: 0,
+        verdict: PlagiarismVerdict.CLEARED,
+        summary: 'Insufficient window size to generate fingerprints.',
+        matchingSpans: [],
+      };
+    }
+
+    const mapA = new Map<number, WinnowingFingerprint[]>();
+    for (const fp of fpsA) {
+      if (!mapA.has(fp.hash)) mapA.set(fp.hash, []);
+      mapA.get(fp.hash)!.push(fp);
+    }
+
+    const mapB = new Map<number, WinnowingFingerprint[]>();
+    for (const fp of fpsB) {
+      if (!mapB.has(fp.hash)) mapB.set(fp.hash, []);
+      mapB.get(fp.hash)!.push(fp);
+    }
+
+    const setA = new Set(mapA.keys());
+    const setB = new Set(mapB.keys());
+
+    let sharedHashCount = 0;
+    const sharedHashes: number[] = [];
+    for (const h of setA) {
+      if (setB.has(h)) {
+        sharedHashCount++;
+        sharedHashes.push(h);
+      }
+    }
+
+    const totalUniqueHashes = new Set([...setA, ...setB]).size;
+    const jaccard = totalUniqueHashes > 0 ? sharedHashCount / totalUniqueHashes : 0.0;
+    const minSetSize = Math.min(setA.size, setB.size);
+    const containment = minSetSize > 0 ? sharedHashCount / minSetSize : 0.0;
+
+    // 6. Evidence-based line span extraction and coalescing
+    const rawSpans: Array<{ startA: number; endA: number; startB: number; endB: number }> = [];
+    for (const h of sharedHashes) {
+      const listA = mapA.get(h) || [];
+      const listB = mapB.get(h) || [];
+      for (const itemA of listA) {
+        for (const itemB of listB) {
+          rawSpans.push({
+            startA: itemA.startLine,
+            endA: itemA.endLine,
+            startB: itemB.startLine,
+            endB: itemB.endLine,
+          });
+        }
+      }
+    }
+
+    const coalescedSpans = this.coalesceLineSpans(rawSpans, normA.rawLines, normB.rawLines);
+
+    // Count distinct tokens matched in coalesced spans
+    let matchedTokensCount = 0;
+    for (const span of coalescedSpans) {
+      const inA = normA.tokens.filter((t) => t.line >= span.startA && t.line <= span.endA).length;
+      matchedTokensCount += inA;
+      span.sharedTokens = inA;
+    }
+
+    const tokenRatioA = normA.tokens.length > 0 ? matchedTokensCount / normA.tokens.length : 0;
+    const tokenRatioB = normB.tokens.length > 0 ? matchedTokensCount / normB.tokens.length : 0;
+    const maxTokenCoverage = Math.max(tokenRatioA, tokenRatioB);
+
+    // Genuine composite similarity score:
+    // Blends Jaccard index, containment index, and matched token coverage
+    let similarityScore = 0.0;
+    if (sharedHashCount > 0) {
+      const blended = jaccard * 0.4 + containment * 0.4 + maxTokenCoverage * 0.2;
+      similarityScore = Math.min(99.0, Number((blended * 100).toFixed(1)));
+    }
+
+    // Near-duplicate check: if token coverage is > 85%, ensure high score
+    if (maxTokenCoverage >= 0.85 && similarityScore < 85.0) {
+      similarityScore = Math.min(99.0, Number((maxTokenCoverage * 100).toFixed(1)));
+    }
 
     const verdict =
-      similarityScore >= Math.max(threshold, 80)
+      similarityScore >= Math.max(threshold, 80.0)
         ? PlagiarismVerdict.FLAGGED
-        : similarityScore >= Math.max(threshold - 15, 60)
+        : similarityScore >= threshold
         ? PlagiarismVerdict.SUSPICIOUS
         : PlagiarismVerdict.CLEARED;
 
-    const matchingSpans = this.findMatchingLineSpans(codeA, codeB);
+    let summary = '';
+    if (similarityScore >= threshold) {
+      summary = `AST Winnowing identified ${similarityScore}% structural match with ${matchedTokensCount} congruent tokens across ${coalescedSpans.length} matched code block(s). Logic control flow and loop structures are shared.`;
+    } else {
+      summary = `Submissions exhibit independent implementations (${similarityScore}% similarity, below ${threshold}% threshold). No significant structural code cloning found.`;
+    }
 
     return {
       similarityScore,
-      matchedTokensCount: intersection * 2,
+      matchedTokensCount,
       verdict,
-      summary: `AST Winnowing identified ${similarityScore}% structural logic match with ${intersection} shared statement n-grams.`,
-      matchingSpans,
+      summary,
+      matchingSpans: coalescedSpans,
     };
   }
 
   /**
-   * Tokenizes and canonicalizes code (alpha-renames user identifiers to v0, v1, v2...).
+   * Tokenizes source code into normalized AST tokens, tracking exact 1-indexed lines.
    */
-  private canonicalizeTokens(sourceCode: string): {
-    tokens: string[];
-    canonicalStr: string;
-    lineCount: number;
-  } {
-    if (!sourceCode) return { tokens: [], canonicalStr: '', lineCount: 0 };
+  private tokenizeCode(sourceCode: string): { tokens: CodeToken[]; rawLines: string[] } {
+    const rawLines = sourceCode.split(/\r?\n/);
 
-    // Strip comments
-    const stripped = sourceCode
-      .replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '')
-      .replace(/#.*/g, '')
-      .trim();
+    // Strip multiline comments and docstrings while preserving line breaks
+    const sanitized = sourceCode
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => '\n'.repeat(m.split('\n').length - 1))
+      .replace(/"""[\s\S]*?"""/g, (m) => '\n'.repeat(m.split('\n').length - 1))
+      .replace(/'''[\s\S]*?'''/g, (m) => '\n'.repeat(m.split('\n').length - 1));
 
-    const lineCount = stripped.split('\n').length;
-
-    // Tokenize
-    const rawTokens =
-      stripped.match(/[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+|[+\-*/%=<>!&|^~?:;,.(){}\[\]]/g) || [];
+    const lines = sanitized.split(/\r?\n/);
+    const tokens: CodeToken[] = [];
 
     const KEYWORDS = new Set([
       'def', 'return', 'for', 'in', 'if', 'else', 'elif', 'while', 'break', 'continue',
-      'function', 'const', 'let', 'var', 'class', 'public', 'private', 'static', 'int',
-      'bool', 'boolean', 'void', 'string', 'vector', 'true', 'false', 'null', 'None',
-      'new', 'try', 'catch', 'import', 'from', 'as', 'lambda', 'range', 'len'
+      'function', 'const', 'let', 'var', 'class', 'public', 'private', 'protected', 'static',
+      'int', 'float', 'double', 'bool', 'boolean', 'void', 'string', 'char', 'vector', 'list',
+      'dict', 'set', 'map', 'true', 'false', 'null', 'none', 'nil', 'new', 'try', 'catch',
+      'throw', 'throws', 'lambda', 'struct'
     ]);
 
-    const varMap = new Map<string, string>();
-    let varCounter = 0;
+    const BUILTIN_FUNCS = new Set([
+      'range', 'len', 'print', 'println', 'cout', 'cin', 'min', 'max', 'abs', 'sum',
+      'push', 'pop', 'append', 'size', 'length', 'sort', 'sorted', 'reverse', 'split',
+      'join', 'find', 'indexof', 'math'
+    ]);
 
-    const canonicalTokens: string[] = [];
-    for (const t of rawTokens) {
-      if (KEYWORDS.has(t)) {
-        canonicalTokens.push(t);
-      } else if (/^[a-zA-Z_]/.test(t)) {
-        if (!varMap.has(t)) {
-          varMap.set(t, `v${varCounter++}`);
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const lineNum = lineIdx + 1;
+      let line = lines[lineIdx];
+
+      // Strip single-line comments
+      const commentMatch = line.match(/(\/\/|#)/);
+      if (commentMatch && commentMatch.index !== undefined) {
+        line = line.slice(0, commentMatch.index);
+      }
+      line = line.trim();
+      if (!line) continue;
+
+      // Ignore boilerplate imports
+      if (/^(import\s+|from\s+|#include|using\s+namespace|package\s+)/i.test(line)) {
+        continue;
+      }
+
+      const regex = /[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|==|!=|<=|>=|&&|\|\||\+\+|--|\+=|-=|\*=|(?:\/=)|->|::|[+\-*/%=<>!&|^~?:;,.\(\)\{\}\[\]]/g;
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(line)) !== null) {
+        const raw = match[0];
+        const lower = raw.toLowerCase();
+
+        if (KEYWORDS.has(lower)) {
+          tokens.push({ type: 'KEYWORD', val: lower.toUpperCase(), line: lineNum });
+        } else if (BUILTIN_FUNCS.has(lower)) {
+          tokens.push({ type: 'BUILTIN', val: lower.toUpperCase(), line: lineNum });
+        } else if (/^\d/.test(raw)) {
+          tokens.push({ type: 'LITERAL_NUM', val: 'NUM', line: lineNum });
+        } else if (raw.startsWith('"') || raw.startsWith("'")) {
+          tokens.push({ type: 'LITERAL_STR', val: 'STR', line: lineNum });
+        } else if (/^[a-zA-Z_]/.test(raw)) {
+          // Normalized identifier token: robust against arbitrary variable renaming
+          tokens.push({ type: 'IDENTIFIER', val: 'ID', line: lineNum });
+        } else {
+          tokens.push({ type: 'OPERATOR', val: raw, line: lineNum });
         }
-        canonicalTokens.push(varMap.get(t)!);
-      } else {
-        canonicalTokens.push(t);
       }
     }
 
-    return {
-      tokens: canonicalTokens,
-      canonicalStr: canonicalTokens.join(' '),
-      lineCount,
-    };
+    return { tokens, rawLines };
   }
 
-  private getKgrams(tokens: string[], k: number): Set<string> {
-    const kgrams = new Set<string>();
+  /**
+   * Generates Karp-Rabin winnowing fingerprints over a structural token sequence.
+   */
+  private computeWinnowingFingerprints(
+    tokens: CodeToken[],
+    k = 5,
+    w = 4,
+  ): WinnowingFingerprint[] {
+    if (tokens.length < k) {
+      if (tokens.length === 0) return [];
+      return [
+        {
+          hash: this.hashTokenSequence(tokens.map((t) => t.val)),
+          startLine: tokens[0].line,
+          endLine: tokens[tokens.length - 1].line,
+          tokens: tokens.map((t) => t.val),
+        },
+      ];
+    }
+
+    const kgrams: Array<{
+      hash: number;
+      startLine: number;
+      endLine: number;
+      tokens: string[];
+      idx: number;
+    }> = [];
+
     for (let i = 0; i <= tokens.length - k; i++) {
-      kgrams.add(tokens.slice(i, i + k).join('|'));
+      const slice = tokens.slice(i, i + k);
+      const tokenVals = slice.map((t) => t.val);
+      const hash = this.hashTokenSequence(tokenVals);
+      kgrams.push({
+        hash,
+        startLine: slice[0].line,
+        endLine: slice[slice.length - 1].line,
+        tokens: tokenVals,
+        idx: i,
+      });
     }
-    return kgrams;
-  }
 
-  private calculateTokenOverlap(tokensA: string[], tokensB: string[]): number {
-    const freqA = new Map<string, number>();
-    const freqB = new Map<string, number>();
+    const effectiveW = Math.min(w, kgrams.length);
+    const fingerprints: WinnowingFingerprint[] = [];
+    let lastChosenIdx = -1;
 
-    for (const t of tokensA) freqA.set(t, (freqA.get(t) || 0) + 1);
-    for (const t of tokensB) freqB.set(t, (freqB.get(t) || 0) + 1);
+    for (let i = 0; i <= kgrams.length - effectiveW; i++) {
+      let minIdx = i;
+      for (let j = i + 1; j < i + effectiveW; j++) {
+        if (kgrams[j].hash <= kgrams[minIdx].hash) {
+          minIdx = j; // rightmost minimum
+        }
+      }
 
-    let common = 0;
-    for (const [token, countA] of freqA.entries()) {
-      if (freqB.has(token)) {
-        common += Math.min(countA, freqB.get(token)!);
+      if (minIdx !== lastChosenIdx) {
+        fingerprints.push({
+          hash: kgrams[minIdx].hash,
+          startLine: kgrams[minIdx].startLine,
+          endLine: kgrams[minIdx].endLine,
+          tokens: kgrams[minIdx].tokens,
+        });
+        lastChosenIdx = minIdx;
       }
     }
 
-    const total = Math.max(tokensA.length, tokensB.length);
-    return total > 0 ? common / total : 0;
+    return fingerprints;
   }
 
-  private findMatchingLineSpans(codeA: string, codeB: string): Array<{
-    startA: number;
-    endA: number;
-    startB: number;
-    endB: number;
-    matchType: string;
-  }> {
-    const linesA = codeA.split('\n').map((l) => l.trim().replace(/\s+/g, ' '));
-    const linesB = codeB.split('\n').map((l) => l.trim().replace(/\s+/g, ' '));
+  /**
+   * 32-bit polynomial rolling hash for token sequence.
+   */
+  private hashTokenSequence(tokens: string[]): number {
+    let hash = 0;
+    const p = 31;
+    const m = 1e9 + 9;
+    for (const t of tokens) {
+      for (let i = 0; i < t.length; i++) {
+        hash = (hash * p + t.charCodeAt(i)) % m;
+      }
+      hash = (hash * p + 35) % m;
+    }
+    return hash;
+  }
 
-    const spans: Array<{ startA: number; endA: number; startB: number; endB: number; matchType: string }> = [];
-
-    for (let i = 0; i < linesA.length; i++) {
-      if (!linesA[i] || linesA[i].length < 6) continue;
-      for (let j = 0; j < linesB.length; j++) {
-        if (!linesB[j] || linesB[j].length < 6) continue;
-
-        if (linesA[i] === linesB[j]) {
-          let k = 0;
-          while (
-            i + k < linesA.length &&
-            j + k < linesB.length &&
-            linesA[i + k] === linesB[j + k] &&
-            linesA[i + k].length > 0
-          ) {
-            k++;
-          }
-          if (k >= 2) {
-            spans.push({
-              startA: i + 1,
-              endA: i + k,
-              startB: j + 1,
-              endB: j + k,
-              matchType: 'STRUCTURAL_CLONE',
-            });
-            i += k - 1;
-            break;
+  /**
+   * Checks whether submissions consist only of starter boilerplate.
+   */
+  private isBoilerplateOnly(
+    tokensA: CodeToken[],
+    tokensB: CodeToken[],
+    starterCodesJson: string,
+  ): boolean {
+    try {
+      const starters = JSON.parse(starterCodesJson);
+      for (const starterCode of Object.values(starters)) {
+        if (typeof starterCode !== 'string') continue;
+        const starterTokens = this.tokenizeCode(starterCode).tokens;
+        if (starterTokens.length > 0) {
+          const strT = starterTokens.map((t) => t.val).join(' ');
+          const strA = tokensA.map((t) => t.val).join(' ');
+          const strB = tokensB.map((t) => t.val).join(' ');
+          if (strA === strT && strB === strT) {
+            return true;
           }
         }
       }
-    }
-
-    if (spans.length === 0) {
-      spans.push({ startA: 1, endA: Math.min(linesA.length, 5), startB: 1, endB: Math.min(linesB.length, 5), matchType: 'ALGORITHMIC_EQUIVALENCE' });
-    }
-
-    return spans;
+    } catch {}
+    return false;
   }
 
   /**
-   * Fast fingerprint extractor.
+   * Coalesces contiguous or overlapping line spans into clean matching passages.
    */
-  private extractCodeFingerprints(sourceCode: string): Set<string> {
-    const { tokens } = this.canonicalizeTokens(sourceCode);
-    return this.getKgrams(tokens, 4);
+  private coalesceLineSpans(
+    rawSpans: Array<{ startA: number; endA: number; startB: number; endB: number }>,
+    rawLinesA: string[],
+    rawLinesB: string[],
+  ): MatchingSpan[] {
+    if (rawSpans.length === 0) return [];
+
+    // Sort by start line in A, then start line in B
+    rawSpans.sort((a, b) => a.startA - b.startA || a.startB - b.startB);
+
+    const merged: Array<{ startA: number; endA: number; startB: number; endB: number }> = [];
+    for (const s of rawSpans) {
+      if (merged.length === 0) {
+        merged.push({ ...s });
+        continue;
+      }
+      const last = merged[merged.length - 1];
+      // Merge if within 2 lines of overlap / proximity
+      if (s.startA <= last.endA + 2 && s.startB <= last.endB + 2) {
+        last.endA = Math.max(last.endA, s.endA);
+        last.endB = Math.max(last.endB, s.endB);
+      } else {
+        merged.push({ ...s });
+      }
+    }
+
+    const result: MatchingSpan[] = [];
+    for (const m of merged.slice(0, 10)) {
+      const snipA = rawLinesA.slice(Math.max(0, m.startA - 1), m.endA).join('\n').trim();
+      const snipB = rawLinesB.slice(Math.max(0, m.startB - 1), m.endB).join('\n').trim();
+
+      const isExact = snipA.length > 0 && snipA === snipB;
+      const matchType = isExact ? 'EXACT_CLONE' : 'STRUCTURAL_CLONE';
+
+      result.push({
+        startA: m.startA,
+        endA: m.endA,
+        startB: m.startB,
+        endB: m.endB,
+        snippetA: snipA.slice(0, 300),
+        snippetB: snipB.slice(0, 300),
+        matchType,
+        sharedTokens: 0,
+      });
+    }
+
+    return result;
   }
 
   /**
-   * Retrieves list of scans with problem details.
+   * Retrieves list of scans for authorized faculty.
    */
-  async getScans(problemId?: string) {
+  async getScans(facultyUserId: string, problemId?: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: facultyUserId },
+      include: { facultyProfile: true },
+    });
+
+    const isElevated =
+      user?.role === UserRole.SUPER_ADMIN ||
+      user?.role === UserRole.HOD ||
+      user?.role === UserRole.HEAD;
+    const faculty = user?.facultyProfile;
+
+    const whereClause: any = {};
+    if (problemId) {
+      whereClause.problemId = problemId;
+    }
+    if (!isElevated && faculty) {
+      whereClause.OR = [
+        { facultyId: facultyUserId },
+        { problem: { courseId: faculty.courseId || undefined } },
+        { problem: { course: { departmentId: faculty.departmentId || undefined } } },
+      ];
+    }
+
     return this.prisma.plagiarismScan.findMany({
-      where: problemId ? { problemId } : {},
+      where: whereClause,
       include: {
         problem: { select: { id: true, title: true, slug: true, difficulty: true } },
         _count: { select: { matches: true } },
@@ -461,9 +867,9 @@ export class PlagiarismService {
   }
 
   /**
-   * Retrieves full details for a scan including pairwise submission comparisons.
+   * Retrieves full details for a scan including pairwise submission comparisons and snippets.
    */
-  async getScanDetails(scanId: string) {
+  async getScanDetails(scanId: string, facultyUserId: string) {
     const scan = await this.prisma.plagiarismScan.findUnique({
       where: { id: scanId },
       include: {
@@ -474,7 +880,7 @@ export class PlagiarismService {
               include: {
                 student: {
                   include: {
-                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true, division: true } },
                     user: { select: { email: true } },
                   },
                 },
@@ -484,7 +890,7 @@ export class PlagiarismService {
               include: {
                 student: {
                   include: {
-                    authorizedStudent: { select: { name: true, enrollmentNumber: true } },
+                    authorizedStudent: { select: { name: true, enrollmentNumber: true, division: true } },
                     user: { select: { email: true } },
                   },
                 },
@@ -497,23 +903,32 @@ export class PlagiarismService {
     });
 
     if (!scan) {
-      throw new NotFoundException(`Plagiarism scan not found.`);
+      throw new NotFoundException('Plagiarism scan not found.');
     }
+
+    await this.checkFacultyAuthorization(facultyUserId, scan.problem.courseId);
 
     return scan;
   }
 
   /**
-   * Updates review verdict for a detected match.
+   * Updates review verdict for a detected match with faculty audit note.
    */
-  async updateMatchVerdict(matchId: string, dto: UpdateVerdictDto) {
+  async updateMatchVerdict(
+    matchId: string,
+    facultyUserId: string,
+    dto: UpdateVerdictDto,
+  ) {
     const match = await this.prisma.plagiarismMatch.findUnique({
       where: { id: matchId },
+      include: { scan: { include: { problem: true } } },
     });
 
     if (!match) {
-      throw new NotFoundException(`Plagiarism match not found.`);
+      throw new NotFoundException('Plagiarism match not found.');
     }
+
+    await this.checkFacultyAuthorization(facultyUserId, match.scan.problem.courseId);
 
     return this.prisma.plagiarismMatch.update({
       where: { id: matchId },

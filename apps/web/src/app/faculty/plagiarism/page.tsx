@@ -48,6 +48,17 @@ interface ProblemOption {
   difficulty: string;
 }
 
+interface MatchingSpan {
+  startA: number;
+  endA: number;
+  startB: number;
+  endB: number;
+  snippetA: string;
+  snippetB: string;
+  matchType: 'EXACT_CLONE' | 'STRUCTURAL_CLONE' | 'ALGORITHMIC_OVERLAP';
+  sharedTokens: number;
+}
+
 interface PlagiarismMatch {
   id: string;
   scanId: string;
@@ -64,6 +75,7 @@ interface PlagiarismMatch {
       authorizedStudent?: {
         name: string;
         enrollmentNumber: string;
+        division?: string;
       };
       user?: {
         email: string;
@@ -78,6 +90,7 @@ interface PlagiarismMatch {
       authorizedStudent?: {
         name: string;
         enrollmentNumber: string;
+        division?: string;
       };
       user?: {
         email: string;
@@ -123,6 +136,29 @@ export default function FacultyPlagiarismPage() {
   const [scanning, setScanning] = useState<boolean>(false);
   const [selectedMatch, setSelectedMatch] = useState<PlagiarismMatch | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const parsedSpans: MatchingSpan[] = React.useMemo(() => {
+    if (!selectedMatch?.fingerprintOverlap) return [];
+    try {
+      return JSON.parse(selectedMatch.fingerprintOverlap);
+    } catch {
+      return [];
+    }
+  }, [selectedMatch?.fingerprintOverlap]);
+
+  const linesA = React.useMemo(() => {
+    return (selectedMatch?.submissionA?.sourceCode || '').split(/\r?\n/);
+  }, [selectedMatch?.submissionA?.sourceCode]);
+
+  const linesB = React.useMemo(() => {
+    return (selectedMatch?.submissionB?.sourceCode || '').split(/\r?\n/);
+  }, [selectedMatch?.submissionB?.sourceCode]);
+
+  const isLineMatchedA = (lineNum: number) =>
+    parsedSpans.some((s) => lineNum >= s.startA && lineNum <= s.endA);
+
+  const isLineMatchedB = (lineNum: number) =>
+    parsedSpans.some((s) => lineNum >= s.startB && lineNum <= s.endB);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -215,7 +251,11 @@ export default function FacultyPlagiarismPage() {
       setTimeout(() => setStatusMessage(null), 5000);
     } catch (err: any) {
       console.error('Failed to run plagiarism scan:', err);
-      setStatusMessage(err.message || 'Audit failed. Verify at least 2 submissions exist.');
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        'Audit failed. Verify at least 2 submissions exist in the reference corpus.';
+      setStatusMessage(errMsg);
     } finally {
       setScanning(false);
     }
@@ -600,52 +640,155 @@ export default function FacultyPlagiarismPage() {
                         {/* Student A Code Pane */}
                         <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
                           <div className="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
-                            <span className="text-xs font-bold text-white">
-                              {selectedMatch.submissionA?.student?.authorizedStudent?.name ||
-                                selectedMatch.submissionA?.student?.user?.email?.split('@')[0] ||
-                                'Student A'}
-                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-white">
+                                {selectedMatch.submissionA?.student?.authorizedStudent?.name ||
+                                  selectedMatch.submissionA?.student?.user?.email?.split('@')[0] ||
+                                  'Student A'}
+                              </span>
+                              {selectedMatch.submissionA?.student?.authorizedStudent?.division && (
+                                <span className="text-[10px] text-slate-400 ml-1.5 font-medium">
+                                  ({selectedMatch.submissionA.student.authorizedStudent.division})
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-slate-400 font-mono">
                               {selectedMatch.submissionA?.student?.authorizedStudent?.enrollmentNumber ||
                                 '24CS001'}{' '}
                               • {selectedMatch.submissionA?.language}
                             </span>
                           </div>
-                          <div className="p-4 font-mono text-xs text-blue-200 overflow-x-auto leading-relaxed whitespace-pre max-h-[380px]">
-                            {selectedMatch.submissionA?.sourceCode}
+                          <div className="p-3 font-mono text-xs overflow-x-auto leading-relaxed max-h-[380px] space-y-0.5">
+                            {linesA.map((line, idx) => {
+                              const lineNum = idx + 1;
+                              const matched = isLineMatchedA(lineNum);
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex items-start gap-3 px-2 py-0.5 rounded transition ${
+                                    matched
+                                      ? 'bg-rose-950/60 text-rose-200 border-l-2 border-rose-500 font-semibold'
+                                      : 'text-slate-300'
+                                  }`}
+                                >
+                                  <span className="text-[10px] text-slate-500 select-none w-6 text-right shrink-0">
+                                    {lineNum}
+                                  </span>
+                                  <span className="whitespace-pre font-mono">{line || ' '}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 
                         {/* Student B Code Pane */}
                         <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
                           <div className="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
-                            <span className="text-xs font-bold text-white">
-                              {selectedMatch.submissionB?.student?.authorizedStudent?.name ||
-                                selectedMatch.submissionB?.student?.user?.email?.split('@')[0] ||
-                                'Student B'}
-                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-white">
+                                {selectedMatch.submissionB?.student?.authorizedStudent?.name ||
+                                  selectedMatch.submissionB?.student?.user?.email?.split('@')[0] ||
+                                  'Student B'}
+                              </span>
+                              {selectedMatch.submissionB?.student?.authorizedStudent?.division && (
+                                <span className="text-[10px] text-slate-400 ml-1.5 font-medium">
+                                  ({selectedMatch.submissionB.student.authorizedStudent.division})
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-slate-400 font-mono">
                               {selectedMatch.submissionB?.student?.authorizedStudent?.enrollmentNumber ||
                                 '24CS002'}{' '}
                               • {selectedMatch.submissionB?.language}
                             </span>
                           </div>
-                          <div className="p-4 font-mono text-xs text-purple-200 overflow-x-auto leading-relaxed whitespace-pre max-h-[380px]">
-                            {selectedMatch.submissionB?.sourceCode}
+                          <div className="p-3 font-mono text-xs overflow-x-auto leading-relaxed max-h-[380px] space-y-0.5">
+                            {linesB.map((line, idx) => {
+                              const lineNum = idx + 1;
+                              const matched = isLineMatchedB(lineNum);
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex items-start gap-3 px-2 py-0.5 rounded transition ${
+                                    matched
+                                      ? 'bg-purple-950/60 text-purple-200 border-l-2 border-purple-500 font-semibold'
+                                      : 'text-slate-300'
+                                  }`}
+                                >
+                                  <span className="text-[10px] text-slate-500 select-none w-6 text-right shrink-0">
+                                    {lineNum}
+                                  </span>
+                                  <span className="whitespace-pre font-mono">{line || ' '}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
 
                       {/* Overlap & AST Diagnostic Details */}
-                      <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                          Algorithmic Winnowing Diagnostics
+                      <div className="p-5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            Algorithmic Winnowing Diagnostics & Audit Rationale
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {selectedMatch.matchedTokensCount} Shared Tokens
+                          </span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
+
+                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-slate-800">
                           {selectedMatch.facultyNotes ||
-                            'High-order AST token congruence detected in loop invariant and algorithmic state transitions despite variable renaming.'}
+                            'High-order AST token congruence detected in loop invariant and algorithmic control flow.'}
                         </p>
+
+                        {/* Verified Evidence Passages */}
+                        {parsedSpans.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                            <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">
+                              Verified Evidence Passages ({parsedSpans.length})
+                            </span>
+                            <div className="grid grid-cols-1 gap-2">
+                              {parsedSpans.map((span, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  className="p-3 rounded-lg bg-slate-900/90 border border-slate-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                >
+                                  <div className="space-y-0.5">
+                                    <div className="text-xs font-semibold text-white flex items-center gap-2">
+                                      <span>Passage #{sIdx + 1}:</span>
+                                      <span className="text-rose-300 font-mono">Lines {span.startA}–{span.endA}</span>
+                                      <span className="text-slate-400">↔</span>
+                                      <span className="text-purple-300 font-mono">Lines {span.startB}–{span.endB}</span>
+                                    </div>
+                                    {span.snippetA && (
+                                      <div className="text-[11px] font-mono text-slate-400 truncate max-w-lg">
+                                        "{span.snippetA.slice(0, 80)}"
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {span.sharedTokens > 0 && (
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        {span.sharedTokens} tokens
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                        span.matchType === 'EXACT_CLONE'
+                                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                          : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                                      }`}
+                                    >
+                                      {span.matchType}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

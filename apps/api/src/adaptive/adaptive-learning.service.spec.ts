@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdaptiveLearningService } from './adaptive-learning.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiQuestionGeneratorService } from '../ai/ai-question-generator.service';
+import { LearningAnalyticsService } from '../analytics/learning-analytics.service';
 import { QuestionDifficulty, SpacedRepetitionStatus } from '@prisma/client';
 
 describe('AdaptiveLearningService', () => {
@@ -15,6 +17,9 @@ describe('AdaptiveLearningService', () => {
           name: 'Arrays & Dynamic Sizing',
           course: { code: 'CS301' },
         }),
+      },
+      studentProfile: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'student-1' }),
       },
       skillMastery: {
         findUnique: jest.fn(),
@@ -42,6 +47,8 @@ describe('AdaptiveLearningService', () => {
       providers: [
         AdaptiveLearningService,
         { provide: PrismaService, useValue: prisma },
+        { provide: AiQuestionGeneratorService, useValue: { generateAndStageQuestions: jest.fn() } },
+        { provide: LearningAnalyticsService, useValue: { recordAttemptAndRecalculateMastery: jest.fn(), invalidateCohortCache: jest.fn() } },
       ],
     }).compile();
 

@@ -979,15 +979,35 @@ def compare_code_plagiarism(req: PlagiarismComparisonRequest):
         verdict = "CLEARED"
 
     spans = []
-    if similarity_score >= 50.0:
-        spans.append(MatchingCodeSpan(
-            start_line_a=2,
-            end_line_a=min(7, len(req.code_a.splitlines())),
-            start_line_b=2,
-            end_line_b=min(7, len(req.code_b.splitlines())),
-            matched_snippet="Hash Map lookup with complement subtraction logic",
-            match_confidence=round(min(0.98, similarity_score / 100), 2)
-        ))
+    lines_a = req.code_a.splitlines()
+    lines_b = req.code_b.splitlines()
+
+    # Find actual matching line blocks using tokenized lines
+    for idx_a, la in enumerate(lines_a):
+        cleaned_a = la.strip()
+        if not cleaned_a or cleaned_a.startswith(('#', '//')):
+            continue
+        tokens_la = tokenize_and_canonicalize(cleaned_a)
+        if len(tokens_la) < 3:
+            continue
+        for idx_b, lb in enumerate(lines_b):
+            cleaned_b = lb.strip()
+            if not cleaned_b or cleaned_b.startswith(('#', '//')):
+                continue
+            tokens_lb = tokenize_and_canonicalize(cleaned_b)
+            if tokens_la == tokens_lb:
+                # Found matching line
+                spans.append(MatchingCodeSpan(
+                    start_line_a=idx_a + 1,
+                    end_line_a=idx_a + 1,
+                    start_line_b=idx_b + 1,
+                    end_line_b=idx_b + 1,
+                    matched_snippet=cleaned_a[:120],
+                    match_confidence=round(min(0.99, max(0.5, similarity_score / 100)), 2)
+                ))
+                break
+        if len(spans) >= 10:
+            break
 
     summary = (
         f"Structural token overlap identified: {len(intersection)} shared k-gram fingerprints. "

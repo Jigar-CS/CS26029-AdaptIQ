@@ -109,12 +109,57 @@ export class AnalyticsController {
   // ============================================================================
 
   @Get('faculty/course/:courseId/summary')
-  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
   async getFacultyCourseCohortAnalytics(
+    @Request() req,
     @Param('courseId') courseId: string,
     @Query('division') division?: string,
   ) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForCourse(req.user.id, courseId);
+    }
     return this.analyticsService.getFacultyCourseCohortAnalytics(courseId, division);
+  }
+
+  @Get('faculty/course/:courseId/students')
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
+  async getFacultyCourseStudents(
+    @Request() req,
+    @Param('courseId') courseId: string,
+    @Query('division') division?: string,
+  ) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForCourse(req.user.id, courseId);
+    }
+    return this.analyticsService.getFacultyCourseStudents(courseId, division);
+  }
+
+  @Get('faculty/course/:courseId/student/:studentId')
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
+  async getFacultyStudentAnalytics(
+    @Request() req,
+    @Param('courseId') courseId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForStudent(req.user.id, courseId, studentId);
+    }
+    return this.analyticsService.getFacultyStudentAnalytics(courseId, studentId);
+  }
+
+  @Get('faculty/course/:courseId/student/:studentId/learning-curve')
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
+  async getFacultyStudentLearningCurve(
+    @Request() req,
+    @Param('courseId') courseId: string,
+    @Param('studentId') studentId: string,
+    @Query('topicId') topicId?: string,
+    @Query('source') source?: string,
+  ) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForStudent(req.user.id, courseId, studentId);
+    }
+    return this.analyticsService.getLearningCurve(studentId, topicId, source, courseId);
   }
 
   @Post('faculty/dispatch-remediation-nudge')
@@ -123,6 +168,9 @@ export class AnalyticsController {
     @Request() req,
     @Body() body: { courseId: string; topicId?: string; division?: string },
   ) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForCourse(req.user.id, body.courseId);
+    }
     return this.analyticsService.dispatchRemediationNudge({
       facultyUserId: req.user.id,
       courseId: body.courseId,
@@ -164,7 +212,10 @@ export class AnalyticsController {
 
   @Get('obe/courses/:courseId/attainment')
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
-  async getCourseOBEAttainment(@Param('courseId') courseId: string) {
+  async getCourseOBEAttainment(@Request() req, @Param('courseId') courseId: string) {
+    if (req.user?.role === UserRole.FACULTY) {
+      await this.analyticsService.assertFacultyAuthorizedForCourse(req.user.id, courseId);
+    }
     return this.analyticsService.getCourseOBEAttainment(courseId);
   }
 

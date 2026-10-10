@@ -1051,17 +1051,17 @@ export default function FacultyAssessmentsPage() {
                       )}
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          a.division === 'DIV 1'
+                          a.division === 'CS Div 1' || a.division === 'DIV 1'
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            : a.division === 'DIV 2'
+                            : a.division === 'CS Div 2' || a.division === 'DIV 2'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         }`}
                       >
-                        {a.division === 'DIV 1'
-                          ? 'Division A (DIV 1)'
-                          : a.division === 'DIV 2'
-                          ? 'Division B (DIV 2)'
+                        {a.division === 'CS Div 1' || a.division === 'DIV 1'
+                          ? 'CS Div 1'
+                          : a.division === 'CS Div 2' || a.division === 'DIV 2'
+                          ? 'CS Div 2'
                           : 'Both Divisions (All)'}
                       </span>
                     </div>

@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { QuestionDifficulty, LearningHistoryReason, InterventionStatus } from '@prisma/client';
+import { QuestionDifficulty, LearningHistoryReason, InterventionStatus, SubmissionStatus, UserRole } from '@prisma/client';
 import { BktIrtEngine, BktSequenceResult, IrtAbilityResult } from './engines/bkt-irt.engine';
 import { ForgettingCurveEngine, RetentionAnalysis } from './engines/forgetting-curve.engine';
 import { KnowledgeGraphEngine, CourseKnowledgeGraph, PrerequisiteCheckResult } from './engines/knowledge-graph.engine';
@@ -58,10 +58,23 @@ class TtlCache<T> {
 export class LearningAnalyticsService {
   private readonly logger = new Logger('LearningAnalyticsService');
 
-  /** In-process TTL cache: 30s for dashboard summaries, 60s for course analytics */
+  /** In-process TTL cache: 15s for dashboard summaries, 10s for course analytics */
   private readonly cache = new TtlCache<any>();
-  private readonly DASHBOARD_TTL = 30_000;   // 30 seconds
-  private readonly COHORT_TTL   = 60_000;   // 60 seconds
+  private readonly DASHBOARD_TTL = 15_000;   // 15 seconds
+  private readonly COHORT_TTL   = 10_000;   // 10 seconds
+
+  /**
+   * Invalidates cohort and dashboard cache entries so fresh attempts immediately show in analytics
+   */
+  invalidateCohortCache(courseId?: string): void {
+    if (courseId) {
+      this.cache.invalidatePrefix(`cohort:${courseId}`);
+    } else {
+      this.cache.invalidatePrefix('cohort:');
+    }
+    this.cache.invalidatePrefix('dashboard:');
+    this.cache.invalidatePrefix('dash:');
+  }
 
   // Multipliers for difficulty in EWMA
   private readonly difficultyWeights: Record<QuestionDifficulty, number> = {
@@ -159,8 +172,9 @@ export class LearningAnalyticsService {
       },
     });
 
-    // Invalidate the cached dashboard summary so the next load reflects this attempt
+    // Invalidate the cached dashboard summary and cohort analytics so the next load reflects this attempt
     this.cache.invalidate(`dashboard:${studentId}`);
+    this.invalidateCohortCache();
 
     return updatedMastery;
   }
@@ -177,11 +191,31 @@ export class LearningAnalyticsService {
     studentId: string,
     topicId?: string,
     source?: string,
+    courseId?: string,
   ): Promise<LearningCurvePoint[]> {
     const where: any = { studentId };
 
     if (topicId && topicId !== 'ALL') {
       where.topicId = topicId;
+    }
+
+    if (courseId) {
+      const clean = courseId.replace(/^course-/, '');
+      const course = await this.prisma.course.findFirst({
+        where: {
+          OR: [
+            { id: courseId },
+            { id: clean },
+            { code: courseId },
+            { code: courseId.toUpperCase() },
+            { code: clean.toUpperCase() },
+          ],
+        },
+        select: { id: true },
+      });
+      if (course) {
+        where.topic = { courseId: course.id };
+      }
     }
 
     const normalizedSource = (source || 'ALL').toUpperCase();
@@ -949,10 +983,727 @@ export class LearningAnalyticsService {
   // ============================================================================
 
   /**
+   * Enforces faculty-subject authorization on analytics APIs.
+   * Faculty must either teach the course directly, belong to the course's department,
+   * or have authored assessments for the course.
+   */
+  async assertFacultyAuthorizedForCourse(facultyUserId: string, courseId: string): Promise<void> {
+    const clean = courseId.replace(/^course-/, '');
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseId },
+          { id: clean },
+          { code: courseId },
+          { code: courseId.toUpperCase() },
+          { code: clean.toUpperCase() },
+        ],
+      },
+      include: {
+        department: true,
+      },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found.');
+    }
+
+    const faculty = await this.prisma.facultyProfile.findUnique({
+      where: { userId: facultyUserId },
+      include: { course: true },
+    });
+
+    if (!faculty) {
+      const user = await this.prisma.user.findUnique({ where: { id: facultyUserId } });
+      if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD || user?.role === UserRole.HEAD) {
+        return;
+      }
+      throw new ForbiddenException('Faculty profile not found.');
+    }
+
+    // 1. Direct course assignment
+    if (faculty.courseId && (faculty.courseId === course.id || faculty.course?.code === course.code)) {
+      return;
+    }
+
+    // 2. Department match
+    if (faculty.departmentId && faculty.departmentId === course.departmentId) {
+      return;
+    }
+
+    // 3. Faculty created assessments for this course
+    const createdAssessment = await this.prisma.assessment.findFirst({
+      where: {
+        facultyId: faculty.id,
+        courseId: course.id,
+      },
+    });
+    if (createdAssessment) {
+      return;
+    }
+
+    throw new ForbiddenException(`You are not authorized to access analytics for course ${course.code}.`);
+  }
+
+  /**
+   * Enforces faculty-student authorization.
+   * Faculty must be authorized for the course, and the student must belong to that course's cohort/department
+   * or have attempts/submissions for that course.
+   */
+  async assertFacultyAuthorizedForStudent(
+    facultyUserId: string,
+    courseId: string,
+    studentId: string,
+  ): Promise<void> {
+    // 1. Authorize faculty for course
+    await this.assertFacultyAuthorizedForCourse(facultyUserId, courseId);
+
+    // 2. Fetch the course
+    const clean = courseId.replace(/^course-/, '');
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseId },
+          { id: clean },
+          { code: courseId },
+          { code: courseId.toUpperCase() },
+          { code: clean.toUpperCase() },
+        ],
+      },
+      include: { department: true },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found.');
+    }
+
+    // 3. Resolve student profile or authorized student
+    const student = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [
+          { id: studentId },
+          { userId: studentId },
+          { authorizedStudentId: studentId },
+          { authorizedStudent: { enrollmentNumber: studentId } },
+          { authorizedStudent: { email: studentId } },
+        ],
+      },
+      include: { authorizedStudent: true },
+    });
+
+    const authStudent =
+      student?.authorizedStudent ||
+      (await this.prisma.authorizedStudent.findFirst({
+        where: {
+          OR: [
+            { id: studentId },
+            { enrollmentNumber: studentId },
+            { email: studentId },
+          ],
+        },
+      }));
+
+    if (!authStudent) {
+      throw new NotFoundException('Student profile not found.');
+    }
+
+    // 4. Admin / HOD role bypasses cohort checks
+    const user = await this.prisma.user.findUnique({ where: { id: facultyUserId } });
+    if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD || user?.role === UserRole.HEAD) {
+      return;
+    }
+
+    // 5. Verify student affiliation with course
+    const deptMatch =
+      authStudent.department &&
+      course.department &&
+      (authStudent.department.toUpperCase().includes(course.department.code.toUpperCase()) ||
+        course.department.name.toUpperCase().includes(authStudent.department.toUpperCase()));
+
+    const isCsCourse = course.code.toUpperCase().startsWith('CS');
+    const isCsDivision =
+      authStudent.division &&
+      ['CS Div 1', 'CS Div 2', 'DIV 1', 'DIV 2', '1', '2', 'A', 'B'].includes(authStudent.division);
+
+    if (isCsCourse && !isCsDivision && !deptMatch) {
+      throw new ForbiddenException('You are not authorized to view analytics for this student.');
+    }
+
+    if (!isCsCourse && !deptMatch) {
+      throw new ForbiddenException('You are not authorized to view analytics for this student.');
+    }
+  }
+
+  /**
+   * Fetches the list of authorized students for a course and optional division
+   */
+  async getFacultyCourseStudents(courseId: string, division?: string) {
+    const rawDiv = division ? division.trim() : '';
+    const isAll = !rawDiv || ['ALL', 'ALL DIVISIONS', 'BOTH', 'BOTH DIVISIONS'].includes(rawDiv.toUpperCase());
+
+    let allowedDivisionsForQuery: string[] | undefined = undefined;
+    if (!isAll) {
+      const upper = rawDiv.toUpperCase();
+      if (['CS DIV 1', 'CS DIV-1', 'CS-DIV-1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', '1', 'A'].includes(upper)) {
+        allowedDivisionsForQuery = ['CS Div 1', 'DIV 1', 'A', '1'];
+      } else if (['CS DIV 2', 'CS DIV-2', 'CS-DIV-2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', '2', 'B'].includes(upper)) {
+        allowedDivisionsForQuery = ['CS Div 2', 'DIV 2', 'B', '2'];
+      } else {
+        allowedDivisionsForQuery = [rawDiv];
+      }
+    }
+
+    const clean = courseId.replace(/^course-/, '');
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseId },
+          { id: clean },
+          { code: courseId },
+          { code: courseId.toUpperCase() },
+          { code: clean.toUpperCase() },
+        ],
+      },
+      include: { department: true },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found.');
+    }
+
+    const students = await this.prisma.authorizedStudent.findMany({
+      where: {
+        ...(allowedDivisionsForQuery ? { division: { in: allowedDivisionsForQuery } } : {}),
+      },
+      include: {
+        studentProfile: {
+          include: {
+            skillMasteries: {
+              where: { topic: { courseId: course.id } },
+            },
+            attempts: {
+              where: { question: { courseId: course.id } },
+              select: { id: true, isCorrect: true, createdAt: true },
+            },
+            assessmentSubmissions: {
+              where: {
+                assessment: { courseId: course.id },
+                status: { in: [SubmissionStatus.SUBMITTED, SubmissionStatus.EVALUATED] },
+              },
+              select: { id: true, totalScore: true, submittedAt: true, createdAt: true },
+            },
+          },
+        },
+      },
+      orderBy: { enrollmentNumber: 'asc' },
+    });
+
+    return students.map((s) => {
+      const p = s.studentProfile;
+      const masteries = p?.skillMasteries || [];
+      const attempts = p?.attempts || [];
+      const submissions = p?.assessmentSubmissions || [];
+
+      let averageMastery = 0;
+      if (masteries.length > 0) {
+        averageMastery = Math.round(
+          masteries.reduce((acc, m) => acc + m.masteryScore, 0) / masteries.length,
+        );
+      } else if (attempts.length > 0) {
+        const correct = attempts.filter((a) => a.isCorrect).length;
+        averageMastery = Math.round((correct / attempts.length) * 100);
+      }
+
+      // Determine latest activity
+      let lastActiveAt: Date | null = null;
+      if (attempts.length > 0) {
+        const latestAttempt = [...attempts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        lastActiveAt = latestAttempt.createdAt;
+      }
+      if (submissions.length > 0) {
+        const latestSub = [...submissions].sort(
+          (a, b) => (b.submittedAt || b.createdAt).getTime() - (a.submittedAt || a.createdAt).getTime(),
+        )[0];
+        const subDate = latestSub.submittedAt || latestSub.createdAt;
+        if (!lastActiveAt || subDate.getTime() > lastActiveAt.getTime()) {
+          lastActiveAt = subDate;
+        }
+      }
+
+      return {
+        id: p?.id || s.id,
+        studentProfileId: p?.id || null,
+        authorizedStudentId: s.id,
+        enrollmentNumber: s.enrollmentNumber,
+        name: s.name,
+        email: s.email,
+        division: s.division,
+        department: s.department,
+        semester: s.semester,
+        averageMastery,
+        practiceAttemptsCount: attempts.length,
+        assessmentsCount: submissions.length,
+        totalActivityCount: attempts.length + submissions.length,
+        lastActiveAt,
+        hasProfile: !!p,
+        status:
+          averageMastery >= 70
+            ? 'HEALTHY'
+            : averageMastery >= 45
+            ? 'NEEDS_REINFORCEMENT'
+            : attempts.length + submissions.length === 0
+            ? 'UNTESTED'
+            : 'CRITICAL_DEFICIENCY',
+      };
+    });
+  }
+
+  /**
+   * Detailed individual student learning performance over time for a course.
+   * Calculates metrics purely from real persisted database records (SkillMastery, QuestionAttempt, SubmissionAnswer).
+   */
+  async getFacultyStudentAnalytics(courseId: string, studentId: string) {
+    const clean = courseId.replace(/^course-/, '');
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseId },
+          { id: clean },
+          { code: courseId },
+          { code: courseId.toUpperCase() },
+          { code: clean.toUpperCase() },
+        ],
+      },
+      include: {
+        department: true,
+        topics: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            misconceptions: {
+              select: { title: true, description: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found.');
+    }
+
+    const studentProfile = await this.prisma.studentProfile.findFirst({
+      where: {
+        OR: [
+          { id: studentId },
+          { userId: studentId },
+          { authorizedStudentId: studentId },
+          { authorizedStudent: { enrollmentNumber: studentId } },
+          { authorizedStudent: { email: studentId } },
+        ],
+      },
+      include: {
+        authorizedStudent: true,
+        user: { select: { email: true } },
+      },
+    });
+
+    if (!studentProfile) {
+      // Check if authorized student exists without an activated profile
+      const authStudent = await this.prisma.authorizedStudent.findFirst({
+        where: {
+          OR: [
+            { id: studentId },
+            { enrollmentNumber: studentId },
+            { email: studentId },
+          ],
+        },
+      });
+
+      if (authStudent) {
+        return this.buildEmptyStudentAnalytics(course, authStudent);
+      }
+
+      throw new NotFoundException('Student profile not found.');
+    }
+
+    // 1. Fetch practice attempts, submissions, masteries, and longitudinal learning curve
+    const [practiceAttempts, submissions, masteries, learningCurve] = await Promise.all([
+      this.prisma.questionAttempt.findMany({
+        where: {
+          studentId: studentProfile.id,
+          question: { courseId: course.id },
+        },
+        include: {
+          question: {
+            select: {
+              id: true,
+              topicId: true,
+              difficulty: true,
+              topic: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.assessmentSubmission.findMany({
+        where: {
+          studentId: studentProfile.id,
+          assessment: { courseId: course.id },
+          status: { in: [SubmissionStatus.SUBMITTED, SubmissionStatus.EVALUATED] },
+        },
+        include: {
+          assessment: {
+            select: { id: true, title: true, totalMarks: true, passingMarks: true },
+          },
+          answers: {
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  topicId: true,
+                  topic: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { submittedAt: 'desc' },
+      }),
+      this.prisma.skillMastery.findMany({
+        where: {
+          studentId: studentProfile.id,
+          topic: { courseId: course.id },
+        },
+        include: {
+          topic: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              misconceptions: { select: { title: true } },
+            },
+          },
+        },
+      }),
+      this.getLearningCurve(studentProfile.id, undefined, 'ALL', course.id),
+    ]);
+
+    // 2. Build Topic Mastery and Struggle Breakdown
+    const topicMap: Record<
+      string,
+      {
+        topicId: string;
+        name: string;
+        slug: string;
+        masteryScore: number;
+        attemptCount: number;
+        correctCount: number;
+        accuracy: number;
+        struggleRate: number;
+        status: 'HEALTHY' | 'NEEDS_REINFORCEMENT' | 'CRITICAL_DEFICIENCY' | 'UNTESTED';
+        lastPracticedAt: Date | null;
+        misconceptionTitle?: string;
+      }
+    > = {};
+
+    for (const t of course.topics) {
+      topicMap[t.id] = {
+        topicId: t.id,
+        name: t.name,
+        slug: t.slug,
+        masteryScore: 0,
+        attemptCount: 0,
+        correctCount: 0,
+        accuracy: 0,
+        struggleRate: 0,
+        status: 'UNTESTED',
+        lastPracticedAt: null,
+        misconceptionTitle: t.misconceptions?.[0]?.title,
+      };
+    }
+
+    // Track masteries
+    const studentTopicMastered = new Set<string>();
+    for (const m of masteries) {
+      studentTopicMastered.add(m.topicId);
+      if (topicMap[m.topicId]) {
+        const acc = m.attemptCount > 0 ? Math.round((m.correctCount / m.attemptCount) * 100) : 0;
+        const struggle = m.attemptCount > 0 ? Math.max(0, 100 - acc) : 0;
+        const roundedScore = Math.round(m.masteryScore);
+
+        let status: 'HEALTHY' | 'NEEDS_REINFORCEMENT' | 'CRITICAL_DEFICIENCY' | 'UNTESTED';
+        if (m.attemptCount === 0) status = 'UNTESTED';
+        else if (roundedScore >= 70) status = 'HEALTHY';
+        else if (roundedScore >= 45) status = 'NEEDS_REINFORCEMENT';
+        else status = 'CRITICAL_DEFICIENCY';
+
+        topicMap[m.topicId] = {
+          ...topicMap[m.topicId],
+          masteryScore: roundedScore,
+          attemptCount: m.attemptCount,
+          correctCount: m.correctCount,
+          accuracy: acc,
+          struggleRate: struggle,
+          status,
+          lastPracticedAt: m.lastPracticedAt,
+        };
+      }
+    }
+
+    // Accumulate unmastered practice attempts and assessment answers
+    for (const pa of practiceAttempts) {
+      const tId = pa.question?.topicId;
+      if (tId && topicMap[tId] && !studentTopicMastered.has(tId)) {
+        topicMap[tId].attemptCount += 1;
+        if (pa.isCorrect) topicMap[tId].correctCount += 1;
+        if (!topicMap[tId].lastPracticedAt || pa.createdAt > topicMap[tId].lastPracticedAt) {
+          topicMap[tId].lastPracticedAt = pa.createdAt;
+        }
+      }
+    }
+
+    for (const sub of submissions) {
+      for (const ans of sub.answers) {
+        const tId = ans.question?.topicId;
+        if (tId && topicMap[tId] && !studentTopicMastered.has(tId)) {
+          topicMap[tId].attemptCount += 1;
+          if (ans.isCorrect) topicMap[tId].correctCount += 1;
+          const subDate = sub.submittedAt || sub.createdAt;
+          if (!topicMap[tId].lastPracticedAt || subDate > topicMap[tId].lastPracticedAt) {
+            topicMap[tId].lastPracticedAt = subDate;
+          }
+        }
+      }
+    }
+
+    // Finalize status for topics without formal SkillMastery records
+    for (const tId of Object.keys(topicMap)) {
+      if (!studentTopicMastered.has(tId)) {
+        const t = topicMap[tId];
+        if (t.attemptCount > 0) {
+          t.accuracy = Math.round((t.correctCount / t.attemptCount) * 100);
+          t.masteryScore = t.accuracy;
+          t.struggleRate = Math.max(0, 100 - t.accuracy);
+          if (t.masteryScore >= 70) t.status = 'HEALTHY';
+          else if (t.masteryScore >= 45) t.status = 'NEEDS_REINFORCEMENT';
+          else t.status = 'CRITICAL_DEFICIENCY';
+        }
+      }
+    }
+
+    const topicList = Object.values(topicMap);
+
+    // 3. Overview Telemetry Metrics
+    const questionsPracticed = practiceAttempts.length;
+    const practiceCorrect = practiceAttempts.filter((p) => p.isCorrect).length;
+    const practiceAccuracy = questionsPracticed > 0 ? Math.round((practiceCorrect / questionsPracticed) * 100) : 0;
+
+    const assessmentsAttempted = submissions.length;
+    const averageAssessmentScore =
+      submissions.length > 0
+        ? Math.round(
+            submissions.reduce((acc, s) => {
+              const totalMarks = s.assessment?.totalMarks || 100;
+              const pct = (s.totalScore / totalMarks) * 100;
+              return acc + pct;
+            }, 0) / submissions.length,
+          )
+        : 0;
+
+    const attemptedTopics = topicList.filter((t) => t.attemptCount > 0);
+    const overallMastery =
+      attemptedTopics.length > 0
+        ? Math.round(
+            attemptedTopics.reduce((acc, t) => acc + t.masteryScore, 0) / attemptedTopics.length,
+          )
+        : 0;
+
+    // 4. Strengths & Struggling Topics
+    const strengths = topicList
+      .filter((t) => t.attemptCount > 0 && t.masteryScore >= 70)
+      .sort((a, b) => b.masteryScore - a.masteryScore);
+
+    const strugglingTopics = topicList
+      .filter((t) => t.attemptCount > 0 && (t.struggleRate >= 40 || t.masteryScore < 50))
+      .sort((a, b) => b.struggleRate - a.struggleRate);
+
+    // 5. Improvement Trend from historical learning curve
+    let improvementTrend: 'IMPROVING' | 'STABLE' | 'DECLINING' | 'INSUFFICIENT_DATA' =
+      'INSUFFICIENT_DATA';
+    if (learningCurve.length >= 2) {
+      const firstPoints = learningCurve.slice(0, Math.min(3, Math.ceil(learningCurve.length / 2)));
+      const lastPoints = learningCurve.slice(-Math.min(3, Math.ceil(learningCurve.length / 2)));
+      const firstAvg = firstPoints.reduce((a, b) => a + b.masteryScore, 0) / firstPoints.length;
+      const lastAvg = lastPoints.reduce((a, b) => a + b.masteryScore, 0) / lastPoints.length;
+      const diff = lastAvg - firstAvg;
+      if (diff >= 4) improvementTrend = 'IMPROVING';
+      else if (diff <= -4) improvementTrend = 'DECLINING';
+      else improvementTrend = 'STABLE';
+    }
+
+    // 6. Recent Activity Timeline (Unified timestamped attempts & assessments)
+    const recentActivity: Array<{
+      id: string;
+      type: 'PRACTICE' | 'ASSESSMENT';
+      title: string;
+      topicName: string;
+      isCorrect?: boolean;
+      score?: number;
+      timestamp: Date;
+    }> = [];
+
+    for (const pa of practiceAttempts.slice(0, 15)) {
+      recentActivity.push({
+        id: pa.id,
+        type: 'PRACTICE',
+        title: `Adaptive Practice (${pa.question.difficulty || 'MEDIUM'})`,
+        topicName: pa.question.topic?.name || 'General Topic',
+        isCorrect: pa.isCorrect,
+        timestamp: pa.createdAt,
+      });
+    }
+
+    for (const sub of submissions.slice(0, 10)) {
+      recentActivity.push({
+        id: sub.id,
+        type: 'ASSESSMENT',
+        title: sub.assessment?.title || 'Formal Assessment',
+        topicName: 'Formal Evaluation',
+        score: sub.totalScore,
+        timestamp: sub.submittedAt || sub.createdAt,
+      });
+    }
+
+    recentActivity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // 7. Last active timestamp
+    const lastActiveAt = recentActivity.length > 0 ? recentActivity[0].timestamp : null;
+
+    return {
+      student: {
+        id: studentProfile.id,
+        studentProfileId: studentProfile.id,
+        authorizedStudentId: studentProfile.authorizedStudent?.id,
+        name: studentProfile.authorizedStudent?.name || 'Student',
+        enrollmentNumber: studentProfile.authorizedStudent?.enrollmentNumber || 'N/A',
+        email: studentProfile.authorizedStudent?.email || studentProfile.user?.email || 'N/A',
+        division: studentProfile.authorizedStudent?.division || 'N/A',
+        department: studentProfile.authorizedStudent?.department || course.department?.name || 'N/A',
+        semester: studentProfile.authorizedStudent?.semester || course.semester || 5,
+      },
+      course: {
+        id: course.id,
+        code: course.code,
+        name: course.name,
+        semester: course.semester,
+        departmentName: course.department?.name || 'Computer Science & Engineering',
+      },
+      overview: {
+        overallMastery,
+        questionsPracticed,
+        practiceAccuracy,
+        assessmentsAttempted,
+        averageAssessmentScore,
+        improvementTrend,
+        lastActiveAt,
+        topicsMasteredCount: strengths.length,
+        topicsStrugglingCount: strugglingTopics.length,
+        totalTopicsInCourse: course.topics.length,
+      },
+      topicMasteries: topicList,
+      strengths,
+      strugglingTopics,
+      learningCurve,
+      recentActivity: recentActivity.slice(0, 15),
+    };
+  }
+
+  /**
+   * Builds a clean, graceful zero-state for an enrolled student with no activity
+   */
+  private buildEmptyStudentAnalytics(course: any, authStudent: any) {
+    const topicList = course.topics.map((t: any) => ({
+      topicId: t.id,
+      name: t.name,
+      slug: t.slug,
+      masteryScore: 0,
+      attemptCount: 0,
+      correctCount: 0,
+      accuracy: 0,
+      struggleRate: 0,
+      status: 'UNTESTED',
+      lastPracticedAt: null,
+      misconceptionTitle: t.misconceptions?.[0]?.title,
+    }));
+
+    return {
+      student: {
+        id: authStudent.id,
+        studentProfileId: null,
+        authorizedStudentId: authStudent.id,
+        name: authStudent.name,
+        enrollmentNumber: authStudent.enrollmentNumber,
+        email: authStudent.email,
+        division: authStudent.division,
+        department: authStudent.department || course.department?.name || 'N/A',
+        semester: authStudent.semester || course.semester || 5,
+      },
+      course: {
+        id: course.id,
+        code: course.code,
+        name: course.name,
+        semester: course.semester,
+        departmentName: course.department?.name || 'Computer Science & Engineering',
+      },
+      overview: {
+        overallMastery: 0,
+        questionsPracticed: 0,
+        practiceAccuracy: 0,
+        assessmentsAttempted: 0,
+        averageAssessmentScore: 0,
+        improvementTrend: 'INSUFFICIENT_DATA',
+        lastActiveAt: null,
+        topicsMasteredCount: 0,
+        topicsStrugglingCount: 0,
+        totalTopicsInCourse: course.topics.length,
+      },
+      topicMasteries: topicList,
+      strengths: [],
+      strugglingTopics: [],
+      learningCurve: [],
+      recentActivity: [],
+    };
+  }
+
+  /**
    * Faculty Course Cohort Analytics: Aggregates mastery distribution and bottlenecks across enrolled students
+   * Calculates all metrics dynamically from actual persisted records (SkillMastery, QuestionAttempt, SubmissionAnswer).
    */
   async getFacultyCourseCohortAnalytics(courseId: string, division?: string) {
-    const cacheKey = `cohort:${courseId}:${division || 'ALL'}`;
+    const rawDiv = division ? division.trim() : '';
+    const isAll = !rawDiv || ['ALL', 'ALL DIVISIONS', 'BOTH', 'BOTH DIVISIONS'].includes(rawDiv.toUpperCase());
+
+    // Normalize division representation: active classes are CS Div 1 and CS Div 2
+    let targetDivision: string | undefined = undefined;
+    let allowedDivisionsForQuery: string[] | undefined = undefined;
+
+    if (!isAll) {
+      const upper = rawDiv.toUpperCase();
+      if (['CS DIV 1', 'CS DIV-1', 'CS-DIV-1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', '1', 'A'].includes(upper)) {
+        targetDivision = 'CS Div 1';
+        allowedDivisionsForQuery = ['CS Div 1', 'DIV 1', 'A', '1'];
+      } else if (['CS DIV 2', 'CS DIV-2', 'CS-DIV-2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', '2', 'B'].includes(upper)) {
+        targetDivision = 'CS Div 2';
+        allowedDivisionsForQuery = ['CS Div 2', 'DIV 2', 'B', '2'];
+      } else {
+        targetDivision = rawDiv;
+        allowedDivisionsForQuery = [rawDiv];
+      }
+    }
+
+    const cacheKey = `cohort:${courseId}:${targetDivision || 'ALL'}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -986,18 +1737,27 @@ export class LearningAnalyticsService {
       throw new NotFoundException(`Course not found.`);
     }
 
-    const isAll = !division || division === 'ALL' || division === 'All Divisions' || division.toLowerCase().includes('all');
-    const divisionFilter = isAll ? undefined : division;
+    // 1. Fetch enrolled students in this cohort / division
+    const enrolledStudents = await this.prisma.authorizedStudent.findMany({
+      where: {
+        ...(allowedDivisionsForQuery ? { division: { in: allowedDivisionsForQuery } } : {}),
+      },
+      include: {
+        studentProfile: true,
+      },
+      orderBy: { enrollmentNumber: 'asc' },
+    });
+    const enrolledStudentsCount = enrolledStudents.length;
 
-    // 1. Fetch all student profiles who have attempted questions or have mastery in this course
+    // 2. Fetch all skill masteries for topics in this course
     const allTopicMasteries = await this.prisma.skillMastery.findMany({
       where: {
         topic: { courseId: course.id },
-        ...(divisionFilter
+        ...(allowedDivisionsForQuery
           ? {
               student: {
                 authorizedStudent: {
-                  division: divisionFilter,
+                  division: { in: allowedDivisionsForQuery },
                 },
               },
             }
@@ -1014,7 +1774,64 @@ export class LearningAnalyticsService {
       },
     });
 
-    // Group masteries by student
+    // 3. Fetch all practice question attempts in this course
+    const allPracticeAttempts = await this.prisma.questionAttempt.findMany({
+      where: {
+        question: { courseId: course.id },
+        ...(allowedDivisionsForQuery
+          ? {
+              student: {
+                authorizedStudent: {
+                  division: { in: allowedDivisionsForQuery },
+                },
+              },
+            }
+          : {}),
+      },
+      include: {
+        question: { select: { id: true, topicId: true } },
+        student: {
+          include: {
+            authorizedStudent: true,
+            user: { select: { email: true } },
+          },
+        },
+      },
+    });
+
+    // 4. Fetch all assessment question answers in this course
+    const allAssessmentAnswers = await this.prisma.submissionAnswer.findMany({
+      where: {
+        submission: {
+          assessment: { courseId: course.id },
+          status: { in: [SubmissionStatus.SUBMITTED, SubmissionStatus.EVALUATED] },
+          ...(allowedDivisionsForQuery
+            ? {
+                student: {
+                  authorizedStudent: {
+                    division: { in: allowedDivisionsForQuery },
+                  },
+                },
+              }
+            : {}),
+        },
+      },
+      include: {
+        question: { select: { id: true, topicId: true } },
+        submission: {
+          include: {
+            student: {
+              include: {
+                authorizedStudent: true,
+                user: { select: { email: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Group student analytics
     const studentMap: Record<
       string,
       {
@@ -1023,11 +1840,10 @@ export class LearningAnalyticsService {
         enrollmentNumber: string;
         email: string;
         scores: number[];
-        weakestTopic?: { name: string; score: number };
       }
     > = {};
 
-    // Group masteries by topic
+    // Group masteries & attempts by topic
     const topicMap: Record<
       string,
       {
@@ -1053,14 +1869,18 @@ export class LearningAnalyticsService {
       };
     }
 
+    // Process SkillMastery records
+    const studentTopicMastered = new Set<string>();
+
     for (const m of allTopicMasteries) {
+      studentTopicMastered.add(`${m.studentId}:${m.topicId}`);
       const sId = m.studentId;
       if (!studentMap[sId]) {
         studentMap[sId] = {
           studentId: sId,
-          name: m.student.authorizedStudent.name,
-          enrollmentNumber: m.student.authorizedStudent.enrollmentNumber,
-          email: m.student.authorizedStudent.email,
+          name: m.student.authorizedStudent?.name || 'Student',
+          enrollmentNumber: m.student.authorizedStudent?.enrollmentNumber || 'N/A',
+          email: m.student.authorizedStudent?.email || m.student.user?.email || 'N/A',
           scores: [],
         };
       }
@@ -1071,6 +1891,75 @@ export class LearningAnalyticsService {
         topicMap[m.topicId].attemptSum += m.attemptCount;
         topicMap[m.topicId].correctSum += m.correctCount;
       }
+    }
+
+    // Accumulate unmastered attempts per student per topic
+    const unmasteredStudentTopicMap: Record<
+      string,
+      { attempts: number; correct: number; student: any; topicId: string }
+    > = {};
+
+    for (const pa of allPracticeAttempts) {
+      const sId = pa.studentId;
+      const tId = pa.question?.topicId;
+      if (!tId || !topicMap[tId]) continue;
+
+      if (!studentTopicMastered.has(`${sId}:${tId}`)) {
+        topicMap[tId].attemptSum += 1;
+        if (pa.isCorrect) topicMap[tId].correctSum += 1;
+
+        const key = `${sId}:${tId}`;
+        if (!unmasteredStudentTopicMap[key]) {
+          unmasteredStudentTopicMap[key] = {
+            attempts: 0,
+            correct: 0,
+            student: pa.student,
+            topicId: tId,
+          };
+        }
+        unmasteredStudentTopicMap[key].attempts += 1;
+        if (pa.isCorrect) unmasteredStudentTopicMap[key].correct += 1;
+      }
+    }
+
+    for (const aa of allAssessmentAnswers) {
+      const sId = aa.submission.studentId;
+      const tId = aa.question?.topicId;
+      if (!tId || !topicMap[tId]) continue;
+
+      if (!studentTopicMastered.has(`${sId}:${tId}`)) {
+        topicMap[tId].attemptSum += 1;
+        if (aa.isCorrect) topicMap[tId].correctSum += 1;
+
+        const key = `${sId}:${tId}`;
+        if (!unmasteredStudentTopicMap[key]) {
+          unmasteredStudentTopicMap[key] = {
+            attempts: 0,
+            correct: 0,
+            student: aa.submission.student,
+            topicId: tId,
+          };
+        }
+        unmasteredStudentTopicMap[key].attempts += 1;
+        if (aa.isCorrect) unmasteredStudentTopicMap[key].correct += 1;
+      }
+    }
+
+    // Add unmastered student-topic scores to studentMap and topicMap
+    for (const [key, val] of Object.entries(unmasteredStudentTopicMap)) {
+      const [sId, tId] = key.split(':');
+      if (!studentMap[sId]) {
+        studentMap[sId] = {
+          studentId: sId,
+          name: val.student?.authorizedStudent?.name || 'Student',
+          enrollmentNumber: val.student?.authorizedStudent?.enrollmentNumber || 'N/A',
+          email: val.student?.authorizedStudent?.email || val.student?.user?.email || 'N/A',
+          scores: [],
+        };
+      }
+      const score = val.attempts > 0 ? Math.round((val.correct / val.attempts) * 100) : 0;
+      studentMap[sId].scores.push(score);
+      topicMap[tId].scores.push(score);
     }
 
     // Calculate per-student averages and at-risk students
@@ -1097,6 +1986,7 @@ export class LearningAnalyticsService {
       const avg = t.scores.length > 0 ? t.scores.reduce((a, b) => a + b, 0) / t.scores.length : 0;
       const accuracy = t.attemptSum > 0 ? Math.round((t.correctSum / t.attemptSum) * 100) : 0;
       const roundedAvg = Math.round(avg);
+      const struggleRate = t.attemptSum > 0 ? Math.max(0, 100 - accuracy) : 0;
 
       let status: 'HEALTHY' | 'NEEDS_REINFORCEMENT' | 'CRITICAL_DEFICIENCY' | 'UNTESTED';
       if (t.attemptSum === 0) status = 'UNTESTED';
@@ -1109,9 +1999,10 @@ export class LearningAnalyticsService {
         topicName: t.name,
         slug: t.slug,
         classAverageMastery: roundedAvg,
-        studentsAttempted: t.scores.length,
+        studentsAttempted: t.scores.length > 0 ? t.scores.length : (t.attemptSum > 0 ? 1 : 0),
         totalAttempts: t.attemptSum,
         accuracy,
+        struggleRate,
         status,
         topMisconception:
           t.attemptSum === 0
@@ -1129,7 +2020,7 @@ export class LearningAnalyticsService {
     const developingCount = students.filter((s) => s.averageMastery >= 40 && s.averageMastery < 60).length;
     const atRiskCount = students.filter((s) => s.averageMastery < 40).length;
 
-    const totalAssessed = Math.max(1, students.length);
+    const totalAssessed = students.length;
     const overallClassMastery =
       students.length > 0
         ? Math.round(students.reduce((a, s) => a + s.averageMastery, 0) / students.length)
@@ -1140,18 +2031,10 @@ export class LearningAnalyticsService {
       (t) => t.status === 'NEEDS_REINFORCEMENT' || t.status === 'CRITICAL_DEFICIENCY',
     ).length;
 
-    // Total enrolled students for this course/semester/division
-    const enrolledStudentsCount =
-      (await this.prisma.authorizedStudent.count({
-        where: {
-          ...(divisionFilter ? { division: divisionFilter } : {}),
-        },
-      })) || totalAssessed;
-
     // Practice adherence percentage
     const practiceAdherence = Math.min(
       100,
-      Math.round((students.length / Math.max(1, enrolledStudentsCount)) * 100),
+      enrolledStudentsCount > 0 ? Math.round((students.length / enrolledStudentsCount) * 100) : 0,
     );
 
     // Struggling topics (lowest class average among topics with active diagnostic attempts)
@@ -1161,13 +2044,8 @@ export class LearningAnalyticsService {
         ? [...attemptedTopics].sort((a, b) => a.classAverageMastery - b.classAverageMastery).slice(0, 3)
         : [];
 
-    const rawDivisions = await this.prisma.authorizedStudent.findMany({
-      select: { division: true },
-      distinct: ['division'],
-    });
-    const availableDivisions = Array.from(
-      new Set(rawDivisions.map((d) => d.division).filter(Boolean)),
-    ).sort();
+    // Active CS cohort divisions
+    const availableDivisions = ['CS Div 1', 'CS Div 2'];
 
     const result = {
       courseId: course.id,
@@ -1175,7 +2053,7 @@ export class LearningAnalyticsService {
       courseName: course.name,
       departmentName: course.department?.name || 'Computer Science & Engineering',
       semester: course.semester || 5,
-      selectedDivision: divisionFilter || 'All Divisions',
+      selectedDivision: targetDivision || 'All Divisions',
       availableDivisions,
       enrolledStudentsCount,
       activeAssessedCount: students.length,
@@ -1247,16 +2125,27 @@ export class LearningAnalyticsService {
       throw new NotFoundException('No topic found for this course.');
     }
 
-    const isAll = !params.division || params.division === 'ALL' || params.division === 'All Divisions' || params.division.toLowerCase().includes('all');
-    const divisionFilter = isAll ? undefined : params.division;
+    const rawDiv = params.division ? params.division.trim() : '';
+    const isAll = !rawDiv || ['ALL', 'ALL DIVISIONS', 'BOTH', 'BOTH DIVISIONS'].includes(rawDiv.toUpperCase());
+    let allowedDivs: string[] | undefined = undefined;
+    if (!isAll) {
+      const upper = rawDiv.toUpperCase();
+      if (['CS DIV 1', 'DIV 1', 'DIV-1', 'DIV1', 'A', '1'].includes(upper)) {
+        allowedDivs = ['CS Div 1', 'DIV 1', 'A', '1'];
+      } else if (['CS DIV 2', 'DIV 2', 'DIV-2', 'DIV2', 'B', '2'].includes(upper)) {
+        allowedDivs = ['CS Div 2', 'DIV 2', 'B', '2'];
+      } else {
+        allowedDivs = [rawDiv];
+      }
+    }
 
     // Fetch registered students in the cohort/division
     const students = await this.prisma.studentProfile.findMany({
       where: {
-        ...(divisionFilter
+        ...(allowedDivs
           ? {
               authorizedStudent: {
-                division: divisionFilter,
+                division: { in: allowedDivs },
               },
             }
           : {}),

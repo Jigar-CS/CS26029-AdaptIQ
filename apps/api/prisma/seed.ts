@@ -675,7 +675,7 @@ async function main() {
       department: 'CSE',
       programName: 'B.Tech CSE',
       semester: 5,
-      division: 'A',
+      division: 'CS Div 1',
       graduationYear: 2028,
       activated: true,
     },
@@ -683,10 +683,10 @@ async function main() {
 
   // Additional pre-imported authorized students for import testing
   const sampleAuthorized = [
-    { num: '24CS002', name: 'Priya Sharma', email: 'priya@charusat.edu.in', div: 'A' },
-    { num: '24CS003', name: 'Aarav Desai', email: 'aarav@charusat.edu.in', div: 'B' },
-    { num: '24CS004', name: 'Ananya Shah', email: 'ananya@charusat.edu.in', div: 'B' },
-    { num: '24CS005', name: 'Devansh Joshi', email: 'devansh@charusat.edu.in', div: 'A' },
+    { num: '24CS002', name: 'Priya Sharma', email: 'priya@charusat.edu.in', div: 'CS Div 1' },
+    { num: '24CS003', name: 'Aarav Desai', email: 'aarav@charusat.edu.in', div: 'CS Div 1' },
+    { num: '24CS004', name: 'Ananya Shah', email: 'ananya@charusat.edu.in', div: 'CS Div 1' },
+    { num: '24CS005', name: 'Devansh Joshi', email: 'devansh@charusat.edu.in', div: 'CS Div 1' },
   ];
 
   for (const s of sampleAuthorized) {
