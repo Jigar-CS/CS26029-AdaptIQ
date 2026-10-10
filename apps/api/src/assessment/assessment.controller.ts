@@ -9,7 +9,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { AssessmentService, CreateAssessmentDto, SubmitAnswerDto } from './assessment.service';
+import { AssessmentService, CreateAssessmentDto, UpdateAssessmentDto, SubmitAnswerDto } from './assessment.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -108,6 +108,23 @@ export class AssessmentController {
     @Body('status') status: AssessmentStatus,
   ) {
     return this.assessmentService.updateStatus(assessmentId, status);
+  }
+
+  /**
+   * Faculty: Update assessment configuration (time limit/duration, title, expiration, extend window)
+   */
+  @Patch(':id')
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
+  async updateAssessment(
+    @Req() req: any,
+    @Param('id') assessmentId: string,
+    @Body() dto: UpdateAssessmentDto,
+  ) {
+    const facultyProfileId =
+      req.user?.facultyId ||
+      req.user?.facultyProfile?.id ||
+      req.user?.id;
+    return this.assessmentService.updateAssessment(assessmentId, facultyProfileId, dto);
   }
 
   /**

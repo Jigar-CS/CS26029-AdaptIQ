@@ -440,7 +440,7 @@ export class CodingService {
         testCasesPassed: passedCount,
         totalTestCases: totalCount,
         judgeDetails: JSON.stringify(judgeDetails),
-      },
+      } as any,
       include: {
         problem: { select: { title: true, slug: true, difficulty: true } },
       },

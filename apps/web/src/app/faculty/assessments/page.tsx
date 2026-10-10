@@ -37,6 +37,8 @@ import {
   Play,
   Copy,
   Trophy,
+  Sliders,
+  AlertCircle,
 } from 'lucide-react';
 import { AssessmentLeaderboardModal } from '@/components/AssessmentLeaderboardModal';
 
@@ -105,6 +107,81 @@ export default function FacultyAssessmentsPage() {
   const [filterDifficulty, setFilterDifficulty] = useState('ALL');
   const [questionSearch, setQuestionSearch] = useState('');
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+
+  // Edit assessment modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDuration, setEditDuration] = useState(30);
+  const [editPassingMarks, setEditPassingMarks] = useState(40);
+  const [editTotalMarks, setEditTotalMarks] = useState(100);
+  const [editDivision, setEditDivision] = useState<'ALL' | 'DIV 1' | 'DIV 2'>('ALL');
+  const [editAllowedAttempts, setEditAllowedAttempts] = useState(2);
+  const [editStatus, setEditStatus] = useState<string>('PUBLISHED');
+  const [editExtendMinutes, setEditExtendMinutes] = useState<number>(0);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditModal = (assessment: any) => {
+    setEditingAssessment(assessment);
+    setEditTitle(assessment.title || '');
+    setEditDescription(assessment.description || '');
+    setEditDuration(assessment.durationMinutes || 30);
+    setEditPassingMarks(assessment.passingMarks || 40);
+    setEditTotalMarks(assessment.totalMarks || 100);
+    setEditDivision(assessment.division || 'ALL');
+    setEditAllowedAttempts(assessment.allowedAttempts || 2);
+    setEditStatus(assessment.status || 'PUBLISHED');
+    setEditExtendMinutes(0);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditAssessment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssessment) return;
+
+    setSavingEdit(true);
+    try {
+      await api.patch(`/assessments/${editingAssessment.id}`, {
+        title: editTitle,
+        description: editDescription,
+        durationMinutes: Number(editDuration),
+        passingMarks: Number(editPassingMarks),
+        totalMarks: Number(editTotalMarks),
+        division: editDivision,
+        allowedAttempts: Number(editAllowedAttempts),
+        status: editStatus,
+        extendMinutes: editExtendMinutes > 0 ? Number(editExtendMinutes) : undefined,
+      });
+
+      setIsEditModalOpen(false);
+      setEditingAssessment(null);
+      await loadCourseAssessments(selectedCourseId);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update assessment');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleReopenAssessmentNow = async () => {
+    if (!editingAssessment) return;
+    setSavingEdit(true);
+    try {
+      await api.patch(`/assessments/${editingAssessment.id}`, {
+        reopen: true,
+        durationMinutes: Number(editDuration),
+        status: 'PUBLISHED',
+      });
+      setIsEditModalOpen(false);
+      setEditingAssessment(null);
+      await loadCourseAssessments(selectedCourseId);
+    } catch (err: any) {
+      alert(err.message || 'Failed to reopen assessment');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -755,8 +832,15 @@ export default function FacultyAssessmentsPage() {
                       </span>
                     </div>
 
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {a.status}
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${
+                        a.isExpired || a.status === 'COMPLETED'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${a.isExpired || a.status === 'COMPLETED' ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`} />
+                      <span>{a.isExpired || a.status === 'COMPLETED' ? 'ENDED' : a.status}</span>
                     </span>
                   </div>
 
@@ -771,6 +855,9 @@ export default function FacultyAssessmentsPage() {
                     <div>
                       <span className="text-[10px] text-slate-400 block font-medium">Duration</span>
                       <strong className="text-white font-bold">{a.durationMinutes}m</strong>
+                      <span className="text-[9px] text-slate-500 block">
+                        (+5m: {a.durationMinutes + 5}m)
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 block font-medium">Total Marks</span>
@@ -786,8 +873,17 @@ export default function FacultyAssessmentsPage() {
                   <div className="pt-2 flex items-center gap-2 border-t border-slate-800 flex-wrap">
                     <button
                       type="button"
+                      onClick={() => openEditModal(a)}
+                      className="py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                      title="Edit assessment time limit, title, status and window"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Edit Test</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => openAnalyticsModal(a.id)}
-                      className="py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5"
                     >
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>Cohort Analytics</span>
@@ -2318,6 +2414,241 @@ export default function FacultyAssessmentsPage() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Assessment & Time Limit Modal */}
+      {isEditModalOpen && editingAssessment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-[#0F172A] w-full max-w-xl rounded-3xl shadow-2xl border border-slate-700 overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700/80 bg-[#1E293B]/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-white tracking-tight">Edit Assessment &amp; Time Limit</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {editingAssessment.code} • {courses.find((c) => c.id === selectedCourseId)?.code}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700/80 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditAssessment} className="p-6 overflow-y-auto space-y-5">
+              {/* Expiration Status Indicator */}
+              <div className={`p-4 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+                editingAssessment.isExpired || editingAssessment.status === 'COMPLETED'
+                  ? 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                  : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <Clock className={`w-4 h-4 shrink-0 ${editingAssessment.isExpired || editingAssessment.status === 'COMPLETED' ? 'text-rose-400' : 'text-emerald-400'}`} />
+                  <div>
+                    <span className="font-bold block">
+                      {editingAssessment.isExpired || editingAssessment.status === 'COMPLETED'
+                        ? 'Test is currently ENDED / EXPIRED'
+                        : 'Test is currently ACTIVE'}
+                    </span>
+                    <span className="text-[11px] opacity-80 block mt-0.5">
+                      {editingAssessment.isExpired || editingAssessment.status === 'COMPLETED'
+                        ? 'Students cannot take or resume this test. Extend duration or reopen below to allow access.'
+                        : 'Students can access this test. Will automatically close 5 mins after duration.'}
+                    </span>
+                  </div>
+                </div>
+
+                {(editingAssessment.isExpired || editingAssessment.status === 'COMPLETED') && (
+                  <button
+                    type="button"
+                    onClick={handleReopenAssessmentNow}
+                    disabled={savingEdit}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 shadow-md transition"
+                  >
+                    Reopen Now
+                  </button>
+                )}
+              </div>
+
+              {/* Assessment Title */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1.5">Assessment Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Core Feature: Entire Test Time Limit / Duration */}
+              <div className="p-4 rounded-2xl bg-[#1E293B]/70 border border-indigo-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-indigo-400" />
+                      Entire Test Time Limit / Duration (Minutes)
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      The total exam countdown timer for participating students.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-500/30">
+                    {editDuration} Mins
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={5}
+                    max={300}
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(Number(e.target.value))}
+                    className="w-32 p-3 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white font-bold text-center focus:outline-none focus:border-indigo-500"
+                  />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[15, 30, 45, 60, 90, 120].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setEditDuration(mins)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${
+                          editDuration === mins
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {mins}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Expiration Buffer Notice */}
+                <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/40 text-[11px] text-indigo-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Automatic Expiration:</strong> The test window will automatically expire after{' '}
+                    <strong>{editDuration + 5} minutes</strong> ({editDuration} mins + 5 mins grace period). Once expired, students will see &quot;Test Ended&quot; and will not be able to start or resume.
+                  </span>
+                </div>
+
+                {/* Quick Extend Window */}
+                <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-medium">Quick Time Extension from Now:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[10, 15, 30].map((ext) => (
+                      <button
+                        key={ext}
+                        type="button"
+                        onClick={() => setEditExtendMinutes(ext)}
+                        className={`px-2.5 py-1 rounded-lg font-bold border text-[11px] transition ${
+                          editExtendMinutes === ext
+                            ? 'bg-emerald-600 border-emerald-500 text-white'
+                            : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        +{ext}m
+                      </button>
+                    ))}
+                    {editExtendMinutes > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEditExtendMinutes(0)}
+                        className="text-[10px] text-slate-400 hover:text-white px-1"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status & Division */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ACTIVE">ACTIVE (Open for submissions)</option>
+                    <option value="PUBLISHED">PUBLISHED (Visible to cohort)</option>
+                    <option value="COMPLETED">COMPLETED (Test Ended)</option>
+                    <option value="ARCHIVED">ARCHIVED</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">Division</label>
+                  <select
+                    value={editDivision}
+                    onChange={(e) => setEditDivision(e.target.value as any)}
+                    className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">Both Divisions (All)</option>
+                    <option value="DIV 1">Division A (DIV 1)</option>
+                    <option value="DIV 2">Division B (DIV 2)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Passing Marks & Allowed Attempts */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">Passing %</label>
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    value={editPassingMarks}
+                    onChange={(e) => setEditPassingMarks(Number(e.target.value))}
+                    className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5">Allowed Attempts</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={editAllowedAttempts}
+                    onChange={(e) => setEditAllowedAttempts(Number(e.target.value))}
+                    className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-700/80 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

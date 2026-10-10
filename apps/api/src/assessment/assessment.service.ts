@@ -39,6 +39,43 @@ export interface CreateAssessmentDto {
   examMode?: 'OBJECTIVE' | 'CODING' | 'HYBRID';
 }
 
+export interface UpdateAssessmentDto {
+  title?: string;
+  description?: string;
+  durationMinutes?: number;
+  totalMarks?: number;
+  passingMarks?: number;
+  division?: string;
+  allowedAttempts?: number;
+  scheduledStartTime?: string | Date;
+  scheduledEndTime?: string | Date;
+  status?: AssessmentStatus;
+  reopen?: boolean;
+  extendMinutes?: number;
+}
+
+export function isAssessmentExpired(assessment: {
+  status?: AssessmentStatus;
+  scheduledStartTime?: Date | null;
+  scheduledEndTime?: Date | null;
+  durationMinutes?: number;
+  createdAt?: Date;
+}): boolean {
+  if (assessment.status === AssessmentStatus.COMPLETED || assessment.status === AssessmentStatus.ARCHIVED) {
+    return true;
+  }
+  const now = new Date();
+  if (assessment.scheduledEndTime) {
+    return now > new Date(assessment.scheduledEndTime);
+  }
+  const duration = assessment.durationMinutes || 30;
+  const start = assessment.scheduledStartTime
+    ? new Date(assessment.scheduledStartTime)
+    : (assessment.createdAt ? new Date(assessment.createdAt) : now);
+  const expiry = new Date(start.getTime() + (duration + 5) * 60 * 1000);
+  return now > expiry;
+}
+
 export interface SubmitAnswerDto {
   questionId: string;
   selectedOptionId?: string;
@@ -179,6 +216,14 @@ export class AssessmentService {
       ? `💻 ${dto.title} [CODING]`
       : dto.title;
 
+    const durationMinutes = dto.durationMinutes || 30;
+    const now = new Date();
+    const scheduledStartTime = dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : now;
+    // The test automatically expires duration + 5 minutes after start (e.g. 60m test expires after 65m)
+    const scheduledEndTime = dto.scheduledEndTime
+      ? new Date(dto.scheduledEndTime)
+      : new Date(scheduledStartTime.getTime() + (durationMinutes + 5) * 60 * 1000);
+
     const assessment = await this.prisma.assessment.create({
       data: {
         title: finalTitle,
@@ -189,14 +234,14 @@ export class AssessmentService {
         type: dto.type || AssessmentType.QUIZ,
         status: AssessmentStatus.PUBLISHED,
         division: targetDivision,
-        durationMinutes: dto.durationMinutes || 30,
+        durationMinutes,
         totalMarks,
         passingMarks: dto.passingMarks || 40.0,
         totalQuestions,
         randomizeQuestions: dto.randomizeQuestions ?? false,
         allowedAttempts: dto.allowedAttempts || 2,
-        scheduledStartTime: dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null,
-        scheduledEndTime: dto.scheduledEndTime ? new Date(dto.scheduledEndTime) : null,
+        scheduledStartTime,
+        scheduledEndTime,
         questions: {
           create: combinedQuestionIds.map((qId, idx) => ({
             questionId: qId,
@@ -260,6 +305,84 @@ export class AssessmentService {
   }
 
   /**
+   * Faculty: Update assessment settings (time limit, title, status, extend window, etc.)
+   */
+  async updateAssessment(assessmentId: string, facultyProfileId: string, dto: UpdateAssessmentDto) {
+    const assessment = await this.prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      include: { course: true },
+    });
+
+    if (!assessment) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    // Permission check for faculty
+    const faculty = await this.prisma.facultyProfile.findFirst({
+      where: {
+        OR: [{ id: facultyProfileId }, { userId: facultyProfileId }],
+      },
+    });
+
+    if (faculty && faculty.courseId && assessment.courseId !== faculty.courseId) {
+      throw new ForbiddenException('You can only modify assessments for your assigned course.');
+    }
+
+    const dataToUpdate: any = {};
+    if (dto.title !== undefined) dataToUpdate.title = dto.title;
+    if (dto.description !== undefined) dataToUpdate.description = dto.description;
+    if (dto.totalMarks !== undefined) dataToUpdate.totalMarks = Number(dto.totalMarks);
+    if (dto.passingMarks !== undefined) dataToUpdate.passingMarks = Number(dto.passingMarks);
+    if (dto.division !== undefined) dataToUpdate.division = dto.division;
+    if (dto.allowedAttempts !== undefined) dataToUpdate.allowedAttempts = Number(dto.allowedAttempts);
+    if (dto.status !== undefined) dataToUpdate.status = dto.status;
+
+    let newDuration = assessment.durationMinutes;
+    if (dto.durationMinutes !== undefined && Number(dto.durationMinutes) > 0) {
+      newDuration = Number(dto.durationMinutes);
+      dataToUpdate.durationMinutes = newDuration;
+    }
+
+    const now = new Date();
+    const isCurrentlyExpired = isAssessmentExpired(assessment);
+
+    if (dto.scheduledEndTime) {
+      dataToUpdate.scheduledEndTime = new Date(dto.scheduledEndTime);
+      dataToUpdate.status = AssessmentStatus.PUBLISHED;
+    } else if (dto.extendMinutes && Number(dto.extendMinutes) > 0) {
+      const baseTime = assessment.scheduledEndTime && new Date(assessment.scheduledEndTime) > now
+        ? new Date(assessment.scheduledEndTime)
+        : now;
+      dataToUpdate.scheduledEndTime = new Date(baseTime.getTime() + Number(dto.extendMinutes) * 60 * 1000);
+      dataToUpdate.status = AssessmentStatus.PUBLISHED;
+    } else if (dto.reopen) {
+      dataToUpdate.scheduledStartTime = now;
+      dataToUpdate.scheduledEndTime = new Date(now.getTime() + (newDuration + 5) * 60 * 1000);
+      dataToUpdate.status = AssessmentStatus.PUBLISHED;
+    } else if (dto.durationMinutes !== undefined) {
+      if (isCurrentlyExpired) {
+        // If it was expired and faculty edits duration, reopen from now for new duration + 5 mins
+        dataToUpdate.scheduledStartTime = now;
+        dataToUpdate.scheduledEndTime = new Date(now.getTime() + (newDuration + 5) * 60 * 1000);
+        dataToUpdate.status = AssessmentStatus.PUBLISHED;
+      } else {
+        const start = assessment.scheduledStartTime
+          ? new Date(assessment.scheduledStartTime)
+          : new Date(assessment.createdAt);
+        dataToUpdate.scheduledEndTime = new Date(start.getTime() + (newDuration + 5) * 60 * 1000);
+      }
+    }
+
+    return this.prisma.assessment.update({
+      where: { id: assessmentId },
+      data: dataToUpdate,
+      include: {
+        course: { select: { code: true, name: true } },
+      },
+    });
+  }
+
+  /**
    * Student: Get available assessments with student attempt records
    */
   async getStudentAssessments(studentProfileId: string, courseId?: string) {
@@ -286,7 +409,7 @@ export class AssessmentService {
 
     const assessments = await this.prisma.assessment.findMany({
       where: {
-        status: { in: [AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE] },
+        status: { in: [AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE, AssessmentStatus.COMPLETED] },
         ...(courseId ? { courseId } : {}),
         ...(studentDivision
           ? {
@@ -322,6 +445,12 @@ export class AssessmentService {
         (a.description?.toLowerCase().includes('coding') ?? false) ||
         a.questions.some((q) => q.question.type === QuestionType.CODING);
 
+      const expired = isAssessmentExpired(a);
+      const expiresAt = a.scheduledEndTime
+        ? a.scheduledEndTime
+        : new Date(new Date(a.scheduledStartTime || a.createdAt).getTime() + (a.durationMinutes + 5) * 60 * 1000);
+      const canAttempt = !expired && (attemptsCount < a.allowedAttempts || !!activeSubmission);
+
       return {
         id: a.id,
         title: a.title,
@@ -331,14 +460,19 @@ export class AssessmentService {
         courseCode: a.course.code,
         courseName: a.course.name,
         type: a.type,
-        status: a.status,
+        status: expired ? 'COMPLETED' : a.status,
         durationMinutes: a.durationMinutes,
         totalMarks: a.totalMarks,
         passingMarks: a.passingMarks,
         totalQuestions: a.totalQuestions,
         allowedAttempts: a.allowedAttempts,
+        scheduledStartTime: a.scheduledStartTime,
+        scheduledEndTime: a.scheduledEndTime,
+        expiresAt,
+        isExpired: expired,
         attemptsCount,
-        hasAvailableAttempts: attemptsCount < a.allowedAttempts,
+        hasAvailableAttempts: !expired && attemptsCount < a.allowedAttempts,
+        canAttempt,
         activeSubmissionId: activeSubmission?.id || null,
         bestScore: bestSubmission ? bestSubmission.totalScore : null,
         isCodingExam,
@@ -397,6 +531,15 @@ export class AssessmentService {
 
     if (assessment.status !== AssessmentStatus.PUBLISHED && assessment.status !== AssessmentStatus.ACTIVE) {
       throw new BadRequestException('This assessment is not currently accepting attempts.');
+    }
+
+    if (isAssessmentExpired(assessment)) {
+      const endTimeStr = assessment.scheduledEndTime
+        ? new Date(assessment.scheduledEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : 'the scheduled completion time';
+      throw new BadRequestException(
+        `This test has ended and is no longer accepting attempts. The allocated test window closed at ${endTimeStr}.`,
+      );
     }
 
     const effectiveProfileId = student ? student.id : studentProfileId;

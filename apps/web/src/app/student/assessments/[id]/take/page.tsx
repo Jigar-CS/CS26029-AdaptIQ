@@ -172,6 +172,7 @@ export default function TakeAssessmentPage() {
   const [result, setResult] = useState<any>(null);
   const [resultTab, setResultTab] = useState<'leaderboard' | 'review'>('leaderboard');
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [testEndedError, setTestEndedError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // In-Browser Code Judge Workspace State
@@ -316,8 +317,18 @@ export default function TakeAssessmentPage() {
         setCodingAnswers(initialCoding);
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to start assessment');
-      router.push('/student/assessments');
+      const msg = err.message || '';
+      if (
+        msg.toLowerCase().includes('ended') ||
+        msg.toLowerCase().includes('expired') ||
+        msg.toLowerCase().includes('closed') ||
+        msg.toLowerCase().includes('concluded')
+      ) {
+        setTestEndedError(msg || 'This test has ended and is no longer accepting submissions.');
+      } else {
+        alert(msg || 'Failed to start assessment');
+        router.push('/student/assessments');
+      }
     } finally {
       setLoading(false);
     }
@@ -1131,6 +1142,32 @@ export default function TakeAssessmentPage() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white space-y-4">
         <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
         <p className="text-slate-400 text-sm font-medium">Initializing secure assessment environment...</p>
+      </div>
+    );
+  }
+
+  if (testEndedError) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white font-sans">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-950/50">
+            <Clock className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-white">Assessment Has Ended</h2>
+            <p className="text-xs text-rose-400 font-semibold mt-1">Examination Window Closed</p>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+            {testEndedError}
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/student/assessments')}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/30"
+          >
+            Return to Assessment Hub
+          </button>
+        </div>
       </div>
     );
   }
