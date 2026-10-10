@@ -36,9 +36,16 @@ import {
   Cpu,
   Play,
   Copy,
-  Trophy,
   Sliders,
   AlertCircle,
+  Upload,
+  FileUp,
+  CheckSquare,
+  Square,
+  Trophy,
+  BrainCircuit,
+  Send,
+  RotateCcw,
 } from 'lucide-react';
 import { AssessmentLeaderboardModal } from '@/components/AssessmentLeaderboardModal';
 
@@ -99,14 +106,30 @@ export default function FacultyAssessmentsPage() {
   const [newDuration, setNewDuration] = useState(30);
   const [newTotalMarks, setNewTotalMarks] = useState(100);
   const [newPassingMarks, setNewPassingMarks] = useState(40);
+  const [newStatus, setNewStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [questionsLoading, setQuestionsLoading] = useState(false);
   const [filterTopic, setFilterTopic] = useState('ALL');
   const [filterDifficulty, setFilterDifficulty] = useState('ALL');
+  const [filterQuestionType, setFilterQuestionType] = useState('ALL');
   const [questionSearch, setQuestionSearch] = useState('');
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+  const [showDraftPreview, setShowDraftPreview] = useState(false);
+
+  // Document AI / RAG Integration in Create Assessment
+  const [questionSourceWorkflow, setQuestionSourceWorkflow] = useState<'BANK' | 'DOCUMENT'>('BANK');
+  const [ragFile, setRagFile] = useState<File | null>(null);
+  const [ragExtracting, setRagExtracting] = useState<boolean>(false);
+  const [ragExtractProgress, setRagExtractProgress] = useState<string | null>(null);
+  const [ragExtractError, setRagExtractError] = useState<string | null>(null);
+  const [candidateQuestions, setCandidateQuestions] = useState<any[]>([]);
+  const [selectedCandidateIndices, setSelectedCandidateIndices] = useState<number[]>([]);
+  const [candidateTopicFilter, setCandidateTopicFilter] = useState<string>('ALL');
+  const [candidateOnlyAmbiguous, setCandidateOnlyAmbiguous] = useState<boolean>(false);
+  const [importingToAssessment, setImportingToAssessment] = useState<boolean>(false);
+  const [sourceAttributionMap, setSourceAttributionMap] = useState<Record<string, 'RAG' | 'BANK'>>({});
 
   // Edit assessment modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -180,6 +203,29 @@ export default function FacultyAssessmentsPage() {
       alert(err.message || 'Failed to reopen assessment');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handlePublishAssessment = async (assessment: any) => {
+    try {
+      await api.patch(`/assessments/${assessment.id}`, {
+        status: 'PUBLISHED',
+        reopen: true,
+      });
+      await loadCourseAssessments(selectedCourseId);
+    } catch (err: any) {
+      alert(err.message || 'Failed to publish assessment');
+    }
+  };
+
+  const handleUnpublishAssessment = async (assessment: any) => {
+    try {
+      await api.patch(`/assessments/${assessment.id}/status`, {
+        status: 'DRAFT',
+      });
+      await loadCourseAssessments(selectedCourseId);
+    } catch (err: any) {
+      alert(err.message || 'Failed to revert assessment to draft');
     }
   };
 
@@ -310,19 +356,203 @@ export default function FacultyAssessmentsPage() {
     setQuestionsLoading(true);
     setFilterTopic('ALL');
     setFilterDifficulty('ALL');
+    setFilterQuestionType('ALL');
     setQuestionSearch('');
+    setQuestionSourceWorkflow('BANK');
+    setNewStatus('DRAFT');
+    setRagFile(null);
+    setRagExtractError(null);
+    setRagExtractProgress(null);
+    setCandidateQuestions([]);
+    setSelectedCandidateIndices([]);
+    setShowDraftPreview(false);
     try {
       // Fetch approved questions directly for the selected course
       const questions = await api.get(`/courses/${selectedCourseId}/questions`);
       setAvailableQuestions(questions || []);
-      // Auto-select first 5 questions if none selected yet
-      if (questions && questions.length > 0 && selectedQuestionIds.length === 0) {
-        setSelectedQuestionIds(questions.slice(0, 5).map((q: any) => q.id));
-      }
     } catch (err) {
       console.error('Failed to load question bank', err);
     } finally {
       setQuestionsLoading(false);
+    }
+  };
+
+  const handleSelectRagFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 25 MB)
+    if (file.size > 25 * 1024 * 1024) {
+      setRagExtractError(
+        `File exceeds maximum size limit of 25 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB). Please upload a smaller document.`,
+      );
+      setRagFile(null);
+      return;
+    }
+
+    // Validate file format
+    const allowed = ['.pdf', '.txt', '.doc', '.docx'];
+    const nameLower = file.name.toLowerCase();
+    if (!allowed.some((ext) => nameLower.endsWith(ext))) {
+      setRagExtractError('Unsupported file format. Please upload a PDF, TXT, or DOCX document.');
+      setRagFile(null);
+      return;
+    }
+
+    setRagFile(file);
+    setRagExtractError(null);
+    setRagExtractProgress(null);
+  };
+
+  const handleExtractFromDocument = async () => {
+    if (!ragFile) return;
+
+    setRagExtracting(true);
+    setRagExtractError(null);
+    setRagExtractProgress(`Reading ${ragFile.name} (${(ragFile.size / 1024).toFixed(1)} KB)...`);
+
+    try {
+      let fileBase64 = '';
+      let textContent = '';
+
+      if (ragFile.type === 'text/plain' || ragFile.name.endsWith('.txt')) {
+        textContent = await ragFile.text();
+      } else {
+        setRagExtractProgress(`Encoding ${ragFile.name} for Document AI...`);
+        fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(ragFile);
+        });
+      }
+
+      setRagExtractProgress(
+        'Document AI & RAG Pipeline processing: extracting questions, choices, answers & Bloom taxonomy...',
+      );
+
+      const response: any = await api.post(
+        '/rag/extract-questions',
+        {
+          fileBase64,
+          text: textContent,
+          fileName: ragFile.name,
+          courseId: selectedCourseId,
+        },
+        { timeout: 90000 } as any,
+      );
+
+      if (Array.isArray(response) && response.length > 0) {
+        setCandidateQuestions(response);
+        // Pre-select all extracted candidate questions by default
+        setSelectedCandidateIndices(response.map((_, i) => i));
+        const ambiguousCount = response.filter((q) => q.isAmbiguous).length;
+        setRagExtractProgress(
+          `Extracted ${response.length} candidate questions!${
+            ambiguousCount > 0 ? ` (${ambiguousCount} flagged with ambiguous answers for review)` : ''
+          }`,
+        );
+
+        if (!newTitle.trim()) {
+          setNewTitle(`Assessment on ${ragFile.name.replace(/\.[^/.]+$/, '')}`);
+        }
+        if (!newCode.trim()) {
+          setNewCode(`EXAM-${Date.now().toString().slice(-4)}`);
+        }
+      } else {
+        setRagExtractError('No valid questions could be detected in this document. Please check the document format.');
+      }
+    } catch (err: any) {
+      console.error('Error extracting questions:', err);
+      setRagExtractError(err.message || 'Failed to extract questions from uploaded document.');
+      setRagExtractProgress(null);
+    } finally {
+      setRagExtracting(false);
+    }
+  };
+
+  const handleSetCandidateCorrectOption = (candidateIdx: number, optionIdx: number) => {
+    setCandidateQuestions((prev) => {
+      const copy = [...prev];
+      const targetQ = { ...copy[candidateIdx] };
+      targetQ.options = targetQ.options.map((opt: any, idx: number) => ({
+        ...opt,
+        isCorrect: idx === optionIdx,
+      }));
+      targetQ.isAmbiguous = false;
+      targetQ.explanation = targetQ.explanation?.replace(/\[Ambiguous Answer\]/i, '[Faculty Verified Answer]');
+      copy[candidateIdx] = targetQ;
+      return copy;
+    });
+  };
+
+  const toggleCandidateSelection = (candidateIdx: number) => {
+    setSelectedCandidateIndices((prev) =>
+      prev.includes(candidateIdx) ? prev.filter((i) => i !== candidateIdx) : [...prev, candidateIdx],
+    );
+  };
+
+  const handleImportCandidatesToAssessment = async () => {
+    if (candidateQuestions.length === 0 || selectedCandidateIndices.length === 0) {
+      alert('Please select at least one candidate question to import into the assessment.');
+      return;
+    }
+
+    setImportingToAssessment(true);
+    try {
+      const questionsToImport = selectedCandidateIndices.map((idx) => candidateQuestions[idx]);
+
+      const res: any = await api.post(`/rag/courses/${selectedCourseId}/import-questions`, {
+        questions: questionsToImport,
+      });
+
+      const imported = res?.questions || [];
+      if (imported.length > 0) {
+        const mapped = imported.map((q: any) => ({
+          id: q.id,
+          questionText: q.questionText,
+          difficulty: q.difficulty || 'MEDIUM',
+          bloomLevel: q.bloomLevel || 'APPLY',
+          topic: q.topic || { name: q.topic?.name || 'Document AI' },
+          options: (q.options || []).map((o: any) => ({
+            id: o.id,
+            text: o.optionText || o.text,
+            isCorrect: o.isCorrect,
+            misconception: o.misconception?.title || o.misconception,
+          })),
+          explanation: q.explanation || 'Extracted via Document AI.',
+          sourceType: 'DOCUMENT_AI',
+        }));
+
+        // Merge into available questions without duplicates
+        setAvailableQuestions((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const newItems = mapped.filter((item: any) => !existingIds.has(item.id));
+          return [...newItems, ...prev];
+        });
+
+        // Add newly imported question IDs to selectedQuestionIds
+        const newIds = mapped.map((item: any) => item.id);
+        setSelectedQuestionIds((prev) => Array.from(new Set([...prev, ...newIds])));
+
+        // Update attribution map
+        setSourceAttributionMap((prev) => {
+          const next = { ...prev };
+          newIds.forEach((id: string) => {
+            next[id] = 'RAG';
+          });
+          return next;
+        });
+
+        alert(`✓ Added ${newIds.length} Document AI questions to your assessment draft!`);
+        // Switch to Question Bank view so faculty can inspect the combined draft
+        setQuestionSourceWorkflow('BANK');
+      }
+    } catch (err: any) {
+      console.error('Failed to import candidate questions:', err);
+      alert(err.message || 'Failed to import questions to assessment draft.');
+    } finally {
+      setImportingToAssessment(false);
     }
   };
 
@@ -709,6 +939,7 @@ export default function FacultyAssessmentsPage() {
         totalMarks: Number(newTotalMarks),
         passingMarks: Number(newPassingMarks),
         examMode,
+        status: newStatus,
         questionIds: examMode === 'CODING' ? [] : selectedQuestionIds,
         codingProblems: examMode === 'OBJECTIVE' ? [] : authoredCodingProblems,
       });
@@ -717,6 +948,9 @@ export default function FacultyAssessmentsPage() {
       setNewTitle('');
       setNewCode('');
       setAuthoredCodingProblems([]);
+      setSelectedQuestionIds([]);
+      setRagFile(null);
+      setCandidateQuestions([]);
       await loadCourseAssessments(selectedCourseId);
     } catch (err: any) {
       alert(err.message || 'Failed to create assessment');
@@ -834,13 +1068,21 @@ export default function FacultyAssessmentsPage() {
 
                     <span
                       className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${
-                        a.isExpired || a.status === 'COMPLETED'
+                        a.status === 'DRAFT'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : a.isExpired || a.status === 'COMPLETED'
                           ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                           : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                       }`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${a.isExpired || a.status === 'COMPLETED' ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`} />
-                      <span>{a.isExpired || a.status === 'COMPLETED' ? 'ENDED' : a.status}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        a.status === 'DRAFT'
+                          ? 'bg-amber-400'
+                          : a.isExpired || a.status === 'COMPLETED'
+                          ? 'bg-rose-400'
+                          : 'bg-emerald-400 animate-pulse'
+                      }`} />
+                      <span>{a.status === 'DRAFT' ? 'DRAFT (Not Published)' : a.isExpired || a.status === 'COMPLETED' ? 'ENDED' : 'PUBLISHED'}</span>
                     </span>
                   </div>
 
@@ -871,6 +1113,27 @@ export default function FacultyAssessmentsPage() {
 
                   {/* Assessment Card Action Buttons */}
                   <div className="pt-2 flex items-center gap-2 border-t border-slate-800 flex-wrap">
+                    {a.status === 'DRAFT' ? (
+                      <button
+                        type="button"
+                        onClick={() => handlePublishAssessment(a)}
+                        className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
+                        title="Publish assessment now so it reflects immediately in student panels"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Publish Test</span>
+                      </button>
+                    ) : a.status === 'PUBLISHED' && !a.isExpired ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnpublishAssessment(a)}
+                        className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5"
+                        title="Revert to draft (hide from student panels)"
+                      >
+                        <span>Move to Draft</span>
+                      </button>
+                    ) : null}
+
                     <button
                       type="button"
                       onClick={() => openEditModal(a)}
@@ -1331,172 +1594,640 @@ export default function FacultyAssessmentsPage() {
                 </div>
               )}
 
-              {/* SECTION: Objective MCQ Question Bank (For OBJECTIVE and HYBRID modes) */}
+              {/* SECTION: Objective MCQ Selection & Document AI / RAG Engine (For OBJECTIVE and HYBRID modes) */}
               {(examMode === 'OBJECTIVE' || examMode === 'HYBRID') && (
-                <div className="space-y-3 pt-3 border-t border-slate-700/80">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <label className="block text-sm font-bold text-white">
-                        Select Questions from Course Question Bank
-                      </label>
-                      <span className="text-xs text-slate-400">
-                        Approved faculty questions for {courses.find((c) => c.id === selectedCourseId)?.name}
-                      </span>
+                <div className="space-y-4 pt-4 border-t border-slate-700/80">
+                  {/* Workflow Mode Selector Header */}
+                  <div className="bg-[#111827] p-4 rounded-2xl border border-indigo-500/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <BrainCircuit className="w-5 h-5 text-indigo-400" />
+                          <h4 className="text-sm font-extrabold text-white">Objective Question Composition Engine</h4>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                            {selectedQuestionIds.length} in Draft
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Choose how to compose questions: extract grounded candidate questions from course documents or browse the existing repository.
+                        </p>
+                      </div>
+
+                      {/* Source Toggle Pills */}
+                      <div className="flex items-center p-1 bg-[#0F172A] rounded-xl border border-slate-700 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setQuestionSourceWorkflow('DOCUMENT')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                            questionSourceWorkflow === 'DOCUMENT'
+                              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Document (RAG)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuestionSourceWorkflow('BANK')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                            questionSourceWorkflow === 'BANK'
+                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>Select from Question Bank</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-xl text-xs font-black bg-indigo-500/20 border border-indigo-500/40 text-indigo-300">
-                        {selectedQuestionIds.length} Selected
-                      </span>
-                      <button
-                        type="button"
-                        onClick={selectAllFiltered}
-                        className="px-3 py-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/50 rounded-lg transition"
+                    {/* Quick Source Explanatory Banner */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div
+                        onClick={() => setQuestionSourceWorkflow('DOCUMENT')}
+                        className={`p-2.5 rounded-xl border cursor-pointer transition ${
+                          questionSourceWorkflow === 'DOCUMENT'
+                            ? 'bg-blue-950/40 border-blue-500/60 text-blue-200'
+                            : 'bg-[#1E293B]/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
                       >
-                        Select All Filtered
-                      </button>
-                      <button
-                        type="button"
-                        onClick={deselectAllFiltered}
-                        className="px-3 py-1 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+                        <div className="font-bold flex items-center gap-1.5 text-white">
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Option A: Document AI & RAG Extraction</span>
+                        </div>
+                        <p className="mt-0.5 leading-snug">
+                          Upload syllabus notes, question banks, or Viva PDFs up to 25 MB. Review candidate questions and import them directly.
+                        </p>
+                      </div>
+
+                      <div
+                        onClick={() => setQuestionSourceWorkflow('BANK')}
+                        className={`p-2.5 rounded-xl border cursor-pointer transition ${
+                          questionSourceWorkflow === 'BANK'
+                            ? 'bg-indigo-950/40 border-indigo-500/60 text-indigo-200'
+                            : 'bg-[#1E293B]/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
                       >
-                        Deselect
-                      </button>
+                        <div className="font-bold flex items-center gap-1.5 text-white">
+                          <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Option B: Course Question Bank</span>
+                        </div>
+                        <p className="mt-0.5 leading-snug">
+                          Select from previously approved questions for this course with topic, difficulty, and type filtering.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Filters Row: Topic, Search, Difficulty */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 bg-[#1E293B]/80 p-3 rounded-2xl border border-slate-700">
-                    {/* Topic Filter */}
-                    <div className="sm:col-span-5">
-                      <select
-                        value={filterTopic}
-                        onChange={(e) => setFilterTopic(e.target.value)}
-                        className="w-full p-2.5 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white font-semibold focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="ALL">All Topics ({availableQuestions.length})</option>
-                        {uniqueTopics.map((top) => {
-                          const count = availableQuestions.filter((q) => q.topic?.name === top).length;
-                          return (
-                            <option key={top} value={top}>
-                              {top} ({count})
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="sm:col-span-4 relative">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                      <input
-                        type="text"
-                        value={questionSearch}
-                        onChange={(e) => setQuestionSearch(e.target.value)}
-                        placeholder="Search questions..."
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    {/* Difficulty Filter */}
-                    <div className="sm:col-span-3">
-                      <select
-                        value={filterDifficulty}
-                        onChange={(e) => setFilterDifficulty(e.target.value)}
-                        className="w-full p-2.5 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white font-semibold focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="ALL">All Levels</option>
-                        <option value="EASY">Easy</option>
-                        <option value="MEDIUM">Medium</option>
-                        <option value="HARD">Hard</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Question List */}
-                  <div className="max-h-64 overflow-y-auto space-y-2.5 border border-slate-700 rounded-2xl p-3 bg-[#0F172A]/80">
-                    {questionsLoading ? (
-                      <div className="p-10 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-                        <span>Loading approved questions...</span>
-                      </div>
-                    ) : filteredQuestions.length === 0 ? (
-                      <div className="p-10 text-center text-xs text-slate-400">
-                        No questions found matching the selected topic or search criteria.
-                      </div>
-                    ) : (
-                      filteredQuestions.map((q) => {
-                        const isSelected = selectedQuestionIds.includes(q.id);
-                        const isExpanded = expandedQuestionId === q.id;
-
-                        return (
-                          <div
-                            key={q.id}
-                            className={`rounded-2xl border transition-all overflow-hidden ${
-                              isSelected
-                                ? 'bg-[#1E293B] border-2 border-indigo-500 shadow-md shadow-indigo-500/10'
-                                : 'bg-[#1E293B]/60 border border-slate-700/80 hover:border-slate-600'
-                            }`}
+                  {/* WORKFLOW VIEW 1: Document AI & RAG Upload and Candidate Review */}
+                  {questionSourceWorkflow === 'DOCUMENT' && (
+                    <div className="space-y-3 p-4 bg-[#111827] rounded-2xl border border-blue-500/30">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                        <div>
+                          <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Upload className="w-4 h-4 text-blue-400" />
+                            <span>Document AI Question Extractor & RAG Ingestion</span>
+                          </h5>
+                          <span className="text-[11px] text-slate-400">
+                            Upload a course document (PDF, TXT, DOCX up to 25 MB) to parse candidate questions grounded in the content.
+                          </span>
+                        </div>
+                        {ragFile && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRagFile(null);
+                              setRagExtractError(null);
+                              setRagExtractProgress(null);
+                              setCandidateQuestions([]);
+                              setSelectedCandidateIndices([]);
+                            }}
+                            className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center gap-1 transition"
                           >
-                            <div
-                              onClick={() => toggleQuestionSelection(q.id)}
-                              className="p-3.5 cursor-pointer flex items-start justify-between gap-3"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-indigo-300 border border-indigo-500/30">
-                                    {q.topic?.name || 'General'}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border ${
-                                      q.difficulty === 'EASY'
-                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                        : q.difficulty === 'HARD'
-                                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                    }`}
-                                  >
-                                    {q.difficulty}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-white leading-relaxed font-semibold">
-                                  {q.questionText}
-                                </p>
-                              </div>
+                            <X className="w-3.5 h-3.5" />
+                            <span>Clear File</span>
+                          </button>
+                        )}
+                      </div>
 
-                              <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                                <div
-                                  className={`w-5 h-5 rounded-md flex items-center justify-center border-2 transition ${
-                                    isSelected
-                                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
-                                      : 'border-slate-500 bg-transparent hover:border-indigo-400'
-                                  }`}
-                                >
-                                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                </div>
-                              </div>
+                      {/* File Dropzone / Picker */}
+                      {!ragFile ? (
+                        <div className="relative border-2 border-dashed border-slate-700 hover:border-blue-500/70 rounded-2xl p-6 text-center bg-[#0B0F19]/60 transition group cursor-pointer">
+                          <input
+                            type="file"
+                            accept=".pdf,.txt,.doc,.docx,application/pdf,text/plain"
+                            onChange={handleSelectRagFile}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                          <FileUp className="w-9 h-9 text-blue-400/80 group-hover:text-blue-400 mx-auto mb-2 transition transform group-hover:-translate-y-0.5" />
+                          <p className="text-xs font-bold text-white">
+                            Click or drag and drop your course PDF or question document
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            Supports <strong className="text-blue-300">PDF, TXT, DOCX</strong> files up to <strong className="text-blue-300">25 MB</strong>
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#1E293B] rounded-xl border border-blue-500/40">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/40 shrink-0">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{ragFile.name}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {ragFile.size > 1024 * 1024
+                                  ? `${(ragFile.size / (1024 * 1024)).toFixed(2)} MB`
+                                  : `${(ragFile.size / 1024).toFixed(1)} KB`} • {ragFile.type || 'Document'}
+                              </p>
                             </div>
                           </div>
-                        );
-                      })
-                    )}
-                  </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={handleExtractFromDocument}
+                              disabled={ragExtracting}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/30 transition disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                              {ragExtracting ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Extracting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>Extract Candidate Questions</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status / Error feedback */}
+                      {ragExtractError && (
+                        <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                          <span>{ragExtractError}</span>
+                        </div>
+                      )}
+
+                      {ragExtractProgress && (
+                        <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-blue-200 text-xs flex items-center gap-2">
+                          {ragExtracting ? (
+                            <Loader2 className="w-4 h-4 shrink-0 animate-spin text-blue-400" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                          )}
+                          <span>{ragExtractProgress}</span>
+                        </div>
+                      )}
+
+                      {/* Candidate Questions Review List */}
+                      {candidateQuestions.length > 0 && (
+                        <div className="space-y-3 pt-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#0F172A] rounded-xl border border-slate-800">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-white">
+                                Candidate Questions ({candidateQuestions.length})
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                                {selectedCandidateIndices.length} Selected
+                              </span>
+                              {candidateQuestions.some((q) => q.isAmbiguous) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCandidateOnlyAmbiguous((prev) => !prev)}
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black border transition ${
+                                    candidateOnlyAmbiguous
+                                      ? 'bg-amber-400 text-amber-950 border-amber-400'
+                                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                  }`}
+                                >
+                                  ⚠️ {candidateQuestions.filter((q) => q.isAmbiguous).length} Ambiguous Keys
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCandidateIndices(candidateQuestions.map((_, i) => i))}
+                                className="px-2.5 py-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 hover:bg-blue-950/50 rounded-lg transition"
+                              >
+                                Select All ({candidateQuestions.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCandidateIndices([])}
+                                className="px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:text-white rounded-lg transition"
+                              >
+                                Deselect All
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleImportCandidatesToAssessment}
+                                disabled={importingToAssessment || selectedCandidateIndices.length === 0}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30 transition disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {importingToAssessment ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                )}
+                                <span>Add {selectedCandidateIndices.length} to Draft</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Candidate List Scroll */}
+                          <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1">
+                            {candidateQuestions
+                              .map((q, candidateIdx) => ({ q, candidateIdx }))
+                              .filter(({ q }) => (candidateOnlyAmbiguous ? q.isAmbiguous : true))
+                              .map(({ q, candidateIdx }) => {
+                                const isSelected = selectedCandidateIndices.includes(candidateIdx);
+
+                                return (
+                                  <div
+                                    key={candidateIdx}
+                                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                                      isSelected
+                                        ? 'bg-[#1E293B] border-blue-500 shadow-md shadow-blue-500/10'
+                                        : 'bg-[#1E293B]/60 border-slate-800 hover:border-slate-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex-1 space-y-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                            #{candidateIdx + 1}
+                                          </span>
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-indigo-300 border border-indigo-500/30">
+                                            {q.topic || 'Document Concepts'}
+                                          </span>
+                                          <span
+                                            className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                                              q.difficulty === 'EASY'
+                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                : q.difficulty === 'HARD'
+                                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                            }`}
+                                          >
+                                            {q.difficulty || 'MEDIUM'}
+                                          </span>
+                                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                            {q.bloomLevel || 'APPLY'}
+                                          </span>
+                                        </div>
+
+                                        <p className="text-xs font-semibold text-white leading-relaxed">
+                                          {q.questionText}
+                                        </p>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleCandidateSelection(candidateIdx)}
+                                        className={`w-5 h-5 rounded-md flex items-center justify-center border-2 transition shrink-0 ${
+                                          isSelected
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                            : 'border-slate-500 bg-transparent hover:border-blue-400'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                      </button>
+                                    </div>
+
+                                    {/* Ambiguity Alert Notice if answer was flagged */}
+                                    {q.isAmbiguous && (
+                                      <div className="px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-300 text-[11px] flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                        <span>
+                                          Ambiguous source key: click any option below to confirm the intended correct answer.
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {/* 4 Options Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                                      {(q.options || []).map((opt: any, optIdx: number) => {
+                                        const letter = String.fromCharCode(65 + optIdx);
+                                        return (
+                                          <div
+                                            key={optIdx}
+                                            onClick={() => handleSetCandidateCorrectOption(candidateIdx, optIdx)}
+                                            className={`p-2 rounded-lg border text-left cursor-pointer transition flex items-start gap-2 ${
+                                              opt.isCorrect
+                                                ? 'bg-emerald-950/70 border-emerald-400 text-emerald-100 shadow-sm'
+                                                : 'bg-[#0F172A]/80 border-slate-700/80 hover:border-slate-600 text-slate-300'
+                                            }`}
+                                          >
+                                            <span
+                                              className={`w-4 h-4 rounded text-[10px] font-black flex items-center justify-center shrink-0 ${
+                                                opt.isCorrect
+                                                  ? 'bg-emerald-400 text-emerald-950'
+                                                  : 'bg-slate-800 text-slate-400'
+                                              }`}
+                                            >
+                                              {letter}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-[11px] leading-tight break-words">{opt.text}</p>
+                                              {opt.isCorrect && (
+                                                <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wide block mt-0.5">
+                                                  ✓ Correct Answer
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {q.explanation && (
+                                      <p className="text-[11px] text-slate-400 bg-[#0B0F19]/60 p-2 rounded-lg border border-slate-800 leading-snug">
+                                        <strong className="text-slate-300">Explanation:</strong> {q.explanation}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* WORKFLOW VIEW 2: Select from Existing Course Question Bank */}
+                  {questionSourceWorkflow === 'BANK' && (
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="block text-sm font-bold text-white flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-indigo-400" />
+                            <span>Course Question Bank Repository</span>
+                          </label>
+                          <span className="text-xs text-slate-400">
+                            Approved curriculum questions for {courses.find((c) => c.id === selectedCourseId)?.name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 rounded-xl text-xs font-black bg-indigo-500/20 border border-indigo-500/40 text-indigo-300">
+                            {selectedQuestionIds.length} Selected
+                          </span>
+                          <button
+                            type="button"
+                            onClick={selectAllFiltered}
+                            className="px-3 py-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/50 rounded-lg transition"
+                          >
+                            Select All Filtered
+                          </button>
+                          <button
+                            type="button"
+                            onClick={deselectAllFiltered}
+                            className="px-3 py-1 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+                          >
+                            Deselect
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Filters Row: Topic, Search, Difficulty */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 bg-[#1E293B]/80 p-3 rounded-2xl border border-slate-700">
+                        {/* Topic Filter */}
+                        <div className="sm:col-span-5">
+                          <select
+                            value={filterTopic}
+                            onChange={(e) => setFilterTopic(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white font-semibold focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="ALL">All Topics ({availableQuestions.length})</option>
+                            {uniqueTopics.map((top) => {
+                              const count = availableQuestions.filter((q) => q.topic?.name === top).length;
+                              return (
+                                <option key={top} value={top}>
+                                  {top} ({count})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="sm:col-span-4 relative">
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                          <input
+                            type="text"
+                            value={questionSearch}
+                            onChange={(e) => setQuestionSearch(e.target.value)}
+                            placeholder="Search questions..."
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+
+                        {/* Difficulty Filter */}
+                        <div className="sm:col-span-3">
+                          <select
+                            value={filterDifficulty}
+                            onChange={(e) => setFilterDifficulty(e.target.value)}
+                            className="w-full p-2.5 text-xs bg-[#0F172A] border border-slate-600 rounded-xl text-white font-semibold focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="ALL">All Levels</option>
+                            <option value="EASY">Easy</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HARD">Hard</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Question List */}
+                      <div className="max-h-64 overflow-y-auto space-y-2.5 border border-slate-700 rounded-2xl p-3 bg-[#0F172A]/80">
+                        {questionsLoading ? (
+                          <div className="p-10 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                            <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                            <span>Loading approved questions...</span>
+                          </div>
+                        ) : filteredQuestions.length === 0 ? (
+                          <div className="p-10 text-center text-xs text-slate-400">
+                            No questions found matching the selected criteria.
+                          </div>
+                        ) : (
+                          filteredQuestions.map((q) => {
+                            const isSelected = selectedQuestionIds.includes(q.id);
+                            const isRAG = sourceAttributionMap[q.id] === 'RAG' || q.sourceType === 'DOCUMENT_AI';
+
+                            return (
+                              <div
+                                key={q.id}
+                                className={`rounded-2xl border transition-all overflow-hidden ${
+                                  isSelected
+                                    ? 'bg-[#1E293B] border-2 border-indigo-500 shadow-md shadow-indigo-500/10'
+                                    : 'bg-[#1E293B]/60 border border-slate-700/80 hover:border-slate-600'
+                                }`}
+                              >
+                                <div
+                                  onClick={() => toggleQuestionSelection(q.id)}
+                                  className="p-3.5 cursor-pointer flex items-start justify-between gap-3"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                      {isRAG && (
+                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                          📄 Document AI
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-indigo-300 border border-indigo-500/30">
+                                        {q.topic?.name || 'General'}
+                                      </span>
+                                      <span
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                                          q.difficulty === 'EASY'
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                            : q.difficulty === 'HARD'
+                                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                        }`}
+                                      >
+                                        {q.difficulty}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-white leading-relaxed font-semibold">
+                                      {q.questionText}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                                    <div
+                                      className={`w-5 h-5 rounded-md flex items-center justify-center border-2 transition ${
+                                        isSelected
+                                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
+                                          : 'border-slate-500 bg-transparent hover:border-indigo-400'
+                                      }`}
+                                    >
+                                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* UNIFIED DRAFT INSPECTION DRAWER: Displays combined questions from both sources */}
+                  {selectedQuestionIds.length > 0 && (
+                    <div className="p-3.5 bg-[#0B0F19] rounded-2xl border border-indigo-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-bold text-white">
+                            Current Assessment Draft: {selectedQuestionIds.length} Questions Selected
+                          </span>
+                          <span className="text-[11px] text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-500/30">
+                            ~{(Number(newTotalMarks) / selectedQuestionIds.length).toFixed(1)} marks each ({newTotalMarks} marks total)
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowDraftPreview((prev) => !prev)}
+                          className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition"
+                        >
+                          {showDraftPreview ? 'Hide Draft Preview' : 'Review Drafted Questions'}
+                        </button>
+                      </div>
+
+                      {showDraftPreview && (
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pt-2 border-t border-slate-800">
+                          {selectedQuestionIds.map((qId, orderIdx) => {
+                            const foundQ = availableQuestions.find((item) => item.id === qId);
+                            if (!foundQ) return null;
+                            const isRag = sourceAttributionMap[qId] === 'RAG' || foundQ.sourceType === 'DOCUMENT_AI';
+
+                            return (
+                              <div
+                                key={qId}
+                                className="flex items-center justify-between gap-2 p-2 bg-[#1E293B] rounded-xl border border-slate-700 text-xs"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    {orderIdx + 1}
+                                  </span>
+                                  {isRag && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
+                                      RAG
+                                    </span>
+                                  )}
+                                  <span className="text-white truncate font-medium">{foundQ.questionText}</span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleQuestionSelection(qId)}
+                                  className="text-slate-400 hover:text-rose-400 p-1 transition shrink-0"
+                                  title="Remove from draft"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Action buttons */}
-              <div className="pt-4 border-t border-slate-700 flex items-center justify-between">
-                <span className="text-xs text-slate-300">
-                  Target: <strong className="text-white font-bold">{newDivision === 'DIV 1' ? 'Division A (24CS001-24CS065)' : newDivision === 'DIV 2' ? 'Division B (24CS066+)' : 'Both Divisions (All)'}</strong> • {examMode === 'CODING' ? (
-                    <strong className="text-cyan-400 font-bold">{authoredCodingProblems.length} Coding Problems</strong>
-                  ) : examMode === 'HYBRID' ? (
-                    <strong className="text-purple-400 font-bold">{selectedQuestionIds.length} MCQs + {authoredCodingProblems.length} Coding Problems</strong>
-                  ) : (
-                    <strong className="text-indigo-400 font-bold">{selectedQuestionIds.length} Questions</strong>
-                  )}
-                </span>
+              {/* Action buttons & Publish Status Selection */}
+              <div className="pt-4 border-t border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-300">
+                    Target: <strong className="text-white font-bold">{newDivision === 'DIV 1' ? 'Division A' : newDivision === 'DIV 2' ? 'Division B' : 'All Divisions'}</strong> • {examMode === 'CODING' ? (
+                      <strong className="text-cyan-400 font-bold">{authoredCodingProblems.length} Problems</strong>
+                    ) : examMode === 'HYBRID' ? (
+                      <strong className="text-purple-400 font-bold">{selectedQuestionIds.length} MCQs + {authoredCodingProblems.length} Problems</strong>
+                    ) : (
+                      <strong className="text-indigo-400 font-bold">{selectedQuestionIds.length} MCQs</strong>
+                    )}
+                  </span>
 
-                <div className="flex gap-3">
+                  {/* Draft vs Published Selector */}
+                  <div className="flex items-center p-0.5 bg-[#1E293B] rounded-lg border border-slate-700 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setNewStatus('DRAFT')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition ${
+                        newStatus === 'DRAFT'
+                          ? 'bg-slate-700 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Draft Mode
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewStatus('PUBLISHED')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition ${
+                        newStatus === 'PUBLISHED'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Publish Now
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -1504,13 +2235,21 @@ export default function FacultyAssessmentsPage() {
                   >
                     Cancel
                   </button>
+
                   <button
                     type="submit"
-                    disabled={creating || (examMode === 'CODING' ? authoredCodingProblems.length === 0 : examMode === 'HYBRID' ? (selectedQuestionIds.length === 0 && authoredCodingProblems.length === 0) : selectedQuestionIds.length === 0)}
+                    disabled={
+                      creating ||
+                      (examMode === 'CODING'
+                        ? authoredCodingProblems.length === 0
+                        : examMode === 'HYBRID'
+                        ? selectedQuestionIds.length === 0 && authoredCodingProblems.length === 0
+                        : selectedQuestionIds.length === 0)
+                    }
                     className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition disabled:opacity-50 flex items-center gap-2"
                   >
                     {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>Publish Assessment</span>
+                    <span>{newStatus === 'DRAFT' ? 'Save Assessment Draft' : 'Publish Assessment'}</span>
                   </button>
                 </div>
               </div>
@@ -2584,8 +3323,9 @@ export default function FacultyAssessmentsPage() {
                     onChange={(e) => setEditStatus(e.target.value)}
                     className="w-full p-3 text-xs bg-[#1E293B] border border-slate-600 rounded-xl text-white font-medium focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="ACTIVE">ACTIVE (Open for submissions)</option>
+                    <option value="DRAFT">DRAFT (Hidden from students)</option>
                     <option value="PUBLISHED">PUBLISHED (Visible to cohort)</option>
+                    <option value="ACTIVE">ACTIVE (Open for submissions)</option>
                     <option value="COMPLETED">COMPLETED (Test Ended)</option>
                     <option value="ARCHIVED">ARCHIVED</option>
                   </select>

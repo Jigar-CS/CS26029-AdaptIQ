@@ -36,7 +36,7 @@ export class AssessmentController {
     if (req.user?.role === UserRole.FACULTY && req.user?.courseId) {
       targetCourseId = req.user.courseId;
     }
-    return this.assessmentService.getStudentAssessments(studentProfileId, targetCourseId);
+    return this.assessmentService.getStudentAssessments(studentProfileId, targetCourseId, req.user?.role);
   }
 
   /**

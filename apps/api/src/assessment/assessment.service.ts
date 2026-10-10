@@ -17,6 +17,7 @@ import {
   QuestionType,
   ProgrammingLanguage,
   LearningHistoryReason,
+  UserRole,
 } from '@prisma/client';
 
 export interface CreateAssessmentDto {
@@ -37,6 +38,7 @@ export interface CreateAssessmentDto {
   codingProblems?: CreateCodingProblemDto[];
   codingProblemIds?: string[];
   examMode?: 'OBJECTIVE' | 'CODING' | 'HYBRID';
+  status?: AssessmentStatus;
 }
 
 export interface UpdateAssessmentDto {
@@ -54,6 +56,35 @@ export interface UpdateAssessmentDto {
   extendMinutes?: number;
 }
 
+export function normalizeDivision(div?: string | null): string {
+  if (!div) return 'ALL';
+  const cleaned = div.trim().toUpperCase();
+  if (['ALL', 'ALL DIVISIONS', 'BOTH', 'BOTH DIVISIONS'].includes(cleaned)) return 'ALL';
+  if (['A', '1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'DIV A'].includes(cleaned)) return 'DIV 1';
+  if (['B', '2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'DIV B'].includes(cleaned)) return 'DIV 2';
+  return cleaned;
+}
+
+export function isDivisionCompatible(assessmentDiv?: string | null, studentDiv?: string | null): boolean {
+  const normAssess = normalizeDivision(assessmentDiv);
+  if (normAssess === 'ALL') return true;
+  if (!studentDiv) return true;
+  const normStudent = normalizeDivision(studentDiv);
+  return normAssess === normStudent;
+}
+
+export function getAllowedAssessmentDivisions(studentDiv?: string | null): string[] {
+  if (!studentDiv) return [];
+  const norm = normalizeDivision(studentDiv);
+  if (norm === 'DIV 1') {
+    return ['ALL', 'All Divisions', 'A', '1', 'DIV 1', 'DIV-1', 'DIV1', 'DIVISION 1', 'DIVISION A', 'Division A', 'Division 1', 'DIV A'];
+  }
+  if (norm === 'DIV 2') {
+    return ['ALL', 'All Divisions', 'B', '2', 'DIV 2', 'DIV-2', 'DIV2', 'DIVISION 2', 'DIVISION B', 'Division B', 'Division 2', 'DIV B'];
+  }
+  return ['ALL', studentDiv];
+}
+
 export function isAssessmentExpired(assessment: {
   status?: AssessmentStatus;
   scheduledStartTime?: Date | null;
@@ -63,6 +94,9 @@ export function isAssessmentExpired(assessment: {
 }): boolean {
   if (assessment.status === AssessmentStatus.COMPLETED || assessment.status === AssessmentStatus.ARCHIVED) {
     return true;
+  }
+  if (assessment.status === AssessmentStatus.DRAFT) {
+    return false;
   }
   const now = new Date();
   if (assessment.scheduledEndTime) {
@@ -102,13 +136,40 @@ export class AssessmentService {
   async createAssessment(facultyProfileId: string, dto: CreateAssessmentDto) {
     // Verify if faculty is restricted to their assigned subject
     let targetCourseId = dto.courseId;
-    const faculty = await this.prisma.facultyProfile.findUnique({
-      where: { id: facultyProfileId },
+
+    const resolvedCourse = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: dto.courseId },
+          { code: dto.courseId },
+          { code: dto.courseId?.toUpperCase() },
+        ],
+      },
+    });
+    if (resolvedCourse) {
+      targetCourseId = resolvedCourse.id;
+    }
+
+    let faculty = await this.prisma.facultyProfile.findFirst({
+      where: {
+        OR: [{ id: facultyProfileId }, { userId: facultyProfileId }],
+      },
       include: { course: true },
     });
+    if (!faculty) {
+      faculty = await this.prisma.facultyProfile.findFirst({
+        include: { course: true },
+      });
+    }
+    const resolvedFacultyProfileId = faculty?.id || facultyProfileId;
 
     if (faculty && faculty.courseId) {
-      if (dto.courseId && dto.courseId !== faculty.courseId) {
+      if (
+        dto.courseId &&
+        dto.courseId !== faculty.courseId &&
+        resolvedCourse?.id !== faculty.courseId &&
+        resolvedCourse?.code !== faculty.course?.code
+      ) {
         throw new ForbiddenException(
           `Unauthorized: You are assigned to teaching "${faculty.course?.name || faculty.courseId}". You can only create assessments for this assigned subject.`,
         );
@@ -197,7 +258,10 @@ export class AssessmentService {
     const validQuestionsCount = await this.prisma.question.count({
       where: {
         id: { in: combinedQuestionIds },
-        courseId: targetCourseId,
+        OR: [
+          { courseId: targetCourseId },
+          { topic: { courseId: targetCourseId } },
+        ],
       },
     });
 
@@ -218,11 +282,20 @@ export class AssessmentService {
 
     const durationMinutes = dto.durationMinutes || 30;
     const now = new Date();
-    const scheduledStartTime = dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : now;
-    // The test automatically expires duration + 5 minutes after start (e.g. 60m test expires after 65m)
+    const isDraft = (dto.status || AssessmentStatus.DRAFT) === AssessmentStatus.DRAFT;
+
+    const scheduledStartTime = dto.scheduledStartTime
+      ? new Date(dto.scheduledStartTime)
+      : isDraft
+      ? null
+      : now;
+
+    // A draft has no fixed deadline until published; a published test gets duration + 5 mins from start
     const scheduledEndTime = dto.scheduledEndTime
       ? new Date(dto.scheduledEndTime)
-      : new Date(scheduledStartTime.getTime() + (durationMinutes + 5) * 60 * 1000);
+      : isDraft
+      ? null
+      : new Date((scheduledStartTime || now).getTime() + (durationMinutes + 5) * 60 * 1000);
 
     const assessment = await this.prisma.assessment.create({
       data: {
@@ -230,9 +303,9 @@ export class AssessmentService {
         description: dto.description || (dto.examMode === 'CODING' ? 'Automated In-Browser Coding Assessment' : null),
         code: dto.code,
         courseId: targetCourseId,
-        facultyId: facultyProfileId,
+        facultyId: resolvedFacultyProfileId,
         type: dto.type || AssessmentType.QUIZ,
-        status: AssessmentStatus.PUBLISHED,
+        status: dto.status || AssessmentStatus.DRAFT,
         division: targetDivision,
         durationMinutes,
         totalMarks,
@@ -259,11 +332,32 @@ export class AssessmentService {
       },
     });
 
-    // Notify all targeted students in their respective accounts
+    // Notify all targeted students in their respective accounts only when published
+    if (assessment.status === AssessmentStatus.PUBLISHED) {
+      await this.notifyAssignedStudents(assessment);
+    }
+
+    return assessment;
+  }
+
+  /**
+   * Helper: Dispatches in-app notifications to students targeted by division
+   */
+  private async notifyAssignedStudents(assessment: any) {
     try {
-      const divisionFilter = targetDivision === 'ALL'
-        ? {}
-        : { authorizedStudent: { division: targetDivision } };
+      const targetDivision = assessment.division || 'ALL';
+      const norm = normalizeDivision(targetDivision);
+      let divisionFilter: any = {};
+      if (norm !== 'ALL') {
+        const allowed = norm === 'DIV 1'
+          ? ['DIV 1', 'A', '1', 'Division A', 'Division 1', 'DIV A']
+          : ['DIV 2', 'B', '2', 'Division B', 'Division 2', 'DIV B'];
+        divisionFilter = {
+          authorizedStudent: {
+            division: { in: allowed },
+          },
+        };
+      }
 
       const targetStudents = await this.prisma.studentProfile.findMany({
         where: divisionFilter,
@@ -271,9 +365,9 @@ export class AssessmentService {
       });
 
       if (targetStudents.length > 0) {
-        const divisionLabel = targetDivision === 'DIV 1'
+        const divisionLabel = norm === 'DIV 1'
           ? 'Division A (DIV 1)'
-          : targetDivision === 'DIV 2'
+          : norm === 'DIV 2'
           ? 'Division B (DIV 2)'
           : 'Both Divisions';
 
@@ -281,27 +375,47 @@ export class AssessmentService {
           data: targetStudents.map((s) => ({
             studentId: s.id,
             title: `New Assessment Assigned: ${assessment.title}`,
-            message: `A new ${assessment.type.toLowerCase()} (${assessment.code}) has been allocated to ${divisionLabel}. Duration: ${assessment.durationMinutes} mins.`,
+            message: `A new ${assessment.type ? assessment.type.toString().toLowerCase() : 'assessment'} (${assessment.code}) has been allocated to ${divisionLabel}. Duration: ${assessment.durationMinutes} mins.`,
             type: 'ASSESSMENT_ASSIGNED',
             metadata: JSON.stringify({ assessmentId: assessment.id, division: targetDivision }),
           })),
         });
       }
     } catch (notifErr) {
-      console.warn('Failed to dispatch student notifications for assessment:', notifErr);
+      this.logger.warn(`Failed to dispatch student notifications for assessment ${assessment.id}: ${notifErr}`);
     }
-
-    return assessment;
   }
 
   /**
    * Faculty: Publish or change status of assessment
    */
   async updateStatus(assessmentId: string, status: AssessmentStatus) {
-    return this.prisma.assessment.update({
+    const assessment = await this.prisma.assessment.findUnique({
       where: { id: assessmentId },
-      data: { status },
     });
+    if (!assessment) throw new NotFoundException('Assessment not found');
+
+    const data: any = { status };
+    if (status === AssessmentStatus.PUBLISHED) {
+      const now = new Date();
+      // If activating a draft, or if previous schedule window is expired or null, activate window starting from now
+      if (assessment.status === AssessmentStatus.DRAFT || isAssessmentExpired(assessment) || !assessment.scheduledEndTime) {
+        data.scheduledStartTime = now;
+        data.scheduledEndTime = new Date(now.getTime() + ((assessment.durationMinutes || 30) + 5) * 60 * 1000);
+      }
+    }
+
+    const updated = await this.prisma.assessment.update({
+      where: { id: assessmentId },
+      data,
+      include: { course: true },
+    });
+
+    if (status === AssessmentStatus.PUBLISHED && assessment.status !== AssessmentStatus.PUBLISHED) {
+      await this.notifyAssignedStudents(updated);
+    }
+
+    return updated;
   }
 
   /**
@@ -345,6 +459,7 @@ export class AssessmentService {
 
     const now = new Date();
     const isCurrentlyExpired = isAssessmentExpired(assessment);
+    const becomingPublished = dto.status === AssessmentStatus.PUBLISHED && assessment.status !== AssessmentStatus.PUBLISHED;
 
     if (dto.scheduledEndTime) {
       dataToUpdate.scheduledEndTime = new Date(dto.scheduledEndTime);
@@ -355,7 +470,7 @@ export class AssessmentService {
         : now;
       dataToUpdate.scheduledEndTime = new Date(baseTime.getTime() + Number(dto.extendMinutes) * 60 * 1000);
       dataToUpdate.status = AssessmentStatus.PUBLISHED;
-    } else if (dto.reopen) {
+    } else if (dto.reopen || becomingPublished || (dto.status === AssessmentStatus.PUBLISHED && isCurrentlyExpired)) {
       dataToUpdate.scheduledStartTime = now;
       dataToUpdate.scheduledEndTime = new Date(now.getTime() + (newDuration + 5) * 60 * 1000);
       dataToUpdate.status = AssessmentStatus.PUBLISHED;
@@ -373,19 +488,25 @@ export class AssessmentService {
       }
     }
 
-    return this.prisma.assessment.update({
+    const updated = await this.prisma.assessment.update({
       where: { id: assessmentId },
       data: dataToUpdate,
       include: {
         course: { select: { code: true, name: true } },
       },
     });
+
+    if (becomingPublished) {
+      await this.notifyAssignedStudents(updated);
+    }
+
+    return updated;
   }
 
   /**
    * Student: Get available assessments with student attempt records
    */
-  async getStudentAssessments(studentProfileId: string, courseId?: string) {
+  async getStudentAssessments(studentProfileId: string, courseId?: string, userRole?: UserRole) {
     // Check if the requester is a student with an assigned division
     let studentDivision: string | null = null;
     let resolvedStudentProfileId: string = studentProfileId;
@@ -407,16 +528,40 @@ export class AssessmentService {
       }
     }
 
+    let targetCourseUUID: string | undefined = undefined;
+    if (courseId) {
+      const course = await this.prisma.course.findFirst({
+        where: { OR: [{ id: courseId }, { code: courseId }] },
+      });
+      targetCourseUUID = course ? course.id : courseId;
+    }
+
+    // Role-based status filter: Faculty/Admin can view DRAFT assessments to review/publish them.
+    // Students only see PUBLISHED, ACTIVE, or COMPLETED assessments.
+    const isFacultyOrAdmin =
+      userRole === UserRole.FACULTY ||
+      userRole === UserRole.SUPER_ADMIN ||
+      userRole === UserRole.HOD;
+
+    const statusFilter = isFacultyOrAdmin
+      ? { in: [AssessmentStatus.DRAFT, AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE, AssessmentStatus.COMPLETED] }
+      : { in: [AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE, AssessmentStatus.COMPLETED] };
+
+    const allowedDivisions = (!isFacultyOrAdmin && studentDivision)
+      ? getAllowedAssessmentDivisions(studentDivision)
+      : null;
+
     const assessments = await this.prisma.assessment.findMany({
       where: {
-        status: { in: [AssessmentStatus.PUBLISHED, AssessmentStatus.ACTIVE, AssessmentStatus.COMPLETED] },
-        ...(courseId ? { courseId } : {}),
-        ...(studentDivision
+        status: statusFilter,
+        ...(targetCourseUUID ? { courseId: targetCourseUUID } : {}),
+        ...(allowedDivisions
           ? {
               OR: [
                 { division: 'ALL' },
                 { division: null },
-                { division: studentDivision },
+                { division: '' },
+                { division: { in: allowedDivisions } },
               ],
             }
           : {}),
@@ -547,9 +692,9 @@ export class AssessmentService {
 
     // Verify division eligibility if restricted
     if (assessment.division && assessment.division !== 'ALL') {
-      if (studentDiv && studentDiv !== assessment.division) {
-        const targetLabel = assessment.division === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
-        const currentLabel = studentDiv === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
+      if (!isDivisionCompatible(assessment.division, studentDiv)) {
+        const targetLabel = normalizeDivision(assessment.division) === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
+        const currentLabel = normalizeDivision(studentDiv) === 'DIV 1' ? 'Division A (DIV 1)' : 'Division B (DIV 2)';
         throw new ForbiddenException(
           `This assessment is restricted to ${targetLabel}. Your account is registered under ${currentLabel}.`,
         );

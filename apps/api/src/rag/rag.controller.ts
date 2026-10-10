@@ -78,7 +78,10 @@ export class RagController {
   @Post('extract-questions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
-  async extractQuestions(@Body() dto: ExtractQuestionsDto) {
+  async extractQuestions(@Req() req: any, @Body() dto: ExtractQuestionsDto) {
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId && dto.courseId && dto.courseId !== req.user.courseId) {
+      throw new ForbiddenException('Faculty can only extract questions for their assigned course.');
+    }
     return this.ragService.extractQuestionsFromDocument(dto);
   }
 
@@ -93,6 +96,9 @@ export class RagController {
     @Param('courseId') courseId: string,
     @Body('questions') questions: ExtractedQuestionItem[],
   ) {
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId && courseId !== req.user.courseId) {
+      throw new ForbiddenException('Faculty can only import questions into their assigned course.');
+    }
     const facultyId = req.user?.facultyId || req.user?.facultyProfile?.id || req.user?.id;
     return this.ragService.importQuestionsToCourse(courseId, questions || [], facultyId);
   }
@@ -108,6 +114,9 @@ export class RagController {
     @Param('courseId') courseId: string,
     @Body() dto: CreateAssessmentFromQuestionsDto,
   ) {
+    if (req.user?.role === UserRole.FACULTY && req.user?.courseId && courseId !== req.user.courseId) {
+      throw new ForbiddenException('Faculty can only author assessments for their assigned course.');
+    }
     const facultyId = req.user?.facultyId || req.user?.facultyProfile?.id || req.user?.id;
     return this.ragService.createAssessmentFromExtractedQuestions(courseId, dto, facultyId);
   }

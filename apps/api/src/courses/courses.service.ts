@@ -36,9 +36,20 @@ export class CoursesService {
   }
 
   async getCourseQuestions(courseId: string) {
+    const course = await this.prisma.course.findFirst({
+      where: {
+        OR: [
+          { id: courseId },
+          { code: courseId },
+          { code: courseId.toUpperCase() },
+        ],
+      },
+    });
+    const targetId = course ? course.id : courseId;
+
     return this.prisma.question.findMany({
       where: {
-        OR: [{ courseId }, { topic: { courseId } }],
+        OR: [{ courseId: targetId }, { courseId }, { topic: { courseId: targetId } }],
       },
       include: {
         topic: true,
