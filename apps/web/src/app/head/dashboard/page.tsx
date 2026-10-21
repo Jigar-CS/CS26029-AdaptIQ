@@ -13,7 +13,6 @@ import {
   GraduationCap,
   TrendingUp,
   Award,
-  Sparkles,
   CheckCircle2,
 } from 'lucide-react';
 
@@ -249,15 +248,7 @@ export default function HeadDashboard() {
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 text-blue-950 dark:text-blue-200 flex items-start gap-4">
-            <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-blue-950 dark:text-white">Institutional Governance Architecture Verified</h4>
-              <p className="text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
-                As required by Rule 4 & 5, institutional leadership dashboards allow broad high-level macro visibility across institutes, departments, and programs while maintaining role isolation.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
     </div>

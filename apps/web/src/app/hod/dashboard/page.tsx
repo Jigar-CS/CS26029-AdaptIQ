@@ -11,18 +11,11 @@ import { CounsellorAssignmentModal } from '@/components/CounsellorAssignmentModa
 import { FacultyCourseAssignmentModal } from '@/components/FacultyCourseAssignmentModal';
 import { UserRole } from '@clias/shared-types';
 import {
-  Building2,
   Users,
   TrendingUp,
   BookOpen,
-  GraduationCap,
-  Sparkles,
-  CheckCircle2,
   AlertTriangle,
-  Layers,
-  Award,
   BarChart3,
-  ShieldCheck,
 } from 'lucide-react';
 
 export default function HodDashboard() {
@@ -272,17 +265,6 @@ export default function HodDashboard() {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Architecture Guarantee */}
-          <div className="p-5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/20 text-purple-900 dark:text-purple-200 flex items-start gap-4">
-            <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-slate-900 dark:text-white">Department Learning Intelligence Model</h4>
-              <p className="text-slate-600 dark:text-purple-300/80 leading-relaxed font-sans">
-                Continuous performance evaluation and curriculum health benchmarking calculated directly from student assessment submissions and active division telemetry.
-              </p>
             </div>
           </div>
         </main>

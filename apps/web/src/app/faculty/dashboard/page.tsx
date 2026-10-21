@@ -282,16 +282,7 @@ export default function FacultyDashboard() {
             )}
           </div>
 
-          {/* Platform Status */}
-          <div className="p-5 bg-[rgba(74,111,165,0.08)] dark:bg-[rgba(106,144,197,0.06)] border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] text-[#1a2540] dark:text-[#e8edf5] flex items-start gap-4" style={{borderRadius:0}}>
-            <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-indigo-950">Faculty Console: Active & Synchronized</h4>
-              <p className="text-indigo-800/80 leading-relaxed">
-                Curriculum orchestration, AI question synthesis, automated rubric scoring, and proctoring surveillance are operational for <strong>{user?.name || 'Faculty Member'}</strong>.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
     </div>

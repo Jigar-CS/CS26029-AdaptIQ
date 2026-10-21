@@ -15,11 +15,9 @@ import {
   Award,
   Users,
   CheckCircle2,
-  Sparkles,
   Layers,
   BookOpen,
   ArrowRight,
-  ShieldCheck,
   ChevronRight,
   BarChart3,
 } from 'lucide-react';
@@ -383,16 +381,7 @@ export default function HeadProgramComparisonPage() {
             </div>
           </div>
 
-          {/* Institutional Governance Banner */}
-          <div className="p-5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 text-blue-950 dark:text-blue-200 flex items-start gap-4 shadow-xs">
-            <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-slate-900 dark:text-white">Institutional Dean & Executive Governance Enabled</h4>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                As required by institutional regulations, leadership dashboard provides comprehensive high-level macro visibility across all academic programs, curricula, and accreditation metrics while maintaining strict data governance.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
     </div>
