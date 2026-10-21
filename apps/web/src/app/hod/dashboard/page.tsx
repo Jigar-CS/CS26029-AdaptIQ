@@ -25,38 +25,12 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-interface CourseOutcome {
-  id: string;
-  code: string;
-  description: string;
-  targetAttainment: number;
-  actualAttainment: number;
-  status: string;
-  mappedQuestionsCount: number;
-  programOutcomes: {
-    poCode: string;
-    nbaCategory: string;
-    correlationLevel: number;
-  }[];
-}
-
-interface ProgramOutcomeMatrixItem {
-  code: string;
-  nbaCategory: string;
-  calculatedAttainment: number;
-  targetAttainment: number;
-  accreditationThresholdMet: boolean;
-}
-
 export default function HodDashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [obeData, setObeData] = useState<any>(null);
   const [curriculumHealth, setCurriculumHealth] = useState<any>(null);
   const [courses, setCourses] = useState<any[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [fetching, setFetching] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'obe' | 'divisions'>('obe');
   const [isCounsellorModalOpen, setIsCounsellorModalOpen] = useState(false);
   const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
 
@@ -67,11 +41,11 @@ export default function HodDashboard() {
     }
 
     if (user) {
-      loadOBEAndCurriculumData();
+      loadCurriculumData();
     }
   }, [user, loading]);
 
-  const loadOBEAndCurriculumData = async (courseId?: string) => {
+  const loadCurriculumData = async () => {
     setFetching(true);
     try {
       const [coursesRes, healthRes]: any = await Promise.all([
@@ -85,30 +59,8 @@ export default function HodDashboard() {
       }
       setCourses(courseList);
       setCurriculumHealth(healthRes);
-
-      const targetCourseId = courseId || selectedCourseId || courseList?.[0]?.id;
-      if (targetCourseId) {
-        if (!selectedCourseId || selectedCourseId !== targetCourseId) {
-          setSelectedCourseId(targetCourseId);
-        }
-        const obeRes = await api.get(`/analytics/obe/courses/${targetCourseId}/attainment`).catch(() => null);
-        setObeData(obeRes);
-      }
     } catch (e) {
       console.error('Failed to load HOD curriculum data:', e);
-    } finally {
-      setFetching(false);
-    }
-  };
-
-  const handleCourseChange = async (newCourseId: string) => {
-    setSelectedCourseId(newCourseId);
-    setFetching(true);
-    try {
-      const obeRes: any = await api.get(`/analytics/obe/courses/${newCourseId}/attainment`).catch(() => null);
-      setObeData(obeRes);
-    } catch (e) {
-      console.error('Error changing OBE course:', e);
     } finally {
       setFetching(false);
     }
@@ -173,11 +125,11 @@ export default function HodDashboard() {
               </h1>
             </div>
             <div className="readiness">
-              <p className="mono text-[8px] uppercase tracking-wider text-[#6b7fa3]">CO-PO ATTAINMENT</p>
+              <p className="mono text-[8px] uppercase tracking-wider text-[#6b7fa3]">CURRICULUM MASTERY</p>
               <strong className="font-display text-4xl text-[#1a2540] dark:text-[#f5f0e8]">
-                {obeData?.attainment ? `${Math.round(obeData.attainment)}` : '0'}<span className="font-mono text-sm text-[#e05033]">%</span>
+                {curriculumHealth?.averageMastery ? `${Math.round(curriculumHealth.averageMastery)}` : '0'}<span className="font-mono text-sm text-[#e05033]">%</span>
               </strong>
-              <p className="mono text-[8px] text-[#4a6fa5] dark:text-[#6a90c5] uppercase tracking-wider">NBA CRITERIA 3 & 4</p>
+              <p className="mono text-[8px] text-[#4a6fa5] dark:text-[#6a90c5] uppercase tracking-wider">ACADEMIC HEALTH</p>
             </div>
           </div>
 
@@ -194,9 +146,9 @@ export default function HodDashboard() {
               <div className="metric-label mono">CURRICULUM MASTERY</div>
             </div>
             <div className="metric">
-              <div className="metric-top mono"><span>03</span><span>OBE</span></div>
-              <div className="metric-value font-display text-2xl sm:text-3xl">NBA/NAAC</div>
-              <div className="metric-label mono">ACCREDITATION COMPLIANT</div>
+              <div className="metric-top mono"><span>03</span><span>DIVISIONS</span></div>
+              <div className="metric-value font-display text-2xl sm:text-3xl">2 COHORTS</div>
+              <div className="metric-label mono">BENCHMARK ACTIVE</div>
             </div>
             <div className="metric">
               <div className="metric-top mono"><span>04</span><span className="text-[#4a6fa5]">STATUS</span></div>
@@ -209,10 +161,9 @@ export default function HodDashboard() {
           <div className="priority-band">
             <div className="priority-symbol">!</div>
             <div className="priority-content">
-             
               <h2 className="font-display text-xl uppercase tracking-wide">{departmentTitle.toUpperCase()}</h2>
               <p className="text-xs text-[#8ba0c0] font-sans">
-                Outcome-Based Education metrics, NBA/NAAC CO-PO attainment matrices, and faculty workload delegation.
+                Curriculum mastery metrics, division-to-division comparative benchmarks, and faculty workload delegation.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -252,13 +203,13 @@ export default function HodDashboard() {
               color="indigo"
             />
             <MetricCard
-              title="CO Attainment Rate"
-              value={obeData?.overallCourseAttainment ? `${obeData.overallCourseAttainment}%` : '0%'}
-              subtitle="Target Threshold 70%"
+              title="Curriculum Mastery"
+              value={curriculumHealth?.averageMastery ? `${Math.round(curriculumHealth.averageMastery)}%` : '0%'}
+              subtitle="Department Average Score"
               icon={TrendingUp}
               trend={{
-                value: (obeData?.overallCourseAttainment ?? 0) >= 65 ? 'Above NBA Benchmark' : 'Awaiting Student Assessments',
-                isPositive: (obeData?.overallCourseAttainment ?? 0) >= 65,
+                value: (curriculumHealth?.averageMastery ?? 0) >= 60 ? 'Healthy Performance' : 'Requires Review',
+                isPositive: (curriculumHealth?.averageMastery ?? 0) >= 60,
               }}
               color="emerald"
             />
@@ -271,243 +222,66 @@ export default function HodDashboard() {
             />
           </div>
 
-          {/* Sub Navigation */}
-          <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6">
-            <button
-              onClick={() => setActiveTab('obe')}
-              className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
-                activeTab === 'obe'
-                  ? 'border-purple-600 dark:border-purple-400 text-purple-700 dark:text-purple-400 font-bold'
-                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <Award className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              Outcome-Based Education (CO-PO Matrix)
-            </button>
+          {/* Division Benchmarking */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-5">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-teal-600 dark:text-cyan-400" />
+                Division-to-Division Comparative Benchmark
+              </h3>
+            </div>
 
-            <button
-              onClick={() => setActiveTab('divisions')}
-              className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
-                activeTab === 'divisions'
-                  ? 'border-purple-600 dark:border-purple-400 text-purple-700 dark:text-purple-400 font-bold'
-                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              Division Comparative Benchmark
-            </button>
-          </div>
-
-          {/* TAB 1: OBE Matrix */}
-          {activeTab === 'obe' && obeData && (
-            <div className="space-y-6">
-              {/* Course Outcome Attainment Table */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                      Course Outcome (CO) Direct Attainment — {obeData.courseCode} {obeData.courseName}
-                    </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {normalizedDivisionBenchmarks.map((div: any) => (
+                <div
+                  key={div.division}
+                  className="p-6 rounded-2xl bg-slate-50/70 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-teal-500/40 dark:hover:border-cyan-500/40 transition space-y-4 shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-teal-500/10 dark:bg-cyan-500/10 border border-teal-500/20 dark:border-cyan-500/20 flex items-center justify-center font-mono font-bold text-teal-700 dark:text-cyan-400 text-xs">
+                        {div.division === 'Div 1' ? '01' : '02'}
+                      </div>
+                      <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                        {div.label}
+                      </span>
+                    </div>
+                    <span className="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700">
+                      {div.enrolledStudents} Students
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {courses.length > 0 && (
-                      <select
-                        value={selectedCourseId}
-                        onChange={(e) => handleCourseChange(e.target.value)}
-                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white dark:bg-slate-950 text-slate-900 dark:text-purple-300 border border-slate-300 dark:border-slate-800 outline-none cursor-pointer hover:border-purple-500 transition"
-                      >
-                        {courses.map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.code} — {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <span className="text-xs font-mono font-bold px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
-                      Target: 70%
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-600 dark:text-slate-400 font-medium">Average Mastery</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm font-mono">{div.averageMastery}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${div.averageMastery}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">At-Risk Students:</span>
+                    <span className={`font-bold font-mono ${div.riskCount > 2 ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {div.riskCount} Students Flagged
                     </span>
                   </div>
                 </div>
-
-                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="p-3 w-16">CO Code</th>
-                        <th className="p-3">Course Outcome Statement</th>
-                        <th className="p-3">Mapped POs</th>
-                        <th className="p-3">Target</th>
-                        <th className="p-3">Attained</th>
-                        <th className="p-3">Accreditation Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
-                      {obeData.courseOutcomes && obeData.courseOutcomes.length > 0 ? (
-                        obeData.courseOutcomes.map((co: CourseOutcome) => (
-                          <tr key={co.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                            <td className="p-3 font-bold font-mono text-purple-600 dark:text-purple-400">{co.code}</td>
-                            <td className="p-3 text-slate-800 dark:text-slate-200">{co.description}</td>
-                            <td className="p-3">
-                              <div className="flex gap-1">
-                                {co.programOutcomes.map((p, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-slate-200 dark:border-slate-700"
-                                  >
-                                    {p.poCode} ({p.correlationLevel})
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="p-3 font-mono text-slate-500 dark:text-slate-400">{co.targetAttainment}%</td>
-                            <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
-                              <div className="flex items-center gap-2">
-                                <span>{co.actualAttainment}%</span>
-                                <div className="w-16 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5">
-                                  <div
-                                    className={`h-1.5 rounded-full ${
-                                      co.actualAttainment >= co.targetAttainment ? 'bg-emerald-500' : 'bg-amber-500'
-                                    }`}
-                                    style={{ width: `${Math.min(100, co.actualAttainment)}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                  co.status === 'ATTAINED'
-                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                                }`}
-                              >
-                                {co.status.replace('_', ' ')}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-500 dark:text-slate-400">
-                            No Course Outcomes mapped for {obeData.courseCode || 'this course'} yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Program Outcome Matrix */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <Award className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                      Program Outcome (PO) Correlation Attainment Matrix (NBA Standards)
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {obeData.programOutcomesMatrix && obeData.programOutcomesMatrix.length > 0 ? (
-                    obeData.programOutcomesMatrix.map((po: ProgramOutcomeMatrixItem) => (
-                      <div
-                        key={po.code}
-                        className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-base font-bold font-mono text-purple-700 dark:text-purple-400">{po.code}</span>
-                          <span
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
-                              po.accreditationThresholdMet
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                            }`}
-                          >
-                            {po.accreditationThresholdMet ? 'Threshold Met' : 'Review Needed'}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold">{po.nbaCategory}</div>
-                        <div className="flex items-baseline justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
-                          <span className="text-xs text-slate-500 dark:text-slate-400">Calculated:</span>
-                          <span className="text-lg font-bold text-slate-900 dark:text-white font-mono">{po.calculatedAttainment}%</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-4 p-8 text-center text-slate-500 dark:text-slate-400">
-                      No Program Outcomes mapped for this course yet.
-                    </div>
-                  )}
-                </div>
-              </div>
+              ))}
             </div>
-          )}
-
-          {/* TAB 2: Division Benchmarking (Strictly 2 Divisions: Div 1 and Div 2) */}
-          {activeTab === 'divisions' && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-5">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-teal-600 dark:text-cyan-400" />
-                  Division-to-Division Comparative Benchmark
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {normalizedDivisionBenchmarks.map((div: any) => (
-                  <div
-                    key={div.division}
-                    className="p-6 rounded-2xl bg-slate-50/70 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-teal-500/40 dark:hover:border-cyan-500/40 transition space-y-4 shadow-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-teal-500/10 dark:bg-cyan-500/10 border border-teal-500/20 dark:border-cyan-500/20 flex items-center justify-center font-mono font-bold text-teal-700 dark:text-cyan-400 text-xs">
-                          {div.division === 'Div 1' ? '01' : '02'}
-                        </div>
-                        <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                          {div.label}
-                        </span>
-                      </div>
-                      <span className="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-cyan-300 border border-slate-200 dark:border-slate-700">
-                        {div.enrolledStudents} Students
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-600 dark:text-slate-400 font-medium">Average Mastery</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm font-mono">{div.averageMastery}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2.5 rounded-full transition-all duration-500"
-                          style={{ width: `${div.averageMastery}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
-                      <span className="text-slate-600 dark:text-slate-400 font-medium">At-Risk Students:</span>
-                      <span className={`font-bold font-mono ${div.riskCount > 2 ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                        {div.riskCount} Students Flagged
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Architecture Guarantee */}
           <div className="p-5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/20 text-purple-900 dark:text-purple-200 flex items-start gap-4">
             <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
-              <h4 className="font-bold text-slate-900 dark:text-white">NBA/NAAC Accreditation Continuous Improvement Model</h4>
+              <h4 className="font-bold text-slate-900 dark:text-white">Department Learning Intelligence Model</h4>
               <p className="text-slate-600 dark:text-purple-300/80 leading-relaxed font-sans">
-                As required by NBA Tier-I/II criteria, Course Outcome attainment is evaluated continuously from granular student assessment submissions rather than superficial end-of-semester subjective surveys.
+                Continuous performance evaluation and curriculum health benchmarking calculated directly from student assessment submissions and active division telemetry.
               </p>
             </div>
           </div>
@@ -518,14 +292,14 @@ export default function HodDashboard() {
       <CounsellorAssignmentModal
         isOpen={isCounsellorModalOpen}
         onClose={() => setIsCounsellorModalOpen(false)}
-        onSuccess={() => loadOBEAndCurriculumData()}
+        onSuccess={() => loadCurriculumData()}
       />
 
       {/* Faculty Course Multi-Assignment Modal */}
       <FacultyCourseAssignmentModal
         isOpen={isFacultyModalOpen}
         onClose={() => setIsFacultyModalOpen(false)}
-        onSuccess={() => loadOBEAndCurriculumData()}
+        onSuccess={() => loadCurriculumData()}
       />
     </div>
   );
