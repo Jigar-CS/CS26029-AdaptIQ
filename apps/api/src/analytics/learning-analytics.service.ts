@@ -3112,8 +3112,38 @@ export class LearningAnalyticsService {
    * Retrieves early-warning At-Risk predictive alerts for counsellors.
    */
   async getAtRiskAlerts(counsellorId?: string) {
+    let studentIdsFilter: string[] | undefined;
+
+    if (counsellorId) {
+      const counsellorUser = await this.prisma.user.findFirst({
+        where: { OR: [{ id: counsellorId }, { email: counsellorId }] },
+      });
+      const effectiveCounsellorId = counsellorUser?.id || counsellorId;
+      const assignments = await this.prisma.counsellorAssignment.findMany({
+        where: {
+          OR: [
+            { counsellorId: effectiveCounsellorId },
+            ...(counsellorUser?.email ? [{ counsellorId: counsellorUser.email }] : []),
+          ],
+        },
+        select: { studentId: true },
+      });
+      studentIdsFilter = assignments.map((a) => a.studentId);
+    }
+
+    const whereClause: any = counsellorId
+      ? {
+          OR: [
+            { counsellorId },
+            ...(studentIdsFilter && studentIdsFilter.length > 0
+              ? [{ studentId: { in: studentIdsFilter } }]
+              : []),
+          ],
+        }
+      : undefined;
+
     const alerts = await this.prisma.atRiskAlert.findMany({
-      where: counsellorId ? { counsellorId } : undefined,
+      where: whereClause,
       include: {
         student: {
           include: {
@@ -3131,11 +3161,11 @@ export class LearningAnalyticsService {
     const mapped = alerts.map((a) => ({
       id: a.id,
       studentId: a.studentId,
-      studentName: a.student.authorizedStudent.name,
-      enrollmentNumber: a.student.authorizedStudent.enrollmentNumber,
-      semester: a.student.authorizedStudent.semester,
-      division: a.student.authorizedStudent.division,
-      email: a.student.authorizedStudent.email,
+      studentName: a.student?.authorizedStudent?.name || 'Student',
+      enrollmentNumber: a.student?.authorizedStudent?.enrollmentNumber || 'N/A',
+      semester: a.student?.authorizedStudent?.semester || 1,
+      division: a.student?.authorizedStudent?.division || 'A',
+      email: a.student?.authorizedStudent?.email || a.student?.user?.email || 'N/A',
       severity: a.severity,
       status: a.status,
       triggerReason: a.triggerReason,

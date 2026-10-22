@@ -16,7 +16,8 @@ cmd = [
     '--headless=new',
     '--disable-gpu',
     '--hide-scrollbars',
-    '--window-size=1200,1670',
+    '--window-size=1200,1680',
+    '--device-scale-factor=1.5',
     f'--screenshot={out_path}',
     f'file:///{html_path}'
 ]
