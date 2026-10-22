@@ -5,6 +5,7 @@ import { AuthProvider } from '@/lib/auth-context';
 import { SidebarProvider } from '@/lib/sidebar-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { AuthGuard } from '@/components/AuthGuard';
+import { ToastProvider } from '@/lib/toast';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://clias.vercel.app'),
@@ -180,9 +181,11 @@ export default function RootLayout({
         <div className="relative z-10 min-h-screen">
           <ThemeProvider>
             <AuthProvider>
-              <SidebarProvider>
-                <AuthGuard>{children}</AuthGuard>
-              </SidebarProvider>
+              <ToastProvider>
+                <SidebarProvider>
+                  <AuthGuard>{children}</AuthGuard>
+                </SidebarProvider>
+              </ToastProvider>
             </AuthProvider>
           </ThemeProvider>
         </div>

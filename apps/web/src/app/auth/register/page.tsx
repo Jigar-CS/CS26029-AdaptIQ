@@ -18,6 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { UserRole } from '@clias/shared-types';
+import { toast } from '@/lib/toast';
 
 export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Email, 2: OTP, 3: Set Password
@@ -90,11 +91,12 @@ export default function RegisterPage() {
     setInfoMsg(null);
 
     if (!cleanIdentifier) {
-      setError(
+      const msg =
         selectedRole === UserRole.STUDENT
           ? 'Please enter your Student ID / Enrollment Number (e.g. 24CS093).'
-          : 'Please enter your Faculty ID or Official Name (e.g. dharasolanki.cse).'
-      );
+          : 'Please enter your Faculty ID or Official Name (e.g. dharasolanki.cse).';
+      setError(msg);
+      toast.error(msg, 'Required Field');
       return;
     }
 
@@ -105,11 +107,15 @@ export default function RegisterPage() {
         email,
         role: selectedRole,
       });
-      setInfoMsg(res.message || `Verification code dispatched to ${email}.`);
+      const msg = res.message || `Verification code dispatched to ${email}.`;
+      setInfoMsg(msg);
+      toast.success(msg, 'OTP Dispatched');
       setStep(2);
       setResendCountdown(30);
     } catch (err: any) {
-      setError(err.message || 'Failed to request verification code.');
+      const errMsg = err.message || 'Failed to request verification code.';
+      setError(errMsg);
+      toast.error(errMsg, 'Request Failed');
     } finally {
       setLoading(false);
     }
@@ -126,10 +132,14 @@ export default function RegisterPage() {
         email,
         role: selectedRole,
       });
-      setInfoMsg(res.message || `A new verification code has been dispatched to ${email}.`);
+      const msg = res.message || `A new verification code has been dispatched to ${email}.`;
+      setInfoMsg(msg);
+      toast.info(msg, 'Code Resent');
       setResendCountdown(30);
     } catch (err: any) {
-      setError(err.message || 'Failed to resend verification code.');
+      const errMsg = err.message || 'Failed to resend verification code.';
+      setError(errMsg);
+      toast.error(errMsg, 'Resend Failed');
     } finally {
       setLoading(false);
     }
@@ -155,9 +165,12 @@ export default function RegisterPage() {
       } else {
         setStaffDetails({ email, role: selectedRole, name: cleanIdentifier });
       }
+      toast.success('Identity verified successfully!', 'Verified');
       setStep(3);
     } catch (err: any) {
-      setError(err.message || 'Invalid or expired verification code.');
+      const errMsg = err.message || 'Invalid or expired verification code.';
+      setError(errMsg);
+      toast.error(errMsg, 'Verification Failed');
     } finally {
       setLoading(false);
     }
@@ -168,11 +181,14 @@ export default function RegisterPage() {
     e.preventDefault();
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
+      toast.error('Passwords do not match. Please re-enter your password.', 'Password Mismatch');
       return;
     }
 
     if (selectedRole === UserRole.FACULTY && !selectedCourseId) {
-      setError('Please select the teaching subject you are assigned to instruct.');
+      const msg = 'Please select the teaching subject you are assigned to instruct.';
+      setError(msg);
+      toast.warning(msg, 'Selection Required');
       return;
     }
 
@@ -191,6 +207,7 @@ export default function RegisterPage() {
 
       localStorage.setItem('clias_token', res.accessToken);
       localStorage.setItem('clias_user', JSON.stringify(res.user));
+      toast.success('Account successfully registered! Redirecting to your dashboard...', 'Registration Complete');
 
       if (selectedRole === UserRole.FACULTY) {
         router.push('/faculty/dashboard');
@@ -202,7 +219,9 @@ export default function RegisterPage() {
         router.push('/student/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || 'Registration failed.');
+      const errMsg = err.message || 'Registration failed.';
+      setError(errMsg);
+      toast.error(errMsg, 'Registration Failed');
     } finally {
       setLoading(false);
     }
@@ -267,20 +286,6 @@ export default function RegisterPage() {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-[#faf8f5] dark:bg-[#0f172a] py-8 px-6 shadow-xl border border-[#141c2e]/14 dark:border-white/10 sm:rounded-2xl sm:px-10 backdrop-blur-sm">
-          {error && (
-            <div className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {infoMsg && (
-            <div className="mb-5 p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-800 dark:text-teal-300 text-xs flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-teal-600 dark:text-teal-400" />
-              <span>{infoMsg}</span>
-            </div>
-          )}
-
           {/* STEP 1: Role Selection & Institutional ID */}
           {step === 1 && (
             <form onSubmit={handleRequestOtp} className="space-y-4">

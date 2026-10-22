@@ -118,7 +118,7 @@ body {
   border-radius: 0 !important;
 }
 
-/* Keep circular status indicator dots, loaders, and small avatars rounded */
+/* Keep circular status indicator dots, loaders, toasts, and small avatars rounded */
 .status-dot,
 .rounded-circle,
 .rounded-full,
@@ -127,6 +127,10 @@ body {
 .rounded-full.w-1,
 .rounded-full.h-1 {
   border-radius: 9999px !important;
+}
+
+.toast-card {
+  border-radius: 12px !important;
 }
 
 /* ==============================================================================
