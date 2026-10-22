@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { SidebarProvider } from '@/lib/sidebar-context';
 import { ThemeProvider } from '@/lib/theme-context';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://clias.vercel.app'),
@@ -179,7 +180,9 @@ export default function RootLayout({
         <div className="relative z-10 min-h-screen">
           <ThemeProvider>
             <AuthProvider>
-              <SidebarProvider>{children}</SidebarProvider>
+              <SidebarProvider>
+                <AuthGuard>{children}</AuthGuard>
+              </SidebarProvider>
             </AuthProvider>
           </ThemeProvider>
         </div>
