@@ -909,9 +909,14 @@ export default function CLIASHomePage() {
 
       {/* 6. Institutional Footer */}
       <footer className="relative z-10 max-w-7xl mx-auto px-6 py-8 border-t border-[rgba(74,111,165,0.2)] text-center text-xs text-[#4a6fa5] dark:text-[#6a90c5] flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">
-        <p>
-          CLIAS &copy; 2026 {universityName} &bull; CHARUSAT Learning Intelligence System
-        </p>
+        <div>
+          <p>
+            CLIAS &copy; 2026 {universityName} &bull; CHARUSAT Learning Intelligence System
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            Engineered &amp; Architected by <span className="font-semibold text-[#1a2540] dark:text-white">Jigar Sakhia</span> (Jigar), Param &amp; AdaptIQ Team
+          </p>
+        </div>
         <div className="flex items-center gap-4 text-[10px] uppercase tracking-wider">
           <span>Institutional Accreditation A+</span>
           <span>&bull;</span>

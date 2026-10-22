@@ -8,20 +8,27 @@ import { ThemeProvider } from '@/lib/theme-context';
 export const metadata: Metadata = {
   metadataBase: new URL('https://clias.vercel.app'),
   title: {
-    default: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ',
+    default: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ by Jigar Sakhia & Jigar',
     template: '%s | CLIAS — CHARUSAT',
   },
   description:
-    'CLIAS (AdaptIQ) is CHARUSAT University’s premier AI-powered smart adaptive practice, assessment, and student learning intelligence platform engineered by Jigar, Param, and team. Features Bloom’s cognitive modeling, automated proctoring, Socratic tutoring, and real-time curriculum telemetry.',
+    'CLIAS (AdaptIQ) is CHARUSAT University’s premier AI-powered smart adaptive practice, assessment, and student learning intelligence platform engineered by Jigar Sakhia (Jigar), Param, and team. Features Bloom’s cognitive modeling, automated proctoring, Socratic tutoring, and real-time curriculum telemetry.',
   keywords: [
+    'Jigar Sakhia',
+    'Jigar',
+    'Jigar Sakhia CHARUSAT',
+    'Jigar Sakhia CLIAS',
+    'Jigar Sakhia AdaptIQ',
+    'Jigar Sakhia Developer',
+    'Jigar Sakhia Engineer',
+    'Jigar CHARUSAT',
+    'Jigar CLIAS',
     'CLIAS',
     'CHARUSAT',
     'Charusat University',
     'Charotar University of Science and Technology',
     'AdaptIQ',
-    'Jigar',
     'Param',
-    'Jigar Patel',
     'Param Patel',
     'Smart Adaptive Practice',
     'Adaptive Learning Platform',
@@ -46,11 +53,12 @@ export const metadata: Metadata = {
     'Higher Education AI',
   ],
   authors: [
+    { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
     { name: 'Param' },
     { name: 'CHARUSAT University', url: 'https://www.charusat.ac.in' },
   ],
-  creator: 'Jigar, Param & The AdaptIQ Team',
+  creator: 'Jigar Sakhia (Jigar), Param & The AdaptIQ Team',
   publisher: 'CHARUSAT (Charotar University of Science and Technology)',
   applicationName: 'CLIAS',
   generator: 'Next.js',
@@ -72,9 +80,9 @@ export const metadata: Metadata = {
     canonical: 'https://clias.vercel.app',
   },
   openGraph: {
-    title: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ',
+    title: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ by Jigar Sakhia',
     description:
-      'AI-Powered Smart Adaptive Practice, Assessment & Knowledge Modeling Platform developed for CHARUSAT by Jigar & Param.',
+      'AI-Powered Smart Adaptive Practice, Assessment & Knowledge Modeling Platform developed for CHARUSAT by Jigar Sakhia (Jigar) and Param.',
     url: 'https://clias.vercel.app',
     siteName: 'CLIAS — CHARUSAT Learning Intelligence',
     locale: 'en_US',
@@ -82,9 +90,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CLIAS — CHARUSAT Smart Adaptive Learning & Assessment Platform',
+    title: 'CLIAS — CHARUSAT Smart Adaptive Learning & Assessment Platform | Jigar Sakhia',
     description:
-      'Next-generation AI learning intelligence, adaptive drills, and automated proctoring engineered for CHARUSAT by Jigar & Param.',
+      'Next-generation AI learning intelligence, adaptive drills, and automated proctoring engineered for CHARUSAT by Jigar Sakhia (Jigar) and Param.',
     creator: '@CHARUSAT',
   },
   category: 'education',
@@ -112,13 +120,20 @@ export default function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'WebApplication',
               name: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System',
-              alternateName: ['AdaptIQ', 'CLIAS CHARUSAT', 'CHARUSAT Adaptive Practice'],
+              alternateName: ['AdaptIQ', 'CLIAS CHARUSAT', 'CHARUSAT Adaptive Practice', 'AdaptIQ by Jigar Sakhia'],
               url: 'https://clias.vercel.app',
               applicationCategory: 'EducationalApplication',
               operatingSystem: 'All',
               description:
-                'AI-Powered Student Learning Intelligence, Smart Adaptive Practice, Automated Assessment, and Knowledge Modeling Platform for CHARUSAT University.',
+                'AI-Powered Student Learning Intelligence, Smart Adaptive Practice, Automated Assessment, and Knowledge Modeling Platform for CHARUSAT University engineered by Jigar Sakhia (Jigar) and Param.',
               author: [
+                {
+                  '@type': 'Person',
+                  name: 'Jigar Sakhia',
+                  alternateName: 'Jigar',
+                  url: 'https://github.com/Jigar-CS',
+                  jobTitle: 'Lead Software Engineer & Platform Architect',
+                },
                 {
                   '@type': 'Person',
                   name: 'Jigar',
@@ -135,7 +150,7 @@ export default function RootLayout({
                 url: 'https://www.charusat.ac.in',
               },
               keywords:
-                'CLIAS, CHARUSAT, AdaptIQ, Jigar, Param, Smart Adaptive Practice, AI Assessment, Socratic Tutoring, Charusat University, CSPIT, DEPSTAR',
+                'Jigar Sakhia, Jigar, CLIAS, CHARUSAT, AdaptIQ, Param, Smart Adaptive Practice, AI Assessment, Socratic Tutoring, Charusat University, CSPIT, DEPSTAR',
             }),
           }}
         />
