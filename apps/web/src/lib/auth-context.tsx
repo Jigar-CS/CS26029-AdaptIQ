@@ -30,6 +30,7 @@ interface AuthContextType {
   user: UserSession | null;
   token: string | null;
   loading: boolean;
+  isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<UserSession>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
@@ -39,9 +40,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserSession | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<UserSession | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('clias_user');
+        return stored ? JSON.parse(stored) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('clias_token');
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -80,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string): Promise<UserSession> => {
+    setIsLoggingOut(false);
     const res = await api.post('/auth/login', { email, password });
     const { accessToken, user: sessionUser } = res;
 
@@ -93,11 +111,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('clias_token');
-    localStorage.removeItem('clias_user');
-    setToken(null);
-    setUser(null);
-    router.push('/auth/login');
+    // 1. Immediately flag logging out so blur overlay with round spinner appears over current page
+    setIsLoggingOut(true);
+    try {
+      localStorage.removeItem('clias_token');
+      localStorage.removeItem('clias_user');
+      localStorage.removeItem('clias_active_role_view');
+      sessionStorage.clear();
+    } catch {}
+
+    // 2. Perform page transition while current screen remains blurred underneath
+    if (typeof window !== 'undefined') {
+      window.location.href = '/auth/login';
+    } else {
+      router.push('/auth/login');
+    }
   };
 
   const updateUser = (updates: Partial<UserSession>) => {
@@ -119,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, updateUser, hasRole }}>
+    <AuthContext.Provider value={{ user, token, loading, isLoggingOut, login, logout, updateUser, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

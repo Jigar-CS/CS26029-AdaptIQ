@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { UserRole } from '@clias/shared-types';
+import { toast } from '@/lib/toast';
 
 interface RolePreset {
   id: string;
@@ -134,6 +135,7 @@ export default function LoginPage() {
 
     try {
       const user = await login(email, password);
+      toast.success(`Welcome back, ${user.name || user.email}!`, 'Signed In');
       // Role-aware redirection
       if (user.role === UserRole.SUPER_ADMIN) {
         router.push('/admin/dashboard');
@@ -149,7 +151,9 @@ export default function LoginPage() {
         router.push('/student/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password. Please verify your credentials.');
+      const errMsg = err.message || 'Invalid email or password. Please verify your credentials.';
+      setError(errMsg);
+      toast.error(errMsg, 'Authentication Failed');
     } finally {
       setLoading(false);
     }
@@ -230,13 +234,6 @@ export default function LoginPage() {
               </span>
             </div>
           </div>
-
-          {error && (
-            <div className="mb-4 p-3 bg-[rgba(224,80,51,0.08)] border border-[rgba(224,80,51,0.3)] text-[#e05033] text-[11px] flex items-start gap-2.5 font-mono" style={{ borderRadius: 0 }}>
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-              <span>{error}</span>
-            </div>
-          )}
 
           <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
             <div>
