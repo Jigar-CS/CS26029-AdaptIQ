@@ -240,7 +240,7 @@ export class AuthService {
         role,
         student: {
           enrollmentNumber: authorized.enrollmentNumber,
-          name: authorized.name,
+          name: authorized.name && !authorized.name.startsWith('Student ') ? authorized.name : '',
           email: authorized.email,
           institute: authorized.institute,
           department: authorized.department,
@@ -302,6 +302,14 @@ export class AuthService {
         throw new NotFoundException('Authorized student record missing.');
       }
 
+      // Prefer user-entered full name if provided, else fallback to clean default
+      const studentName =
+        dto.fullName && dto.fullName.trim().length > 0
+          ? dto.fullName.trim()
+          : (authorized.name && !authorized.name.startsWith('Student ')
+              ? authorized.name
+              : `Student ${authorized.enrollmentNumber}`);
+
       // Atomically create User and StudentProfile
       const user = await this.prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
@@ -326,6 +334,7 @@ export class AuthService {
           data: {
             activated: true,
             userId: newUser.id,
+            name: studentName,
           },
         });
 
@@ -351,7 +360,7 @@ export class AuthService {
             specialization = VALUES(specialization)
         `,
           user.id,
-          authorized.name,
+          studentName,
           authorized.department,
           'Student Scholar',
           `${authorized.institute} Campus`,
@@ -362,7 +371,7 @@ export class AuthService {
       }
 
       // Send welcome onboarding email asynchronously
-      this.emailService.sendWelcome(email, authorized.name).catch((err) => {
+      this.emailService.sendWelcome(email, studentName).catch((err) => {
         this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
       });
 
@@ -376,10 +385,10 @@ export class AuthService {
           id: user.id,
           email: user.email,
           role: user.role,
-          name: authorized.name,
+          name: studentName,
           enrollmentNumber: authorized.enrollmentNumber,
           studentId: user.studentProfile.id,
-          studentDetails: authorized,
+          studentDetails: { ...authorized, name: studentName },
         },
       };
     } else {

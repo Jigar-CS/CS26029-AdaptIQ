@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   BookOpen,
   RotateCcw,
+  User,
 } from 'lucide-react';
 import { UserRole } from '@clias/shared-types';
 import { toast } from '@/lib/toast';
@@ -25,6 +26,7 @@ export default function RegisterPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STUDENT);
   const [identifier, setIdentifier] = useState('');
   const [otp, setOtp] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [studentDetails, setStudentDetails] = useState<any>(null);
@@ -160,10 +162,19 @@ export default function RegisterPage() {
 
       if (res.student) {
         setStudentDetails(res.student);
+        if (res.student.name && !res.student.name.startsWith('Student ')) {
+          setFullName(res.student.name);
+        } else {
+          setFullName('');
+        }
       } else if (res.profile) {
         setStaffDetails(res.profile);
+        if (res.profile.name) {
+          setFullName(res.profile.name);
+        }
       } else {
         setStaffDetails({ email, role: selectedRole, name: cleanIdentifier });
+        setFullName(cleanIdentifier);
       }
       toast.success('Identity verified successfully!', 'Verified');
       setStep(3);
@@ -179,6 +190,13 @@ export default function RegisterPage() {
   // Step 3: Set password and finalize registration
   const handleFinalizeRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fullName.trim()) {
+      const msg = 'Please enter your official full name.';
+      setError(msg);
+      toast.warning(msg, 'Name Required');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       toast.error('Passwords do not match. Please re-enter your password.', 'Password Mismatch');
@@ -201,7 +219,7 @@ export default function RegisterPage() {
         otp: otp.trim(),
         password,
         role: selectedRole,
-        fullName: staffDetails?.name,
+        fullName: fullName.trim(),
         courseId: selectedRole === UserRole.FACULTY ? selectedCourseId : undefined,
       });
 
@@ -502,15 +520,19 @@ export default function RegisterPage() {
                   {studentDetails && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-[#141c2e]/60 dark:text-slate-400">Name:</span>
-                        <span className="font-bold text-[#141c2e] dark:text-white">{studentDetails.name}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-[#141c2e]/60 dark:text-slate-400">Enrollment:</span>
                         <span className="font-bold font-mono text-[#dc2626]">
                           {studentDetails.enrollmentNumber}
                         </span>
                       </div>
+                      {studentDetails.department && (
+                        <div className="flex justify-between">
+                          <span className="text-[#141c2e]/60 dark:text-slate-400">Department:</span>
+                          <span className="font-medium text-[#141c2e] dark:text-white">
+                            {studentDetails.department}
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
                   {staffDetails && (
@@ -519,6 +541,28 @@ export default function RegisterPage() {
                       <span className="font-bold text-teal-700 dark:text-teal-400">{selectedRole}</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Full Name Input */}
+              <div>
+                <label className="block text-xs font-medium text-[#141c2e]/80 dark:text-slate-300 mb-1">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-[#141c2e]/40 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={
+                      selectedRole === UserRole.STUDENT
+                        ? 'Enter your official full name (e.g. Param Shah)'
+                        : 'Enter your official full name (e.g. Prof. John Doe)'
+                    }
+                    className="w-full pl-10 pr-4 py-2.5 text-xs bg-white dark:bg-slate-900 border border-[#141c2e]/20 dark:border-slate-700 text-[#141c2e] dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-[#dc2626] transition font-sans"
+                  />
                 </div>
               </div>
 

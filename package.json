@@ -13,6 +13,8 @@
     "dev": "npm run dev:api",
     "build:all": "npm --workspaces --if-present run build",
     "test": "npm --workspace=apps/api run test",
+    "studio": "npm --workspace=apps/api run studio",
+    "studio:prod": "npm --workspace=apps/api run studio:prod",
     "db:migrate": "npm --workspace=apps/api run db:migrate",
     "db:seed": "npm --workspace=apps/api run db:seed",
     "db:generate": "npm --workspace=apps/api run db:generate"
