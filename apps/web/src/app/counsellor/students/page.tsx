@@ -20,7 +20,6 @@ import {
   Calendar,
   BookOpen,
   ArrowRight,
-  ShieldCheck,
   Sparkles,
   ShieldAlert,
   Eye,
@@ -580,16 +579,7 @@ export default function CounsellorAssignedStudentsPage() {
             </div>
           </div>
 
-          {/* Privacy & Scope Architecture Guarantee */}
-          <div className="p-5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/40 text-indigo-950 dark:text-indigo-200 flex items-start gap-4 shadow-xs">
-            <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-slate-900 dark:text-white">Strict Student Mentorship Isolation Enforced</h4>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                As per institutional regulations, counsellors can view and interact solely with students mapped directly to them by the Super Admin or HOD roster. All practice, mastery, and exam proctoring violation data is cryptographically scoped at the API layer.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
 

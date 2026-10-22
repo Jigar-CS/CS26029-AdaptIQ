@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   HeartPulse,
   TrendingUp,
-  ShieldCheck,
   Sparkles,
   Clock,
   CheckCircle2,
@@ -118,26 +117,26 @@ export default function CounsellorDashboard() {
   const getSeverityBadge = (sev: string) => {
     switch (sev) {
       case 'CRITICAL':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
+        return 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30';
       case 'HIGH':
-        return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
       case 'MEDIUM':
-        return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
       default:
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
     }
   };
 
   const getStatusBadge = (st: string) => {
     switch (st) {
       case 'RESOLVED':
-        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
       case 'IN_PROGRESS':
-        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+        return 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30';
       case 'DISMISSED':
-        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+        return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30';
       default:
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+        return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30';
     }
   };
 
@@ -255,28 +254,27 @@ export default function CounsellorDashboard() {
           </div>
 
           {/* At-Risk Student Predictive Queue */}
-          <div id="alerts" className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div id="alerts" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
                   Predictive At-Risk Student Intervention Queue
                 </h3>
-               
               </div>
 
               {/* Status Filter */}
               <div className="flex items-center gap-2">
                 <Filter className="w-3.5 h-3.5 text-slate-400" />
-                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
                   {(['ALL', 'PENDING', 'IN_PROGRESS', 'RESOLVED'] as const).map((st) => (
                     <button
                       key={st}
                       onClick={() => setStatusFilter(st)}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                      className={`px-3 py-1 rounded-lg font-medium transition-colors ${
                         statusFilter === st
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-slate-200'
+                          ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
                       {st.replace('_', ' ')}
@@ -292,7 +290,7 @@ export default function CounsellorDashboard() {
                 filteredAlerts.map((alert) => (
                   <div
                     key={alert.id}
-                    className="p-5 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
+                    className="p-5 rounded-xl bg-slate-50/70 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-3.5"
                   >
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -300,10 +298,10 @@ export default function CounsellorDashboard() {
                           {alert.severity} RISK
                         </span>
                         <div>
-                          <div className="font-bold text-white text-sm flex items-center gap-2">
+                          <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
                             {alert.studentName}
-                            <span className="font-mono text-xs text-slate-400">({alert.enrollmentNumber})</span>
-                            <span className="text-[11px] font-medium text-slate-500">
+                            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">({alert.enrollmentNumber})</span>
+                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                               Sem {alert.semester} • Div {alert.division}
                             </span>
                           </div>
@@ -319,7 +317,7 @@ export default function CounsellorDashboard() {
                           <button
                             onClick={() => handleUpdateStatus(alert.id, 'IN_PROGRESS')}
                             disabled={updatingAlertId === alert.id}
-                            className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg transition-colors"
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
                           >
                             Initiate Intervention
                           </button>
@@ -329,31 +327,32 @@ export default function CounsellorDashboard() {
                           <button
                             onClick={() => handleUpdateStatus(alert.id, 'RESOLVED')}
                             disabled={updatingAlertId === alert.id}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Mark Resolved
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark Resolved</span>
                           </button>
                         )}
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs space-y-1">
-                      <div className="font-semibold text-rose-300 flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                    <div className="p-3.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/30 text-xs space-y-1">
+                      <div className="font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                         Trigger Condition:
                       </div>
-                      <p className="text-slate-300 leading-relaxed font-sans">{alert.triggerReason}</p>
+                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans">{alert.triggerReason}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-xs space-y-1">
-                      <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/30 text-xs space-y-1">
+                      <div className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                         Prescribed Pedagogical Intervention:
                       </div>
-                      <p className="text-slate-300 leading-relaxed font-sans">{alert.suggestedIntervention}</p>
+                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans">{alert.suggestedIntervention}</p>
                       {alert.actionNotes && (
-                        <div className="text-[11px] text-slate-400 pt-1 border-t border-indigo-500/10 mt-1.5">
-                          <span className="font-semibold text-slate-300">Mentorship Log: </span>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1.5 border-t border-indigo-200/60 dark:border-indigo-800/30 mt-1.5">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">Mentorship Log: </span>
                           {alert.actionNotes}
                         </div>
                       )}
@@ -361,7 +360,7 @@ export default function CounsellorDashboard() {
                   </div>
                 ))
               ) : (
-                <div className="p-8 text-center text-slate-500 text-sm">
+                <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
                   No at-risk alerts match the selected filter.
                 </div>
               )}
@@ -369,20 +368,20 @@ export default function CounsellorDashboard() {
           </div>
 
           {/* Assigned Students Roster */}
-          <div id="students" className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-4">
+          <div id="students" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">Assigned Student Knowledge Profiles</h3>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Assigned Student Knowledge Profiles</h3>
               <a
                 href="/counsellor/students"
-                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-cyan-400 dark:hover:text-cyan-300 hover:underline flex items-center gap-1"
               >
                 <span>Full Roster View</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>
-            <div className="overflow-x-auto border border-slate-800 rounded-xl">
+            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                <thead className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
                     <th className="p-3">Enrollment</th>
                     <th className="p-3">Student Name</th>
@@ -392,25 +391,25 @@ export default function CounsellorDashboard() {
                     <th className="p-3">Mentorship Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800 font-medium text-slate-300">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
                   {menteesSummary?.mentees && menteesSummary.mentees.length > 0 ? (
                     menteesSummary.mentees.map((m: any) => (
-                      <tr key={m.studentId} className="hover:bg-slate-800/50">
-                        <td className="p-3 font-mono font-bold text-white">{m.enrollmentNumber}</td>
-                        <td className="p-3 font-semibold text-white">{m.name}</td>
-                        <td className="p-3 text-slate-400 font-mono text-[11px]">{m.email}</td>
+                      <tr key={m.studentId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                        <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">{m.enrollmentNumber}</td>
+                        <td className="p-3 font-semibold text-slate-900 dark:text-white">{m.name}</td>
+                        <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">{m.email}</td>
                         <td className="p-3">
-                          <span className="font-extrabold text-indigo-400">{m.averageMastery}%</span>
+                          <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{m.averageMastery}%</span>
                         </td>
                         <td className="p-3">{m.primaryFocusTopic || 'Core Fundamentals'}</td>
                         <td className="p-3">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               m.riskLevel === 'CRITICAL'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                                 : m.riskLevel === 'WARNING'
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                             }`}
                           >
                             {m.riskLevel === 'HEALTHY' ? 'Normal Progress' : m.riskLevel}
@@ -420,7 +419,7 @@ export default function CounsellorDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-slate-500 text-xs">
+                      <td colSpan={6} className="p-6 text-center text-slate-500 dark:text-slate-400 text-xs">
                         No assigned mentees currently requiring intervention.
                       </td>
                     </tr>
@@ -430,16 +429,7 @@ export default function CounsellorDashboard() {
             </div>
           </div>
 
-          {/* Architecture Guarantee Banner */}
-          <div className="p-5 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 text-indigo-200 flex items-start gap-4">
-            <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-white">Strict Isolation Architecture Verified</h4>
-              <p className="text-indigo-300/80 leading-relaxed">
-                As specified in Rule 5 & 23, counsellors can view only students assigned directly to them through `CounsellorAssignment`. Unassigned departmental records remain completely inaccessible to safeguard student privacy.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
     </div>

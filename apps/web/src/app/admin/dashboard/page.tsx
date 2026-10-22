@@ -305,16 +305,7 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
-          {/* Security & Access Isolation Banner */}
-          <div className="p-5 bg-[rgba(74,111,165,0.08)] dark:bg-[rgba(106,144,197,0.06)] border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] text-[#1a2540] dark:text-[#e8edf5] flex items-start gap-4 shadow-sm" style={{borderRadius:0}}>
-            <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-bold text-slate-900 dark:text-white">Institutional Super Admin Governance Active</h4>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                Full privileges granted for student identity authorization, cross-institutional data reconciliation, curriculum provisioning, and global platform security configuration.
-              </p>
-            </div>
-          </div>
+
         </main>
       </div>
     </div>

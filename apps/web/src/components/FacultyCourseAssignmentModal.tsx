@@ -186,7 +186,7 @@ export function FacultyCourseAssignmentModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Faculty Course Multi-Assignment</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/20">
                   {isHOD ? 'HOD Department Console' : 'Super Admin University-Wide'}
                 </span>
               </div>
@@ -199,7 +199,7 @@ export function FacultyCourseAssignmentModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -247,7 +247,7 @@ export function FacultyCourseAssignmentModal({
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
                   >
                     {faculties.map((f) => (
-                      <option key={f.facultyId} value={f.facultyId}>
+                      <option key={f.facultyId} value={f.facultyId} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         {f.email.split('@')[0]} ({f.primaryCourse?.code || 'No Subject'})
                       </option>
                     ))}
@@ -264,7 +264,7 @@ export function FacultyCourseAssignmentModal({
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500"
                   >
                     {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={c.id} value={c.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         {c.code} — {c.name} ({c.department?.code || ''})
                       </option>
                     ))}
@@ -289,33 +289,42 @@ export function FacultyCourseAssignmentModal({
                   placeholder="Filter faculty or subject..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition"
                 />
               </div>
 
               {/* Faculty quick list */}
               <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-60">
-                {filteredFaculties.map((f) => (
-                  <button
-                    key={f.facultyId}
-                    onClick={() => setSelectedFacultyId(f.facultyId)}
-                    className={`w-full text-left p-2.5 rounded-lg border text-xs transition flex flex-col gap-1 ${
-                      selectedFacultyId === f.facultyId
-                        ? 'bg-indigo-500/10 border-indigo-500/40 text-white'
-                        : 'bg-slate-900/60 border-slate-800/80 text-slate-300 hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold truncate">{f.email.split('@')[0]}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-400">
-                        {1 + f.additionalCourses.length} {1 + f.additionalCourses.length === 1 ? 'subject' : 'subjects'}
+                {filteredFaculties.map((f) => {
+                  const isSelected = selectedFacultyId === f.facultyId;
+                  return (
+                    <button
+                      key={f.facultyId}
+                      onClick={() => setSelectedFacultyId(f.facultyId)}
+                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition flex flex-col gap-1 ${
+                        isSelected
+                          ? 'bg-indigo-50 dark:bg-indigo-500/15 border-indigo-300 dark:border-indigo-500/40 text-slate-900 dark:text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`font-semibold truncate ${isSelected ? 'text-indigo-950 dark:text-white' : 'text-slate-900 dark:text-slate-200'}`}>
+                          {f.email.split('@')[0]}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+                          isSelected
+                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {1 + f.additionalCourses.length} {1 + f.additionalCourses.length === 1 ? 'subject' : 'subjects'}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] truncate ${isSelected ? 'text-indigo-700/80 dark:text-indigo-300/80' : 'text-slate-500 dark:text-slate-400'}`}>
+                        Primary: {f.primaryCourse?.code || 'None'} • {f.email}
                       </span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 truncate">
-                      Primary: {f.primaryCourse?.code || 'None'} • {f.email}
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -323,65 +332,65 @@ export function FacultyCourseAssignmentModal({
             <div className="md:col-span-7 flex flex-col gap-4 overflow-y-auto">
               {selectedFaculty ? (
                 <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-bold">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
                         <User className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-white">{selectedFaculty.email.split('@')[0]}</h4>
-                        <p className="text-xs text-slate-400">{selectedFaculty.email}</p>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{selectedFaculty.email.split('@')[0]}</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-400">{selectedFaculty.email}</p>
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                    <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       <span>All Assigned Teaching Subjects</span>
                     </h5>
 
                     <div className="space-y-2">
                       {/* Primary Subject */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/60 border border-indigo-500/30 flex items-center justify-between">
+                      <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-slate-950/60 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-white">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">
                               {selectedFaculty.primaryCourse?.code || 'No Primary Subject'}
                             </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
                               Primary Subject
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                             {selectedFaculty.primaryCourse?.name || 'Assigned via Profile'}
                             {selectedFaculty.primaryCourse?.department && (
-                              <span className="ml-1 text-slate-500">
+                              <span className="ml-1 text-slate-500 dark:text-slate-400">
                                 • {selectedFaculty.primaryCourse.department.code} ({selectedFaculty.primaryCourse.department.institute?.code})
                               </span>
                             )}
                           </p>
                         </div>
-                        <span className="text-[10px] text-slate-500 font-mono">Permanent</span>
+                        <span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 font-mono bg-indigo-100/80 dark:bg-indigo-500/20 border border-indigo-200/80 dark:border-indigo-500/30 px-2 py-0.5 rounded-md">Permanent</span>
                       </div>
 
                       {/* Additional Subjects */}
                       {selectedFaculty.additionalCourses.map((ac) => (
                         <div
                           key={ac.assignmentId}
-                          className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 hover:border-slate-700 transition flex items-center justify-between"
+                          className="p-3.5 rounded-xl bg-white dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition flex items-center justify-between shadow-xs"
                         >
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-white">{ac.courseCode}</span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white">{ac.courseCode}</span>
+                              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
                                 Additional Subject
                               </span>
                             </div>
-                            <p className="text-xs text-slate-400 mt-0.5">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                               {ac.courseName}
                               {ac.department && (
-                                <span className="ml-1 text-slate-500">
+                                <span className="ml-1 text-slate-500 dark:text-slate-400">
                                   • {ac.department.code} ({ac.department.institute?.code})
                                 </span>
                               )}
@@ -389,7 +398,7 @@ export function FacultyCourseAssignmentModal({
                           </div>
                           <button
                             onClick={() => handleRemove(selectedFaculty.facultyId, ac.courseId)}
-                            className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition flex items-center gap-1 text-[11px]"
+                            className="p-1.5 px-2.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 transition flex items-center gap-1 text-[11px] font-medium"
                             title="Unassign this subject"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -399,7 +408,7 @@ export function FacultyCourseAssignmentModal({
                       ))}
 
                       {selectedFaculty.additionalCourses.length === 0 && (
-                        <p className="text-xs text-slate-500 italic p-3 border border-dashed border-slate-800 rounded-xl text-center">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 italic p-4 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl text-center bg-slate-50/50 dark:bg-slate-950/20">
                           No additional subjects assigned yet. Select a subject from the left panel to assign.
                         </p>
                       )}
@@ -407,7 +416,7 @@ export function FacultyCourseAssignmentModal({
                   </div>
                 </div>
               ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
                   Select a faculty member from the list to view their subjects.
                 </div>
               )}
@@ -416,13 +425,13 @@ export function FacultyCourseAssignmentModal({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-800 bg-slate-950/60">
-          <span className="text-[11px] text-slate-400">
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
+          <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
             Faculties assigned to multiple subjects can create assessments and view questions for all assigned subjects.
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition"
+            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition"
           >
             Close
           </button>

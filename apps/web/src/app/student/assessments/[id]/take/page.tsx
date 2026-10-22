@@ -1619,7 +1619,7 @@ export default function TakeAssessmentPage() {
                 className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition ${
                   resultTab === 'review'
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                 }`}
               >
                 <FileText className="w-4 h-4" />
@@ -1629,7 +1629,7 @@ export default function TakeAssessmentPage() {
               <button
                 type="button"
                 onClick={() => router.push('/student/assessments')}
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-slate-700 transition"
+                className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition"
               >
                 Return to Assessments
               </button>
@@ -1659,51 +1659,58 @@ export default function TakeAssessmentPage() {
           {/* Tab 2: Itemized Question Review */}
           {resultTab === 'review' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-slate-200">Question Itemization & Explanations</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Question Itemization & Explanations</h3>
               {result.answers?.map((ans: any, idx: number) => (
                 <div
                   key={ans.questionId}
                   className={`rounded-2xl border p-6 ${
                     ans.isCorrect
-                      ? 'bg-slate-900/90 border-emerald-500/30'
-                      : 'bg-slate-900/90 border-rose-500/30'
+                      ? 'bg-white dark:bg-slate-900 border-emerald-500/30 shadow-xs'
+                      : 'bg-white dark:bg-slate-900 border-rose-500/30 shadow-xs'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-400">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                       Question {idx + 1} • {ans.topicName}
                     </span>
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      className={`px-3 py-1 rounded-full text-xs font-bold border ${
                         ans.isCorrect
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'bg-rose-500/20 text-rose-300'
+                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
                       }`}
                     >
                       {ans.isCorrect ? `+${ans.pointsAwarded} pts (Correct)` : '0 pts (Incorrect)'}
                     </span>
                   </div>
 
-                  <p className="text-sm font-semibold text-white leading-relaxed mb-4">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed mb-4">
                     {ans.questionText}
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
-                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
-                      <span className="text-slate-400 block font-medium mb-1">Your Selection:</span>
-                      <span className={ans.isCorrect ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                        {ans.selectedOptionText}
+                    <div className={`p-3.5 rounded-xl border ${
+                      ans.isCorrect
+                        ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                        : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40'
+                    }`}>
+                      <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Your Selection:</span>
+                      <span className={`block font-bold text-sm ${ans.isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                        {ans.selectedOptionText || 'No answer selected'}
                       </span>
                     </div>
-                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
-                      <span className="text-slate-400 block font-medium mb-1">Correct Solution:</span>
-                      <span className="text-emerald-400 font-bold">{ans.correctOptionText}</span>
+                    <div className="p-3.5 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40">
+                      <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Correct Solution:</span>
+                      <span className="text-emerald-700 dark:text-emerald-400 font-bold text-sm block">{ans.correctOptionText}</span>
                     </div>
                   </div>
 
                   {ans.explanation && (
-                    <div className="bg-indigo-950/30 p-4 rounded-xl border border-indigo-500/20 text-xs text-indigo-200">
-                      <strong className="text-white block mb-1">Pedagogical Explanation:</strong>
+                    <div className="bg-indigo-50/80 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-500/20 text-xs text-slate-700 dark:text-indigo-200 leading-relaxed font-sans">
+                      <strong className="text-indigo-950 dark:text-white block mb-1 font-bold text-xs flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        Pedagogical Explanation:
+                      </strong>
                       {ans.explanation}
                     </div>
                   )}
