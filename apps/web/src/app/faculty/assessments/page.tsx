@@ -47,6 +47,7 @@ import {
   Send,
   RotateCcw,
   GraduationCap,
+  Shuffle,
 } from 'lucide-react';
 import { AssessmentLeaderboardModal } from '@/components/AssessmentLeaderboardModal';
 
@@ -243,6 +244,7 @@ export default function FacultyAssessmentsPage() {
   const [newTotalMarks, setNewTotalMarks] = useState(100);
   const [newPassingMarks, setNewPassingMarks] = useState(40);
   const [newStatus, setNewStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
+  const [newRandomizeQuestions, setNewRandomizeQuestions] = useState(true);
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
@@ -281,6 +283,7 @@ export default function FacultyAssessmentsPage() {
   const [editAllowedAttempts, setEditAllowedAttempts] = useState(2);
   const [editStatus, setEditStatus] = useState<string>('PUBLISHED');
   const [editExtendMinutes, setEditExtendMinutes] = useState<number>(0);
+  const [editRandomizeQuestions, setEditRandomizeQuestions] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const selectedCourse = courses.find((c) => c.id === selectedCourseId);
@@ -299,6 +302,7 @@ export default function FacultyAssessmentsPage() {
     setEditAllowedAttempts(assessment.allowedAttempts || 2);
     setEditStatus(assessment.status || 'PUBLISHED');
     setEditExtendMinutes(0);
+    setEditRandomizeQuestions(assessment.randomizeQuestions !== false);
     setIsEditModalOpen(true);
   };
 
@@ -320,6 +324,7 @@ export default function FacultyAssessmentsPage() {
         allowedAttempts: Number(editAllowedAttempts),
         status: editStatus,
         extendMinutes: editExtendMinutes > 0 ? Number(editExtendMinutes) : undefined,
+        randomizeQuestions: editRandomizeQuestions,
       });
 
       setIsEditModalOpen(false);
@@ -1118,6 +1123,7 @@ export default function FacultyAssessmentsPage() {
         passingMarks: Number(newPassingMarks),
         examMode,
         status: newStatus,
+        randomizeQuestions: newRandomizeQuestions,
         questionIds: examMode === 'CODING' ? [] : selectedQuestionIds,
         codingProblems: examMode === 'OBJECTIVE' ? [] : authoredCodingProblems,
       });
@@ -1887,6 +1893,33 @@ export default function FacultyAssessmentsPage() {
                     className="w-full p-2.5 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-[#4a6fa5]"
                   />
                 </div>
+              </div>
+
+              {/* Anti-Cheating Question & Option Jumbling Setting */}
+              <div className="p-3.5 bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="font-display text-xs uppercase tracking-wider text-slate-900 dark:text-white font-bold">
+                      Anti-Cheating: Randomize Question &amp; Option Order
+                    </span>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded border border-emerald-500/30">
+                      ANTI-CHEAT ON
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newRandomizeQuestions}
+                      onChange={(e) => setNewRandomizeQuestions(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 font-sans leading-relaxed">
+                  Questions (Objective, Coding, and Hybrid) and MCQ options are jumbled into unique deterministic sequences for each student. Two students sitting adjacent to each other will never see questions in the same order.
+                </p>
               </div>
 
               {/* SECTION: Coding Problem Authoring & Management (For CODING and HYBRID modes) */}
@@ -3834,6 +3867,33 @@ export default function FacultyAssessmentsPage() {
                     className="w-full p-3 text-xs bg-white dark:bg-[#1E293B] border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-medium focus:outline-none focus:border-indigo-500 shadow-xs"
                   />
                 </div>
+              </div>
+
+              {/* Anti-Cheating Question & Option Jumbling Setting */}
+              <div className="p-3.5 bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Anti-Cheating: Randomize Question &amp; Option Order
+                    </span>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded border border-emerald-500/30">
+                      ANTI-CHEAT ON
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editRandomizeQuestions}
+                      onChange={(e) => setEditRandomizeQuestions(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 font-sans leading-relaxed">
+                  When enabled, questions (Objective, Coding, and Hybrid) and MCQ options are jumbled into unique deterministic sequences for each student. Adjacent students will not receive questions in the same sequence.
+                </p>
               </div>
 
               {/* Action Buttons */}

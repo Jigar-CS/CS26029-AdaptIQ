@@ -51,6 +51,17 @@ interface SkillGap {
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
+interface PillarBreakdown {
+  domainCoveragePct: number;
+  verifiedCompetencyPct: number;
+  volumeConfidencePct: number;
+  problemDepthPct: number;
+  mockValidationPct: number;
+  totalQuestionsAttempted: number;
+  practicedSkillsCount: number;
+  totalRequiredSkillsCount: number;
+}
+
 interface GapAnalysis {
   roleType: string;
   roleTitle: string;
@@ -61,6 +72,7 @@ interface GapAnalysis {
   mockTestsTaken: number;
   avgMockScore: number;
   personalizedRoadmap: string[];
+  pillarBreakdown?: PillarBreakdown;
 }
 
 interface MockExam {
@@ -321,6 +333,163 @@ export default function StudentPlacementPage() {
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
                     <CheckCircle className="w-3.5 h-3.5" />
                     AI Proctoring Audit Active
+                  </div>
+                </div>
+              </div>
+
+              {/* 5-Pillar Placement Readiness Index (PRI) Breakdown Panel */}
+              <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        5-Pillar Placement Readiness Index (PRI)
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
+                        ANTI-INFLATION AUDIT ACTIVE
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sans">
+                      Authentic hiring readiness computed across curriculum breadth, demonstrated skill mastery, sample size confidence, question rigor, and proctored simulations.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+                    <span>Overall Index:</span>
+                    <strong className="text-sm font-bold text-slate-900 dark:text-white">
+                      {analysis?.readinessScore ?? 0}%
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  {/* Pillar 1 */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                        1. Domain Coverage (35%)
+                      </span>
+                      <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {analysis?.pillarBreakdown?.domainCoveragePct ?? 0}%
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        ({analysis?.pillarBreakdown?.practicedSkillsCount ?? 0}/{analysis?.pillarBreakdown?.totalRequiredSkillsCount ?? 0} topics)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-purple-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(analysis?.pillarBreakdown?.domainCoveragePct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Percentage of role syllabus pillars actively attempted.
+                    </p>
+                  </div>
+
+                  {/* Pillar 2 */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                        2. Verified Mastery (30%)
+                      </span>
+                      <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {analysis?.pillarBreakdown?.verifiedCompetencyPct ?? 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(analysis?.pillarBreakdown?.verifiedCompetencyPct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Score earned in practiced topics. Untouched skills earn 0%.
+                    </p>
+                  </div>
+
+                  {/* Pillar 3 */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                        3. Volume Confidence (15%)
+                      </span>
+                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {analysis?.pillarBreakdown?.volumeConfidencePct ?? 0}%
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        ({analysis?.pillarBreakdown?.totalQuestionsAttempted ?? 0} solved)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(analysis?.pillarBreakdown?.volumeConfidencePct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Statistical sample-size confidence (scales with question count).
+                    </p>
+                  </div>
+
+                  {/* Pillar 4 */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                        4. Problem Depth (10%)
+                      </span>
+                      <Code className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {analysis?.pillarBreakdown?.problemDepthPct ?? 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-cyan-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(analysis?.pillarBreakdown?.problemDepthPct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Interview rigor weighting: Easy (0.8x), Medium (1.2x), Hard (1.5x).
+                    </p>
+                  </div>
+
+                  {/* Pillar 5 */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                        5. Mock Validation (10%)
+                      </span>
+                      <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {analysis?.pillarBreakdown?.mockValidationPct ?? 0}%
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        ({analysis?.mockTestsTaken ?? 0} taken)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(analysis?.pillarBreakdown?.mockValidationPct ?? 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      Proctored interview simulations and timed exams.
+                    </p>
                   </div>
                 </div>
               </div>

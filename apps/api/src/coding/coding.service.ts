@@ -884,11 +884,13 @@ CRITICAL RULES FOR AUTOMATED CODE JUDGE:
 }`;
 
     const modelsToTry = [
-      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
+      'gemini-3-flash-preview',
       'gemini-flash-lite-latest',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
       'gemini-3.8-flash',
-      'gemini-flash-latest',
     ];
 
     for (const model of modelsToTry) {
@@ -902,9 +904,12 @@ CRITICAL RULES FOR AUTOMATED CODE JUDGE:
             generationConfig: {
               temperature: 0.2,
               responseMimeType: 'application/json',
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
             },
           }),
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(15000),
         });
 
         if (!res.ok) {

@@ -481,13 +481,18 @@ export default function PracticePage() {
       });
 
       if (res?.question) {
+        if (res.question.topicId) {
+          setSelectedTopicId(res.question.topicId);
+        }
         const sessionRes = await api.post('/practice/sessions', {
           courseId: selectedCourseId,
           topicId: res.question.topicId,
           difficulty: selectedDifficulty,
         });
 
-        setActiveSession(sessionRes.session || { id: 'ai-session-' + Date.now() });
+        setActiveSession(
+          sessionRes.session || { id: 'ai-session-' + Date.now(), topicId: res.question.topicId }
+        );
         setCurrentQuestion(res.question);
         if (res.question.id) {
           setAttemptedQuestionIds([res.question.id]);
@@ -633,21 +638,25 @@ export default function PracticePage() {
       const excludeQuery = attemptedQuestionIds.length > 0 ? `&excludeIds=${attemptedQuestionIds.join(',')}` : '';
       const diffQuery = !adaptiveMode ? `&difficulty=${selectedDifficulty}` : '';
 
-      if (selectedTopicId) {
-        const sessionQuery = activeSession?.id ? `&sessionId=${activeSession.id}` : '';
-        const adaptRes = await api.get(
-          `/adaptive/next-question?topicId=${selectedTopicId}&courseId=${selectedCourseId}${diffQuery}${excludeQuery}${sessionQuery}`
-        );
-        if (adaptRes?.question) {
-          setCurrentQuestion(adaptRes.question);
-          setCurrentQuestionIndex((prev) => prev + 1);
-          setAttemptedQuestionIds((prev) => [...prev, adaptRes.question.id]);
-          if (adaptRes.calibration) {
-            setCalibrationData(adaptRes.calibration);
-          }
-          return;
+      const effectiveTopicId = selectedTopicId || activeSession?.topicId;
+      const sessionQuery = activeSession?.id ? `&sessionId=${activeSession.id}` : '';
+      const topicQuery = effectiveTopicId ? `&topicId=${effectiveTopicId}` : '';
+
+      // Primary: Adaptive Engine (queries unattempted DB questions, dedupes, or triggers Gemini/Groq on-demand)
+      const adaptRes = await api.get(
+        `/adaptive/next-question?courseId=${selectedCourseId}${topicQuery}${diffQuery}${excludeQuery}${sessionQuery}`
+      );
+      if (adaptRes?.question) {
+        setCurrentQuestion(adaptRes.question);
+        setCurrentQuestionIndex((prev) => prev + 1);
+        setAttemptedQuestionIds((prev) => [...prev, adaptRes.question.id]);
+        if (adaptRes.calibration) {
+          setCalibrationData(adaptRes.calibration);
         }
+        return;
       }
+
+      // Secondary fallback: Practice session bank
       const nextQ = await api.get(`/practice/sessions/${activeSession.id}/next-question`);
       if (nextQ) {
         setCurrentQuestion(nextQ);
@@ -656,7 +665,7 @@ export default function PracticePage() {
           setAttemptedQuestionIds((prev) => [...prev, nextQ.id]);
         }
       } else {
-        // No further questions available in current filter
+        // No further questions available
         setSessionCompleted(true);
       }
     } catch (err) {

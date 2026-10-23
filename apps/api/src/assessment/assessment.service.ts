@@ -59,6 +59,7 @@ export interface UpdateAssessmentDto {
   status?: AssessmentStatus;
   reopen?: boolean;
   extendMinutes?: number;
+  randomizeQuestions?: boolean;
 }
 
 export function isEnrollmentOddEvenMatch(enrollmentNumber?: string | null, rollFilter?: string | null): boolean {
@@ -380,7 +381,7 @@ export class AssessmentService {
           totalMarks,
           passingMarks: Number(dto.passingMarks) > 0 ? Number(dto.passingMarks) : 40.0,
           totalQuestions,
-          randomizeQuestions: dto.randomizeQuestions ?? false,
+          randomizeQuestions: dto.randomizeQuestions !== false,
           allowedAttempts: Number(dto.allowedAttempts) > 0 ? Number(dto.allowedAttempts) : 2,
           scheduledStartTime,
           scheduledEndTime,
@@ -589,6 +590,7 @@ export class AssessmentService {
     if (dto.rollFilter !== undefined) dataToUpdate.rollFilter = dto.rollFilter.toUpperCase();
     if (dto.allowedAttempts !== undefined) dataToUpdate.allowedAttempts = Number(dto.allowedAttempts);
     if (dto.status !== undefined) dataToUpdate.status = dto.status;
+    if (dto.randomizeQuestions !== undefined) dataToUpdate.randomizeQuestions = dto.randomizeQuestions;
 
     let newDuration = assessment.durationMinutes;
     if (dto.durationMinutes !== undefined && Number(dto.durationMinutes) > 0) {
@@ -1093,8 +1095,11 @@ export class AssessmentService {
         };
       });
 
-    if (assessment.randomizeQuestions) {
-      questions = seededShuffle(questions, `${submission.id}:question_order`);
+    // Anti-Cheat: Jumble / randomize question order uniquely per student attempt
+    // Ensures adjacent students sitting together in an exam hall receive questions in completely different orders.
+    // Deterministic seed with submission.id and studentId ensures question sequence remains stable on page refresh.
+    if (assessment.randomizeQuestions !== false) {
+      questions = seededShuffle(questions, `${submission.id}:${submission.studentId || 'attempt'}:question_order`);
     }
 
     const elapsedMs = Date.now() - new Date(submission.startedAt).getTime();

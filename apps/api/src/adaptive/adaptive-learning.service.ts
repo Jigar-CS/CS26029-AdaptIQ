@@ -119,7 +119,7 @@ export class AdaptiveLearningService {
    */
   async getNextAdaptiveQuestion(
     studentId: string,
-    topicId: string,
+    topicId?: string,
     courseId?: string,
     preferredDifficulty?: QuestionDifficulty,
     excludeIds?: string[],
@@ -134,20 +134,32 @@ export class AdaptiveLearningService {
       : null;
     const effectiveStudentId = student ? student.id : studentId;
 
+    let targetTopicId = topicId;
+    if (!targetTopicId && courseId) {
+      const courseTopics = await this.prisma.topic.findMany({
+        where: {
+          OR: [{ courseId }, { course: { code: courseId } }],
+        },
+      });
+      if (courseTopics.length > 0) {
+        targetTopicId = courseTopics[Math.floor(Math.random() * courseTopics.length)].id;
+      }
+    }
+
     const topic = this.prisma.topic?.findFirst
       ? await this.prisma.topic.findFirst({
           where: {
-            OR: [{ id: topicId }, { slug: topicId }],
+            OR: [{ id: targetTopicId }, { slug: targetTopicId }, { name: targetTopicId }],
           },
           include: { course: true },
         })
       : await this.prisma.topic?.findUnique({
-          where: { id: topicId },
+          where: { id: targetTopicId },
           include: { course: true },
         });
 
     if (!topic) {
-      throw new NotFoundException(`Topic with ID ${topicId} not found.`);
+      throw new NotFoundException(`Topic "${topicId || courseId}" not found.`);
     }
 
     if (courseId && this.prisma.course) {
@@ -263,21 +275,48 @@ export class AdaptiveLearningService {
     // Proactive background synthesis: If remaining unattempted questions in this topic are low (<= 3),
     // trigger background question generation asynchronously so the question bank stays stocked without adding latency!
     if (candidateQuestions.length <= 3) {
-      this.prisma.topic.findUnique({ where: { id: topicId } }).then((topic) => {
-        if (topic) {
-          this.aiQuestionGenerator.generateAndPersistQuestion({
-            topicName: topic.name,
-            courseId: courseId || topic.courseId,
-            difficulty: targetDifficulty,
-            preferredDifficulty: targetDifficulty,
-          }).catch(() => {});
-        }
-      }).catch(() => {});
+      this.prisma.topic
+        .findUnique({
+          where: { id: topic.id },
+          include: { course: true },
+        })
+        .then((t) => {
+          if (t) {
+            this.aiQuestionGenerator
+              .generateAndPersistQuestion({
+                topicName: t.name,
+                courseId: courseId || t.courseId,
+                courseName: t.course?.name,
+                difficulty: targetDifficulty,
+                preferredDifficulty: targetDifficulty,
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
 
-    // If candidate unattempted questions exist, select one instantly (<5ms)
-    if (candidateQuestions.length > 0) {
-      const selected = candidateQuestions[Math.floor(Math.random() * candidateQuestions.length)];
+    // Fetch recent question texts to avoid duplicate questions in current session
+    const recentAttempts =
+      allExcludedIds.length > 0
+        ? await this.prisma.question.findMany({
+            where: { id: { in: allExcludedIds } },
+            select: { questionText: true },
+            take: 20,
+          })
+        : [];
+    const avoidTexts = recentAttempts.map((q) => q.questionText);
+    const avoidTextsSet = new Set(avoidTexts.map((t) => t.trim().toLowerCase()));
+
+    // Deduplicate candidate questions against any question texts already seen
+    const uniqueCandidates = candidateQuestions.filter(
+      (q) => !avoidTextsSet.has(q.questionText.trim().toLowerCase()),
+    );
+
+    // If candidate unattempted unique questions exist, select one instantly (<5ms)
+    if (uniqueCandidates.length > 0) {
+      const selected =
+        uniqueCandidates[Math.floor(Math.random() * uniqueCandidates.length)];
       return {
         question: {
           ...selected,
@@ -293,22 +332,31 @@ export class AdaptiveLearningService {
     }
 
     // Tier 4: All existing questions in topic and course have been attempted by this student!
-    // Synthesize a fresh, verified AI question on demand.
+    // Synthesize a fresh, verified AI question on demand using Gemini/Groq.
     try {
-      const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
-      if (topic) {
+      const topicRecord = await this.prisma.topic.findUnique({
+        where: { id: topic.id },
+        include: { course: true },
+      });
+      if (topicRecord) {
         const aiResult = await this.aiQuestionGenerator.generateAndPersistQuestion({
-          topicName: topic.name,
-          courseId: courseId || topic.courseId,
+          topicName: topicRecord.name,
+          courseId: courseId || topicRecord.courseId,
+          courseName: topicRecord.course?.name,
           difficulty: targetDifficulty,
           preferredDifficulty: targetDifficulty,
+          avoidQuestionTexts: avoidTexts,
         });
 
         if (aiResult?.question) {
           return {
             question: {
               ...aiResult.question,
-              options: shuffleQuestionOptions(aiResult.question.options, sessionId || studentId, aiResult.question.id),
+              options: shuffleQuestionOptions(
+                aiResult.question.options,
+                sessionId || studentId,
+                aiResult.question.id,
+              ),
             },
             calibration: {
               ...calibration,
@@ -325,10 +373,11 @@ export class AdaptiveLearningService {
     }
 
     // Absolute fallback: least recently attempted question or any question not in current session
-    const sessionExcludedIds = excludeIds && excludeIds.length > 0 ? { notIn: excludeIds } : undefined;
+    const sessionExcludedIds =
+      excludeIds && excludeIds.length > 0 ? { notIn: excludeIds } : undefined;
     const fallback = await this.prisma.question.findFirst({
       where: {
-        topicId,
+        topicId: topic.id,
         ...(courseId ? { courseId } : {}),
         ...(sessionExcludedIds ? { id: sessionExcludedIds } : {}),
       },
@@ -367,6 +416,13 @@ export class AdaptiveLearningService {
     difficulty?: QuestionDifficulty,
     studentId?: string,
   ) {
+    const course = await this.prisma.course.findFirst({
+      where: { OR: [{ id: courseId }, { code: courseId }] },
+      select: { id: true, name: true },
+    });
+    const effectiveCourseId = course?.id || courseId;
+    const effectiveCourseName = course?.name;
+
     if (studentId) {
       const student = await this.prisma.studentProfile.findFirst({
         where: { OR: [{ id: studentId }, { userId: studentId }] },
@@ -375,7 +431,7 @@ export class AdaptiveLearningService {
 
       const targetTopic = await this.prisma.topic.findFirst({
         where: {
-          courseId,
+          courseId: effectiveCourseId,
           OR: [
             { name: { equals: topicName } },
             { slug: { equals: topicName.toLowerCase().replace(/\s+/g, '-') } },
@@ -405,7 +461,8 @@ export class AdaptiveLearningService {
 
     return this.aiQuestionGenerator.generateAndPersistQuestion({
       topicName,
-      courseId,
+      courseId: effectiveCourseId,
+      courseName: effectiveCourseName,
       difficulty: difficulty || QuestionDifficulty.MEDIUM,
       preferredDifficulty: difficulty,
     });

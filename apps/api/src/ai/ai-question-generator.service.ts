@@ -24,6 +24,7 @@ export interface GeneratedQuestionPayload {
 export class AiQuestionGeneratorService {
   private readonly logger = new Logger('AiQuestionGeneratorService');
   private readonly geminiApiKey: string;
+  private readonly groqApiKey: string;
 
   constructor(
     private prisma: PrismaService,
@@ -34,6 +35,10 @@ export class AiQuestionGeneratorService {
       this.configService.get<string>('GEMINI_API_KEY') ||
       process.env.GEMINI_API_KEY ||
       '';
+    this.groqApiKey =
+      this.configService.get<string>('GROQ_API_KEY') ||
+      process.env.GROQ_API_KEY ||
+      '';
   }
 
   /**
@@ -43,8 +48,10 @@ export class AiQuestionGeneratorService {
   async generateAndPersistQuestion(params: {
     topicName: string;
     courseId: string;
+    courseName?: string;
     difficulty?: QuestionDifficulty;
     preferredDifficulty?: QuestionDifficulty;
+    avoidQuestionTexts?: string[];
   }) {
     const targetDifficulty =
       params.preferredDifficulty || params.difficulty || QuestionDifficulty.MEDIUM;
@@ -84,10 +91,24 @@ export class AiQuestionGeneratorService {
       this.logger.log(`Created new topic: "${topic.name}" (${topic.id})`);
     }
 
-    // 2. Generate question via Gemini or Grounded Synthesis
+    // Resolve course name if not directly supplied
+    let effectiveCourseName = params.courseName;
+    if (!effectiveCourseName && params.courseId) {
+      const course = await this.prisma.course.findFirst({
+        where: { OR: [{ id: params.courseId }, { code: params.courseId }] },
+        select: { name: true },
+      });
+      if (course) {
+        effectiveCourseName = course.name;
+      }
+    }
+
+    // 2. Generate question via Gemini or Groq or Grounded Synthesis
     const payload = await this.synthesizeReliableQuestion(
       topic.name,
       targetDifficulty,
+      effectiveCourseName,
+      params.avoidQuestionTexts,
     );
 
     // 3. Persist verified question into MySQL
@@ -122,7 +143,7 @@ export class AiQuestionGeneratorService {
     });
 
     this.logger.log(
-      `Persisted AI question: [${question.difficulty}] ${question.id} for "${topic.name}"`,
+      `Persisted AI question: [${question.difficulty}] ${question.id} for "${topic.name}" in course "${effectiveCourseName || params.courseId}"`,
     );
 
     return {
@@ -137,34 +158,61 @@ export class AiQuestionGeneratorService {
 
   /**
    * Anti-hallucination synthesis: tries Gemini AI first; if restricted/error,
-   * uses Python FastAPI microservice or deterministic curriculum knowledge base.
+   * falls back to Groq Cloud, Python FastAPI microservice, or deterministic curriculum knowledge base.
    */
   async synthesizeReliableQuestion(
     topicName: string,
     difficulty: QuestionDifficulty,
+    courseName?: string,
+    avoidQuestionTexts?: string[],
   ): Promise<GeneratedQuestionPayload> {
-    // Attempt 1: Gemini Generative AI
+    // Attempt 1: Gemini Generative AI (Primary)
     if (this.geminiApiKey) {
       try {
-        const geminiResult = await this.callGeminiApi(topicName, difficulty);
+        const geminiResult = await this.callGeminiApi(
+          topicName,
+          difficulty,
+          courseName,
+          avoidQuestionTexts,
+        );
         if (geminiResult && this.validateQuestionStructure(geminiResult)) {
           this.logger.log(
-            `Successfully generated reliable question via Gemini AI for ${topicName} [${difficulty}]`,
+            `Successfully generated reliable question via Gemini AI for ${courseName ? `${courseName} — ` : ''}${topicName} [${difficulty}]`,
           );
           return geminiResult;
         }
       } catch (err: any) {
         this.logger.warn(
-          `Gemini API generation fallback (${err.message}). Using curriculum-grounded engine.`,
+          `Gemini API generation fallback (${err.message}). Trying secondary AI providers.`,
         );
       }
     }
 
-    // Attempt 2: FastAPI AI Microservice on port 8000
+    // Attempt 2: Groq Cloud High-Speed AI (Secondary Fast LLM)
+    if (this.groqApiKey) {
+      try {
+        const groqResult = await this.callGroqApi(
+          topicName,
+          difficulty,
+          courseName,
+          avoidQuestionTexts,
+        );
+        if (groqResult && this.validateQuestionStructure(groqResult)) {
+          this.logger.log(
+            `Successfully generated question via Groq Cloud AI for ${courseName ? `${courseName} — ` : ''}${topicName} [${difficulty}]`,
+          );
+          return groqResult;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Groq API skipped (${err.message}). Trying microservice.`);
+      }
+    }
+
+    // Attempt 3: FastAPI AI Microservice on port 8000
     try {
       const microserviceResult = await this.aiClientService.generateQuestions({
         topic: topicName,
-        course_code: 'CS301',
+        course_code: courseName || 'CS301',
         bloom_level:
           difficulty === QuestionDifficulty.HARD
             ? 'EVALUATE'
@@ -200,8 +248,13 @@ export class AiQuestionGeneratorService {
       this.logger.warn(`FastAPI microservice skipped: ${err.message}`);
     }
 
-    // Attempt 3: Deterministic Curriculum Knowledge Base (100% Guaranteed Reliability)
-    const fallback = this.getCurriculumGroundedQuestion(topicName, difficulty);
+    // Attempt 4: Deterministic Curriculum Knowledge Base (100% Guaranteed Reliability)
+    const fallback = this.getCurriculumGroundedQuestion(
+      topicName,
+      difficulty,
+      courseName,
+      avoidQuestionTexts,
+    );
     return {
       ...fallback,
       options: randomShuffle(fallback.options),
@@ -214,19 +267,34 @@ export class AiQuestionGeneratorService {
   private async callGeminiApi(
     topicName: string,
     difficulty: QuestionDifficulty,
+    courseName?: string,
+    avoidQuestionTexts?: string[],
   ): Promise<GeneratedQuestionPayload | null> {
+    const subjectContext = courseName
+      ? `the university course "${courseName}" and topic "${topicName}"`
+      : `the Computer Science topic "${topicName}"`;
+
+    let avoidPrompt = '';
+    if (avoidQuestionTexts && avoidQuestionTexts.length > 0) {
+      const snippets = avoidQuestionTexts
+        .slice(-6)
+        .map((q, i) => `${i + 1}. ${q.slice(0, 140)}`)
+        .join('\n');
+      avoidPrompt = `\n\nCRITICAL ANTI-DUPLICATE CONSTRAINT:\nThe student has already answered the following questions in this practice drill:\n${snippets}\nYou MUST generate a completely NEW, UNIQUE question testing a different subconcept, theorem, state transition, or property. Do NOT repeat or paraphrase any of the above questions!`;
+    }
+
     const prompt = `You are a distinguished university professor in Computer Science.
-Generate exactly one multiple choice question on the topic "${topicName}" calibrated strictly to "${difficulty}" difficulty.
+Generate exactly one multiple choice question on ${subjectContext} calibrated strictly to "${difficulty}" difficulty.
 
 ANTI-HALLUCINATION & ANTI-BIAS RULES:
-1. Ground the question strictly in established computer science fundamentals, exact data structure invariants, and time/space complexity bounds.
+1. Ground the question strictly in established computer science fundamentals, exact formal language theory, algorithms, state machine invariants, theorems, and time/space complexity bounds.
 2. Formulate 4 mutually exclusive options.
 3. Exactly ONE option must be mathematically and conceptually correct.
 4. The remaining 3 options must be realistic, plausible distractors representing common student misconceptions.
 5. ANTI-LENGTH BIAS: All 4 options MUST be reasonably comparable in length, grammar, technical precision, and level of detail. Never make the correct answer substantially longer or more qualified than the distractors.
 6. ANTI-POSITION BIAS: Distribute the correct answer naturally across any option position. Do NOT default to putting the correct answer first.
 7. Provide a thorough, step-by-step technical explanation proving why the correct option is true and analyzing why each distractor is wrong.
-8. Return purely valid JSON with no markdown formatting or extra text.
+8. Return purely valid JSON with no markdown formatting or extra text.${avoidPrompt}
 
 JSON Schema:
 {
@@ -244,11 +312,13 @@ JSON Schema:
 }`;
 
     const modelsToTry = [
+      'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-3.8-flash',
+      'gemini-3-flash-preview',
       'gemini-flash-lite-latest',
-      'gemini-flash-latest',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.8-flash',
     ];
 
     for (const model of modelsToTry) {
@@ -260,11 +330,14 @@ JSON Schema:
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
-              temperature: 0.2, // Low temperature eliminates hallucination
+              temperature: 0.35,
               responseMimeType: 'application/json',
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
             },
           }),
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(15000),
         });
 
         if (!res.ok) continue;
@@ -273,7 +346,117 @@ JSON Schema:
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!rawText) continue;
 
-        const parsed = JSON.parse(rawText);
+        const cleaned = rawText
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+        const parsed = JSON.parse(cleaned);
+        if (this.validateQuestionStructure(parsed)) {
+          return {
+            questionText: parsed.questionText,
+            difficulty: parsed.difficulty || difficulty,
+            cognitiveLevel: parsed.cognitiveLevel || 'APPLY',
+            options: randomShuffle(parsed.options),
+            explanation: parsed.explanation,
+            pedagogicalRationale: parsed.pedagogicalRationale,
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Invokes Groq Cloud AI as ultra-fast high-availability fallback
+   */
+  private async callGroqApi(
+    topicName: string,
+    difficulty: QuestionDifficulty,
+    courseName?: string,
+    avoidQuestionTexts?: string[],
+  ): Promise<GeneratedQuestionPayload | null> {
+    if (!this.groqApiKey) return null;
+
+    const subjectContext = courseName
+      ? `the university course "${courseName}" and topic "${topicName}"`
+      : `the Computer Science topic "${topicName}"`;
+
+    let avoidPrompt = '';
+    if (avoidQuestionTexts && avoidQuestionTexts.length > 0) {
+      const snippets = avoidQuestionTexts
+        .slice(-6)
+        .map((q, i) => `${i + 1}. ${q.slice(0, 140)}`)
+        .join('\n');
+      avoidPrompt = `\n\nCRITICAL ANTI-DUPLICATE CONSTRAINT:\nThe student has already answered the following questions in this practice drill:\n${snippets}\nYou MUST generate a completely NEW, UNIQUE question testing a different subconcept, theorem, state transition, or property. Do NOT repeat or paraphrase any of the above questions!`;
+    }
+
+    const prompt = `You are a distinguished university professor in Computer Science.
+Generate exactly one multiple choice question on ${subjectContext} calibrated strictly to "${difficulty}" difficulty.
+
+ANTI-HALLUCINATION & ANTI-BIAS RULES:
+1. Ground the question strictly in established computer science fundamentals, exact formal language theory, algorithms, state machine invariants, theorems, and time/space complexity bounds.
+2. Formulate 4 mutually exclusive options.
+3. Exactly ONE option must be mathematically and conceptually correct.
+4. The remaining 3 options must be realistic, plausible distractors representing common student misconceptions.
+5. ANTI-LENGTH BIAS: All 4 options MUST be reasonably comparable in length, grammar, technical precision, and level of detail. Never make the correct answer substantially longer or more qualified than the distractors.
+6. ANTI-POSITION BIAS: Distribute the correct answer naturally across any option position.
+7. Provide a thorough, step-by-step technical explanation proving why the correct option is true and analyzing why each distractor is wrong.
+8. Return purely valid JSON with no markdown formatting or extra text.${avoidPrompt}
+
+JSON Schema:
+{
+  "questionText": "Clear problem statement",
+  "difficulty": "${difficulty}",
+  "cognitiveLevel": "${difficulty === 'HARD' ? 'EVALUATE' : difficulty === 'MEDIUM' ? 'ANALYZE' : 'APPLY'}",
+  "options": [
+    { "optionText": "Plausible technical distractor", "isCorrect": false, "misconception": "Why a student picks this" },
+    { "optionText": "Accurate correct solution", "isCorrect": true, "misconception": null },
+    { "optionText": "Plausible alternative distractor", "isCorrect": false, "misconception": "Why a student picks this" },
+    { "optionText": "Realistic edge-case distractor", "isCorrect": false, "misconception": "Why a student picks this" }
+  ],
+  "explanation": "Detailed theoretical proof and distractor breakdown",
+  "pedagogicalRationale": "Target concept being assessed"
+}`;
+
+    const models = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
+    for (const model of models) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.groqApiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are an expert Computer Science professor that generates rigorous, error-free multiple-choice questions in strict JSON format.',
+              },
+              { role: 'user', content: prompt },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.35,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) continue;
+
+        const cleaned = content
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+        const parsed = JSON.parse(cleaned);
         if (this.validateQuestionStructure(parsed)) {
           return {
             questionText: parsed.questionText,
@@ -324,8 +507,195 @@ JSON Schema:
   private getCurriculumGroundedQuestion(
     topicName: string,
     difficulty: QuestionDifficulty,
+    courseName?: string,
+    avoidQuestionTexts?: string[],
   ): GeneratedQuestionPayload {
-    const key = topicName.toLowerCase();
+    const key = `${courseName || ''} ${topicName}`.toLowerCase();
+    const avoided = new Set((avoidQuestionTexts || []).map((t) => t.trim().toLowerCase()));
+
+    // Theory of Computation & Automata Theory
+    if (
+      key.includes('theory of computation') ||
+      key.includes('automata') ||
+      key.includes('dfa') ||
+      key.includes('nfa') ||
+      key.includes('regular') ||
+      key.includes('grammar') ||
+      key.includes('turing') ||
+      key.includes('pumping') ||
+      key.includes('chomsky') ||
+      key.includes('pda')
+    ) {
+      const tocBank: GeneratedQuestionPayload[] = [
+        {
+          questionText:
+            'Let M = (Q, Σ, δ, q0, F) be a Deterministic Finite Automaton (DFA) with n states. If M accepts an infinite language L(M), what is the tightest bound on the length of at least one string w accepted by M guaranteed by the Pumping Lemma?',
+          difficulty: QuestionDifficulty.MEDIUM,
+          cognitiveLevel: 'ANALYZE',
+          options: [
+            {
+              optionText: 'n ≤ |w| < 2n',
+              isCorrect: true,
+              misconception: null,
+            },
+            {
+              optionText: '|w| = n/2',
+              isCorrect: false,
+              misconception: 'Arbitrarily halving state count bounds without loop justification',
+            },
+            {
+              optionText: '|w| ≥ 2^n',
+              isCorrect: false,
+              misconception: 'Confusing DFA state pumping with NFA-to-DFA subset construction cardinality',
+            },
+            {
+              optionText: '0 < |w| ≤ n - 1',
+              isCorrect: false,
+              misconception: 'This bound tests non-emptiness, not infinitude of regular languages',
+            },
+          ],
+          explanation:
+            'By the Pumping Lemma for regular languages, if a DFA with n states accepts an infinite language, there exists a loop in its transition diagram. Any string that traverses a single cycle must have length at least n and strictly less than 2n, ensuring the language is infinite.',
+          pedagogicalRationale:
+            'Assesses formal understanding of the Pumping Lemma and loop traversal in finite state automata.',
+        },
+        {
+          questionText:
+            'Which of the following decision problems is strictly UNDECIDABLE for Context-Free Languages (CFLs)?',
+          difficulty: QuestionDifficulty.HARD,
+          cognitiveLevel: 'EVALUATE',
+          options: [
+            {
+              optionText: 'Equivalence problem: Testing whether L(G1) = L(G2) for two arbitrary CFGs G1 and G2',
+              isCorrect: true,
+              misconception: null,
+            },
+            {
+              optionText: 'Emptiness problem: Testing whether L(G) = ∅ for an arbitrary CFG G',
+              isCorrect: false,
+              misconception: 'Emptiness of CFG is decidable in polynomial time by finding generating non-terminals',
+            },
+            {
+              optionText: 'Membership problem: Testing whether a given string w ∈ L(G) using the CYK algorithm',
+              isCorrect: false,
+              misconception: 'Membership in CFL is decidable in O(n³) time using dynamic programming',
+            },
+            {
+              optionText: 'Finiteness problem: Testing whether L(G) generates a finite number of strings',
+              isCorrect: false,
+              misconception: 'Finiteness is decidable by detecting recursive generating cycles in CNF graphs',
+            },
+          ],
+          explanation:
+            'While emptiness, finiteness, and membership are decidable for Context-Free Languages, equivalence (L(G1) = L(G2)), universality (L(G) = Σ*), and ambiguity are famously undecidable via reduction from the Post Correspondence Problem (PCP) or Turing machine computation histories.',
+          pedagogicalRationale:
+            'Tests foundational boundaries between decidability and undecidability in the Chomsky hierarchy.',
+        },
+        {
+          questionText:
+            'When converting a Non-Deterministic Finite Automaton (NFA) with k states to an equivalent Deterministic Finite Automaton (DFA) using the powerset (subset) construction, what is the theoretical maximum number of states in the resultant DFA?',
+          difficulty: QuestionDifficulty.EASY,
+          cognitiveLevel: 'REMEMBER',
+          options: [
+            {
+              optionText: '2^k states',
+              isCorrect: true,
+              misconception: null,
+            },
+            {
+              optionText: 'k² states',
+              isCorrect: false,
+              misconception: 'Confusing product automaton construction with powerset subset construction',
+            },
+            {
+              optionText: 'k! states',
+              isCorrect: false,
+              misconception: 'Confusing permutation order with the cardinality of the power set P(Q)',
+            },
+            {
+              optionText: '2k + 1 states',
+              isCorrect: false,
+              misconception: 'Underestimating the exponential state explosion in worst-case NFAs',
+            },
+          ],
+          explanation:
+            'Each state in the DFA corresponds to a subset of states from the NFA. Since a set with k elements has exactly 2^k subsets (the power set), the maximum possible number of states in the converted DFA is 2^k.',
+          pedagogicalRationale:
+            'Evaluates knowledge of powerset construction and worst-case determinization state complexity.',
+        },
+        {
+          questionText:
+            'According to Rice\'s Theorem, which of the following statements regarding semantic properties of Turing Machines is true?',
+          difficulty: QuestionDifficulty.HARD,
+          cognitiveLevel: 'EVALUATE',
+          options: [
+            {
+              optionText: 'Any non-trivial semantic property of the language recognized by a Turing machine is undecidable.',
+              isCorrect: true,
+              misconception: null,
+            },
+            {
+              optionText: 'Syntactic properties of Turing machine transition tables are undecidable.',
+              isCorrect: false,
+              misconception: 'Syntactic properties (e.g. number of states, tape symbols) are trivial to check and decidable',
+            },
+            {
+              optionText: 'All properties satisfied by the empty language ∅ are decidable.',
+              isCorrect: false,
+              misconception: 'Emptiness testing itself is a non-trivial property and thus undecidable',
+            },
+            {
+              optionText: 'Rice theorem only applies to linear bounded automata, not general Turing machines.',
+              isCorrect: false,
+              misconception: 'Rice theorem fundamentally applies to all Turing-complete computational formalisms',
+            },
+          ],
+          explanation:
+            'Rice\'s theorem states that any non-trivial semantic property (a property of the language recognized by a Turing machine, where at least one TM language satisfies it and at least one does not) is undecidable.',
+          pedagogicalRationale:
+            'Tests high-level computability theory and invariant application of Rice\'s theorem.',
+        },
+        {
+          questionText:
+            'Which of the following formal language classes is strictly CLOSED under intersection and complementation?',
+          difficulty: QuestionDifficulty.MEDIUM,
+          cognitiveLevel: 'ANALYZE',
+          options: [
+            {
+              optionText: 'Regular Languages',
+              isCorrect: true,
+              misconception: null,
+            },
+            {
+              optionText: 'Context-Free Languages',
+              isCorrect: false,
+              misconception: 'CFLs are NOT closed under intersection or complementation (e.g. a^n b^n c^n)',
+            },
+            {
+              optionText: 'Recursively Enumerable (Turing-Recognizable) Languages',
+              isCorrect: false,
+              misconception: 'Recursively enumerable languages are closed under intersection, but NOT complementation',
+            },
+            {
+              optionText: 'Non-deterministic Pushdown Automata Languages with 2 stacks',
+              isCorrect: false,
+              misconception: 'Two stacks make the machine equivalent to a Turing machine, which is not closed under complement',
+            },
+          ],
+          explanation:
+            'Regular languages are closed under all Boolean operations including union, intersection, and complement (via swapping final and non-final states in a DFA). Context-Free Languages fail closure under intersection and complement.',
+          pedagogicalRationale:
+            'Validates mastery over algebraic closure properties across the Chomsky hierarchy.',
+        },
+      ];
+
+      for (const q of tocBank) {
+        if (!avoided.has(q.questionText.trim().toLowerCase())) {
+          return q;
+        }
+      }
+      return tocBank[Math.floor(Math.random() * tocBank.length)];
+    }
 
     // Arrays & Sequences
     if (key.includes('array')) {
@@ -560,35 +930,111 @@ JSON Schema:
       };
     }
 
-    // Universal Algorithmic Generator for any Custom Topic
+    // Dynamic Multi-Pattern Generator for any arbitrary topic to ensure non-repetition
+    const topicLabel = courseName ? `${courseName} (${topicName})` : topicName;
+    const seedVariants = [
+      {
+        questionText: `In the context of ${topicLabel}, which theoretical principle governs optimal resource allocation and asymptotic trade-offs at the ${difficulty.toLowerCase()} mastery tier?`,
+        options: [
+          {
+            optionText: `Enforcing strict boundary invariants that prevent unbounded state expansion and preserve predictable worst-case bounds.`,
+            isCorrect: true,
+            misconception: null,
+          },
+          {
+            optionText: `Bypassing validation checks during execution to guarantee uniform O(1) latency across all distributed nodes.`,
+            isCorrect: false,
+            misconception: 'Ignoring safety invariants in favor of hypothetical unvalidated execution',
+          },
+          {
+            optionText: `Allocating unconstrained auxiliary memory buffers proportional to exponential factorial permutations.`,
+            isCorrect: false,
+            misconception: 'Confusing combinatorial space complexity with disciplined algorithmic constraints',
+          },
+          {
+            optionText: `Assuming all concurrent execution branches can update shared state without synchronization barriers.`,
+            isCorrect: false,
+            misconception: 'Neglecting race condition hazards in concurrent architectures',
+          },
+        ],
+        explanation: `Reliable implementations of ${topicLabel} require mathematical invariant preservation to bound complexity without compromising memory or execution stability.`,
+      },
+      {
+        questionText: `When diagnosing edge-case anomalies in ${topicLabel}, what constitutes the most critical failure mode under high-throughput conditions?`,
+        options: [
+          {
+            optionText: `State space explosion caused by unpruned recursive pathways or non-terminating cyclic transitions.`,
+            isCorrect: true,
+            misconception: null,
+          },
+          {
+            optionText: `Direct hardware clock drift occurring inside synchronous execution registers.`,
+            isCorrect: false,
+            misconception: 'Attributing logical algorithmic degradation to low-level physical clock jitter',
+          },
+          {
+            optionText: `Deterministic compiler optimizations producing non-deterministic bytecode instructions.`,
+            isCorrect: false,
+            misconception: 'Assuming standard optimizing compilers violate formal semantics',
+          },
+          {
+            optionText: `Inverting logical bitwise masks that double CPU cache line bus bandwidth.`,
+            isCorrect: false,
+            misconception: 'Misunderstanding the physical bus protocol of modern microarchitectures',
+          },
+        ],
+        explanation: `In ${topicLabel}, failure to detect cyclic state graphs or prune unconstrained branches leads to exponential runtime degradation and stack exhaustion.`,
+      },
+      {
+        questionText: `Which algorithmic property is fundamentally necessary to ensure correctness and convergence when evaluating ${topicLabel}?`,
+        options: [
+          {
+            optionText: `A strictly monotonic potential or progress measure guaranteeing termination in finite steps.`,
+            isCorrect: true,
+            misconception: null,
+          },
+          {
+            optionText: `Infinite recursion depth enabled by dynamic heap expansion without stack limits.`,
+            isCorrect: false,
+            misconception: 'Infinite recursion is a failure condition, not a convergence guarantee',
+          },
+          {
+            optionText: `Randomized state resetting whenever an unexpected intermediate condition is reached.`,
+            isCorrect: false,
+            misconception: 'Randomized resets destroy algorithmic convergence proofs',
+          },
+          {
+            optionText: `Restricting all numerical computations strictly to 8-bit integer overflows.`,
+            isCorrect: false,
+            misconception: 'Arbitrary precision truncation leads to arithmetic inaccuracies',
+          },
+        ],
+        explanation: `Convergence proofs in ${topicLabel} fundamentally rely on well-founded partial order relations or monotonic potential functions that decrease on every transition.`,
+      },
+    ];
+
+    for (const v of seedVariants) {
+      if (!avoided.has(v.questionText.trim().toLowerCase())) {
+        return {
+          questionText: v.questionText,
+          difficulty,
+          cognitiveLevel: difficulty === QuestionDifficulty.HARD ? 'EVALUATE' : 'ANALYZE',
+          options: randomShuffle(v.options),
+          explanation: v.explanation,
+          pedagogicalRationale: `Evaluates theoretical reasoning and edge-case handling in ${topicLabel}.`,
+        };
+      }
+    }
+
+    const selectedVariant = seedVariants[Math.floor(Math.random() * seedVariants.length)];
     return {
-      questionText: `Which of the following architectural statements regarding ${topicName} represents an optimal asymptotic property under ${difficulty.toLowerCase()}-tier constraints?`,
+      questionText: selectedVariant.questionText,
       difficulty,
-      cognitiveLevel: difficulty === QuestionDifficulty.HARD ? 'ANALYZE' : 'APPLY',
-      options: [
-        {
-          optionText: `The core operations maintain structural invariants that bound worst-case resource utilization to optimal polynomial/logarithmic limits.`,
-          isCorrect: true,
-          misconception: null,
-        },
-        {
-          optionText: `All operations execute in strict O(1) auxiliary space without requiring any recursion depth or pointer metadata.`,
-          isCorrect: false,
-          misconception: 'Overlooking structural metadata and call-stack frame memory consumption',
-        },
-        {
-          optionText: `The computational time complexity degrades exponentially to O(2^N) under all standard non-empty workloads.`,
-          isCorrect: false,
-          misconception: 'Confusing worst-case unmemoized brute force with disciplined algorithmic structures',
-        },
-        {
-          optionText: `Data mutations can bypass concurrency mutual-exclusion invariants without corrupting memory integrity.`,
-          isCorrect: false,
-          misconception: 'Ignoring thread-safety and race condition hazards in data structures',
-        },
-      ],
-      explanation: `Disciplined implementations of ${topicName} maintain rigorous mathematical invariants that ensure predictable asymptotic bounds, balancing time-space trade-offs without corrupting internal memory states.`,
-      pedagogicalRationale: `Evaluates formal theoretical reasoning and invariant enforcement in ${topicName}.`,
+      cognitiveLevel: difficulty === QuestionDifficulty.HARD ? 'EVALUATE' : 'ANALYZE',
+      options: randomShuffle(selectedVariant.options),
+      explanation: selectedVariant.explanation,
+      pedagogicalRationale: `Evaluates theoretical reasoning and edge-case handling in ${topicLabel}.`,
     };
   }
 }
+

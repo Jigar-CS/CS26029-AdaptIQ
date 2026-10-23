@@ -13,6 +13,17 @@ export interface SkillGapItem {
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
+export interface PlacementPillarBreakdown {
+  domainCoveragePct: number;
+  verifiedCompetencyPct: number;
+  volumeConfidencePct: number;
+  problemDepthPct: number;
+  mockValidationPct: number;
+  totalQuestionsAttempted: number;
+  practicedSkillsCount: number;
+  totalRequiredSkillsCount: number;
+}
+
 export interface SkillGapAnalysisResult {
   roleType: CareerRoleType;
   roleTitle: string;
@@ -23,6 +34,7 @@ export interface SkillGapAnalysisResult {
   mockTestsTaken: number;
   avgMockScore: number;
   personalizedRoadmap: string[];
+  pillarBreakdown: PlacementPillarBreakdown;
 }
 
 @Injectable()
@@ -192,14 +204,18 @@ export class PlacementService {
         ) / 10
         : 0.0;
 
-    // Calculate baseline curriculum mastery across all completed topics
-    const activeTopicScores = masteries
-      .map((m) => m.masteryScore ?? 0)
-      .filter((s) => typeof s === 'number' && s > 0);
-    const avgMasteryAcrossAllTopics =
-      activeTopicScores.length > 0
-        ? activeTopicScores.reduce((acc, v) => acc + v, 0) / activeTopicScores.length
-        : 0;
+    // Fetch question attempt history to gauge volume and difficulty depth
+    const questionAttempts =
+      (await this.prisma.questionAttempt?.findMany({
+        where: { studentId: studentProfileId },
+        select: {
+          difficultyAtAttempt: true,
+          isCorrect: true,
+        },
+      })) || [];
+
+    const masteryAttemptsSum = masteries.reduce((acc, m) => acc + (m.attemptCount || (m.masteryScore ? 3 : 0)), 0);
+    const totalQuestionsAttempted = Math.max(questionAttempts.length, masteryAttemptsSum);
 
     interface BenchmarkSkillItem {
       topicSlug?: string;
@@ -223,9 +239,11 @@ export class PlacementService {
       }
     } catch {
       parsedSkills = [
-        { topicSlug: 'arrays', topicName: 'Arrays', minMastery: 85, weight: 1.2 },
-        { topicSlug: 'trees', topicName: 'Trees', minMastery: 80, weight: 1.2 },
+        { topicSlug: 'arrays-dynamic-arrays', topicName: 'Arrays & Dynamic Arrays', minMastery: 85, weight: 1.2 },
+        { topicSlug: 'linked-lists-pointers', topicName: 'Linked Lists & Pointers', minMastery: 75, weight: 1.0 },
+        { topicSlug: 'trees-binary-search-trees', topicName: 'Trees & Balanced Search Trees', minMastery: 80, weight: 1.2 },
         { topicSlug: 'dynamic-programming', topicName: 'Dynamic Programming', minMastery: 75, weight: 1.3 },
+        { topicSlug: 'graph-algorithms', topicName: 'Graph Algorithms & Shortest Paths', minMastery: 70, weight: 1.1 },
       ];
     }
 
@@ -242,8 +260,9 @@ export class PlacementService {
     const verifiedSkills: Array<{ skill: string; mastery: number; required: number }> = [];
     const skillGaps: SkillGapItem[] = [];
 
-    let totalWeight = 0;
-    let earnedWeight = 0;
+    let totalTargetWeight = 0;
+    let earnedCompetencyWeight = 0;
+    let practicedSkillsCount = 0;
 
     for (const item of parsedSkills) {
       const skillName = item.topicName || item.skill || 'Core Skill';
@@ -254,6 +273,7 @@ export class PlacementService {
 
       // 1. Direct slug or name match
       let studentMastery: number | null = null;
+      let attemptCount = 0;
       let matchedTopicId: string | undefined = undefined;
       let matchedTopicSlug: string | undefined = undefined;
       let matchedCourseId: string | undefined = undefined;
@@ -263,15 +283,21 @@ export class PlacementService {
         const mSlug = (m.topic.slug || '').toLowerCase().trim();
         const mName = (m.topic.name || '').toLowerCase().trim();
         if (skillSlug && (mSlug === skillSlug || skillSlug.includes(mSlug) || mSlug.includes(skillSlug))) {
-          studentMastery = Math.max(studentMastery ?? 0, m.masteryScore ?? 0);
-          matchedTopicId = m.topic.id;
-          matchedTopicSlug = m.topic.slug;
-          matchedCourseId = m.topic.courseId;
+          if ((m.masteryScore ?? 0) >= (studentMastery ?? 0)) {
+            studentMastery = m.masteryScore ?? 0;
+            attemptCount = Math.max(attemptCount, m.attemptCount ?? 0);
+            matchedTopicId = m.topic.id;
+            matchedTopicSlug = m.topic.slug;
+            matchedCourseId = m.topic.courseId;
+          }
         } else if (lowerSkillName && (mName === lowerSkillName || lowerSkillName.includes(mName) || mName.includes(lowerSkillName))) {
-          studentMastery = Math.max(studentMastery ?? 0, m.masteryScore ?? 0);
-          matchedTopicId = m.topic.id;
-          matchedTopicSlug = m.topic.slug;
-          matchedCourseId = m.topic.courseId;
+          if ((m.masteryScore ?? 0) >= (studentMastery ?? 0)) {
+            studentMastery = m.masteryScore ?? 0;
+            attemptCount = Math.max(attemptCount, m.attemptCount ?? 0);
+            matchedTopicId = m.topic.id;
+            matchedTopicSlug = m.topic.slug;
+            matchedCourseId = m.topic.courseId;
+          }
         }
       }
 
@@ -295,29 +321,30 @@ export class PlacementService {
           });
 
           if (matched.length > 0) {
-            studentMastery = Math.max(...matched.map((m) => m.masteryScore ?? 0));
-            if (!matchedTopicId && matched[0].topic) {
-              matchedTopicId = matched[0].topic.id;
-              matchedTopicSlug = matched[0].topic.slug;
-              matchedCourseId = matched[0].topic.courseId;
+            const best = matched.reduce((prev, curr) => ((curr.masteryScore ?? 0) > (prev.masteryScore ?? 0) ? curr : prev));
+            studentMastery = best.masteryScore ?? 0;
+            attemptCount = Math.max(attemptCount, best.attemptCount ?? 0);
+            if (!matchedTopicId && best.topic) {
+              matchedTopicId = best.topic.id;
+              matchedTopicSlug = best.topic.slug;
+              matchedCourseId = best.topic.courseId;
             }
           }
         }
       }
 
-      // 3. Curriculum baseline credit if student has demonstrated overall mastery or exam capability
-      if ((studentMastery === null || studentMastery === 0) && (avgMasteryAcrossAllTopics > 0 || avgMockScore > 0)) {
-        const baselineCredit = Math.max(
-          avgMasteryAcrossAllTopics > 0 ? avgMasteryAcrossAllTopics * 0.65 : 0,
-          avgMockScore > 0 ? avgMockScore * 0.5 : 0,
-        );
-        studentMastery = Math.round(baselineCredit * 10) / 10;
+      // STRICT INTEGRITY: If the student has never practiced this topic, mastery is strictly 0.0.
+      // Absolutely NO unearned phantom baseline credit for untouched topics!
+      const isActuallyPracticed = studentMastery !== null && studentMastery > 0;
+      const finalMastery = isActuallyPracticed ? Math.round((studentMastery ?? 0) * 10) / 10 : 0.0;
+
+      if (finalMastery > 0) {
+        practicedSkillsCount++;
       }
 
-      const finalMastery = studentMastery !== null ? Math.round(studentMastery * 10) / 10 : 0.0;
       const gap = Math.max(0, Math.round((requiredMastery - finalMastery) * 10) / 10);
-      totalWeight += requiredMastery * weight;
-      earnedWeight += Math.min(finalMastery, requiredMastery) * weight;
+      totalTargetWeight += requiredMastery * weight;
+      earnedCompetencyWeight += Math.min(finalMastery, requiredMastery) * weight;
 
       if (gap <= 0) {
         verifiedSkills.push({
@@ -327,7 +354,7 @@ export class PlacementService {
         });
       } else {
         const priority: 'HIGH' | 'MEDIUM' | 'LOW' =
-          finalMastery === 0 || gap > 25 ? 'HIGH' : gap > 12 ? 'MEDIUM' : 'LOW';
+          finalMastery === 0 ? 'HIGH' : gap > 20 ? 'HIGH' : gap > 10 ? 'MEDIUM' : 'LOW';
         skillGaps.push({
           skill: skillName,
           topicId: matchedTopicId,
@@ -341,77 +368,143 @@ export class PlacementService {
       }
     }
 
-    const rawSkillReadiness =
-      totalWeight > 0 ? (earnedWeight / totalWeight) * 100 : 0.0;
+    // =========================================================================
+    // Multi-Factor Placement Readiness Index (PRI) Formula:
+    // 1. Domain Coverage (35%): Did the student attempt the required role domains?
+    // 2. Verified Competency (30%): Genuine mastery earned across practiced topics
+    // 3. Sample Size / Volume Confidence (15%): Statistical reliability curve
+    // 4. Problem Difficulty Depth (10%): Practice rigor across Easy / Med / Hard
+    // 5. Timed Mock Validation (10%): Proctored placement screening performance
+    // =========================================================================
 
-    // Synthesize verified competency mastery with assessment / mock exam performance
-    let calculatedReadiness = 0.0;
-    if (mockTestsTaken > 0 && rawSkillReadiness > 0) {
-      calculatedReadiness = Math.round((rawSkillReadiness * 0.7 + avgMockScore * 0.3) * 10) / 10;
-    } else if (rawSkillReadiness > 0) {
-      calculatedReadiness = Math.round(rawSkillReadiness * 10) / 10;
-    } else if (mockTestsTaken > 0) {
-      calculatedReadiness = Math.round((avgMockScore * 0.65) * 10) / 10;
-    } else {
-      calculatedReadiness = 0.0;
+    // Pillar 1: Domain Coverage Rate (0 - 100%)
+    const totalRequiredSkillsCount = parsedSkills.length;
+    const domainCoveragePct = totalRequiredSkillsCount > 0
+      ? Math.round((practicedSkillsCount / totalRequiredSkillsCount) * 1000) / 10
+      : 0.0;
+
+    // Pillar 2: Verified Competency Mastery (0 - 100%)
+    const verifiedCompetencyPct = totalTargetWeight > 0
+      ? Math.round((earnedCompetencyWeight / totalTargetWeight) * 1000) / 10
+      : 0.0;
+
+    // Pillar 3: Practice Volume & Sample Size Confidence (0 - 100%)
+    // Concave exponential confidence curve: 1 - exp(-N / 25)
+    // N=4 => ~14.8%, N=15 => ~45.1%, N=30 => ~69.9%, N=60 => ~90.9%
+    const volumeConfidencePct = Math.min(
+      100.0,
+      Math.round((1 - Math.exp(-totalQuestionsAttempted / 25)) * 1000) / 10,
+    );
+
+    // Pillar 4: Difficulty Depth (0 - 100%)
+    let problemDepthPct = 0.0;
+    if (questionAttempts.length > 0) {
+      let easyCount = 0;
+      let medCount = 0;
+      let hardCount = 0;
+      for (const qa of questionAttempts) {
+        if (qa.difficultyAtAttempt === 'HARD') hardCount++;
+        else if (qa.difficultyAtAttempt === 'EASY') easyCount++;
+        else medCount++;
+      }
+      const rawDepthMultiplier =
+        (easyCount * 0.8 + medCount * 1.2 + hardCount * 1.5) /
+        (1.2 * questionAttempts.length);
+      const depthMultiplier = Math.min(1.0, Math.max(0.4, rawDepthMultiplier));
+      const volumeGate = Math.min(1.0, totalQuestionsAttempted / 20);
+      problemDepthPct = Math.round(depthMultiplier * volumeGate * 1000) / 10;
+    } else if (totalQuestionsAttempted > 0) {
+      const volumeGate = Math.min(1.0, totalQuestionsAttempted / 25);
+      problemDepthPct = Math.round(volumeGate * 60 * 10) / 10;
     }
 
-    const readinessScore = Math.min(100.0, Math.max(0.0, calculatedReadiness));
+    // Pillar 5: Timed Mock Exam Validation (0 - 100%)
+    let mockValidationPct = 0.0;
+    if (mockTestsTaken > 0) {
+      const mockConfidence = Math.min(1.0, mockTestsTaken / 3);
+      mockValidationPct = Math.min(100.0, Math.round(avgMockScore * mockConfidence * 10) / 10);
+    }
 
-    const hiringBarStatus =
-      readinessScore >= (benchmark.targetMastery || 80.0)
+    // Weighted Synthesis:
+    const rawAggregateReadiness =
+      domainCoveragePct * 0.35 +
+      verifiedCompetencyPct * 0.30 +
+      volumeConfidencePct * 0.15 +
+      problemDepthPct * 0.10 +
+      mockValidationPct * 0.10;
+
+    const readinessScore = Math.min(100.0, Math.max(0.0, Math.round(rawAggregateReadiness * 10) / 10));
+
+    // Hiring Bar Determination: Requires both high overall score AND strong domain breadth
+    const targetThreshold = benchmark.targetMastery || 80.0;
+    const hiringBarStatus: 'MEETS_BAR' | 'NEAR_BAR' | 'DEVELOPING' =
+      readinessScore >= targetThreshold && domainCoveragePct >= 80.0
         ? 'MEETS_BAR'
-        : readinessScore >= 55.0
+        : readinessScore >= 45.0 && domainCoveragePct >= 40.0
           ? 'NEAR_BAR'
           : 'DEVELOPING';
 
-    // Build dynamic personalized roadmap
+    const pillarBreakdown: PlacementPillarBreakdown = {
+      domainCoveragePct,
+      verifiedCompetencyPct,
+      volumeConfidencePct,
+      problemDepthPct,
+      mockValidationPct,
+      totalQuestionsAttempted,
+      practicedSkillsCount,
+      totalRequiredSkillsCount,
+    };
+
+    // Dynamic, Actionable Roadmap
     const personalizedRoadmap: string[] = [];
-    if (skillGaps.length === 0 && verifiedSkills.length > 0) {
-      personalizedRoadmap.push(
-        `Milestone 1: Outstanding! You have met the industry hiring bar across all competencies for ${benchmark.title}.`,
-      );
-      personalizedRoadmap.push(
-        `Milestone 2: Take timed placement mock exams to refine your speed and accuracy under interview pressure.`,
-      );
-      personalizedRoadmap.push(
-        `Milestone 3: Your profile is fully eligible for direct campus placement interview referrals with ${benchmark.hiringPartners || 'Tier-1 firms'}.`,
-      );
-    } else if (skillGaps.length > 0) {
-      const topGap = skillGaps[0];
-      personalizedRoadmap.push(
-        `Step 1: Bridge highest priority delta in "${topGap.skill}" (Need +${topGap.gap}% to reach ${topGap.requiredMastery}% bar).`,
-      );
-      if (skillGaps[1]) {
+
+    if (practicedSkillsCount < totalRequiredSkillsCount) {
+      const unpracticed = parsedSkills.filter((ps) => {
+        const sName = ps.topicName || ps.skill || '';
+        return !verifiedSkills.some((vs) => vs.skill === sName) &&
+               skillGaps.some((sg) => sg.skill === sName && sg.studentMastery === 0);
+      });
+      const nextSkill = unpracticed[0]?.topicName || unpracticed[0]?.skill || skillGaps[0]?.skill;
+      if (nextSkill) {
         personalizedRoadmap.push(
-          `Step 2: Practice adaptive question sets in "${skillGaps[1].skill}" to close the ${skillGaps[1].gap}% requirement gap.`,
+          `Domain Coverage: You have practiced ${practicedSkillsCount} of ${totalRequiredSkillsCount} required domains. Practice "${nextSkill}" to unlock your syllabus coverage score (current: ${domainCoveragePct}%).`,
+        );
+      }
+    }
+
+    if (totalQuestionsAttempted < 25) {
+      personalizedRoadmap.push(
+        `Volume Confidence: You have attempted ${totalQuestionsAttempted} question(s). Reach at least 25-30 practice problems to establish statistical reliability (currently ${volumeConfidencePct}% confidence).`,
+      );
+    }
+
+    if (skillGaps.length > 0) {
+      const topGap = skillGaps.find((g) => g.studentMastery > 0) || skillGaps[0];
+      if (topGap.studentMastery > 0) {
+        personalizedRoadmap.push(
+          `Competency Lift: Elevate "${topGap.skill}" from ${topGap.studentMastery}% to ${topGap.requiredMastery}% target bar (+${topGap.gap}% needed).`,
         );
       } else {
         personalizedRoadmap.push(
-          `Step 2: Solve adaptive problem sets in the Adaptive Practice Arena to reinforce core topics.`,
+          `Core Competency: Begin practice on "${topGap.skill}" to bridge the foundational requirement gap.`,
         );
       }
-      if (mockTestsTaken === 0) {
-        personalizedRoadmap.push(
-          `Step 3: Complete your first proctored ${benchmark.title} screening mock assessment.`,
-        );
-      } else {
-        personalizedRoadmap.push(
-          `Step 3: Elevate your mock assessment average from ${avgMockScore}% to ≥${benchmark.targetMastery}%.`,
-        );
-      }
+    }
+
+    if (mockTestsTaken === 0) {
       personalizedRoadmap.push(
-        `Step 4: Reach ≥${benchmark.targetMastery}% aggregate readiness to qualify for campus placement drives with ${benchmark.hiringPartners || 'Tier-1 firms'}.`,
+        `Simulation: Take a proctored placement mock exam for ${benchmark.title} to validate performance under timed interview conditions.`,
       );
-    } else {
+    } else if (avgMockScore < targetThreshold) {
       personalizedRoadmap.push(
-        `Step 1: Start adaptive practice sessions across curriculum topics to establish your skill baseline.`,
+        `Mock Elevation: Elevate your mock screening average from ${avgMockScore}% to ≥${targetThreshold}%.`,
       );
-      personalizedRoadmap.push(`Step 2: Complete faculty assessments and timed quizzes.`);
-      personalizedRoadmap.push(
-        `Step 3: Attempt proctored placement mock exams for ${benchmark.title}.`,
+    }
+
+    if (hiringBarStatus === 'MEETS_BAR') {
+      personalizedRoadmap.unshift(
+        `Tier-1 Ready: Congratulations! Your Placement Readiness Index (${readinessScore}%) meets the hiring criteria across all 5 evaluation pillars for ${benchmark.title}.`,
       );
-      personalizedRoadmap.push(`Step 4: Unlock prioritized campus placement interview referrals.`);
     }
 
     // Persist updated scores in DB
@@ -443,6 +536,7 @@ export class PlacementService {
       mockTestsTaken,
       avgMockScore,
       personalizedRoadmap,
+      pillarBreakdown,
     };
   }
 

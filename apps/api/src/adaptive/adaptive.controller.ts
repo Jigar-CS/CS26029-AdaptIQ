@@ -32,7 +32,7 @@ export class AdaptiveController {
   @Roles(UserRole.STUDENT)
   async getNextQuestion(
     @Req() req: any,
-    @Query('topicId') topicId: string,
+    @Query('topicId') topicId?: string,
     @Query('courseId') courseId?: string,
     @Query('difficulty') difficulty?: QuestionDifficulty,
     @Query('excludeIds') excludeIdsStr?: string,
