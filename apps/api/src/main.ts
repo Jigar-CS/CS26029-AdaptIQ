@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import * as dns from 'dns';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -42,7 +43,7 @@ async function bootstrap() {
     ? corsEnv === '*'
       ? true
       : corsEnv.split(',').map((s) => s.trim())
-    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001'];
+    : true; // In dev/lab mode, allow all origins including mobile companion devices and local IPs
 
   app.enableCors({
     origin: allowedOrigins,

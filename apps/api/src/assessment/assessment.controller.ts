@@ -9,7 +9,13 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { AssessmentService, CreateAssessmentDto, UpdateAssessmentDto, SubmitAnswerDto } from './assessment.service';
+import {
+  AssessmentService,
+  CreateAssessmentDto,
+  UpdateAssessmentDto,
+  SubmitAnswerDto,
+  GradeSubmissionDto,
+} from './assessment.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -80,6 +86,23 @@ export class AssessmentController {
       req.user?.studentProfile?.id ||
       req.user?.id;
     return this.assessmentService.getSubmissionResult(submissionId, studentProfileId);
+  }
+
+  /**
+   * Faculty: Manually grade a descriptive assessment submission
+   */
+  @Post('submissions/:id/grade')
+  @Roles(UserRole.FACULTY, UserRole.SUPER_ADMIN, UserRole.HOD)
+  async gradeSubmission(
+    @Req() req: any,
+    @Param('id') submissionId: string,
+    @Body() dto: GradeSubmissionDto,
+  ) {
+    const facultyProfileId =
+      req.user?.facultyId ||
+      req.user?.facultyProfile?.id ||
+      req.user?.id;
+    return this.assessmentService.gradeSubmission(submissionId, facultyProfileId, dto);
   }
 
   /**

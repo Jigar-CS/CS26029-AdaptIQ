@@ -91,7 +91,7 @@ async function seed50Students() {
     const firstName = name.split(' ')[0];
     const passwordPlain = `${firstName.toLowerCase()}@2006`;
     const passwordHash = await bcrypt.hash(passwordPlain, 10);
-    const email = i === 1 ? 'student@charusat.edu.in' : `${enrollment.toLowerCase()}@charusat.edu.in`;
+    const email = `${enrollment.toLowerCase()}@charusat.edu.in`;
 
     // 1. AuthorizedStudent
     let authorized = await prisma.authorizedStudent.findUnique({
@@ -143,24 +143,21 @@ async function seed50Students() {
     }
 
     // 3. StudentProfile
-    let studentProfile = await prisma.studentProfile.findUnique({
-      where: { userId: user.id },
+    const existingWithAuth = await prisma.studentProfile.findUnique({
+      where: { authorizedStudentId: authorized.id },
     });
-
-    if (!studentProfile) {
-      studentProfile = await prisma.studentProfile.findUnique({
-        where: { authorizedStudentId: authorized.id },
-      });
+    if (existingWithAuth && existingWithAuth.userId !== user.id) {
+      await prisma.studentProfile.delete({ where: { id: existingWithAuth.id } });
     }
 
-    if (!studentProfile) {
-      studentProfile = await prisma.studentProfile.create({
-        data: {
-          userId: user.id,
-          authorizedStudentId: authorized.id,
-        },
-      });
-    }
+    const studentProfile = await prisma.studentProfile.upsert({
+      where: { userId: user.id },
+      update: { authorizedStudentId: authorized.id },
+      create: {
+        userId: user.id,
+        authorizedStudentId: authorized.id,
+      },
+    });
 
     // Link user to authorizedStudent if not already linked
     if (!authorized.userId) {

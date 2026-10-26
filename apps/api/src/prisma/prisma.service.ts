@@ -9,7 +9,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     super({
       datasources: {
         db: {
-          url: process.env.DATABASE_URL,
+          url: process.env.DATABASE_URL || 'mysql://root:@localhost:3307/clias_db',
         },
       },
       // Connection pool settings to reduce latency

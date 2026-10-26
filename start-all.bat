@@ -8,7 +8,7 @@ echo ===================================================
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :4000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
-timeout /t 1 /nobreak >nul
+ping 127.0.0.1 -n 2 >nul
 
 :: 1. Check & Start XAMPP MySQL on Port 3307
 netstat -ano | findstr :3307 | findstr LISTENING >nul 2>&1
@@ -17,7 +17,7 @@ if %errorlevel% equ 0 (
 ) else (
     echo [1/4] Starting MySQL on Port 3307...
     start "CLIAS 1 - MySQL (Port 3307)" cmd /k "color 0A && echo Starting MySQL on Port 3307... && C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini --console"
-    timeout /t 3 /nobreak >nul
+    ping 127.0.0.1 -n 4 >nul
 )
 
 :: 2. Start FastAPI AI Microservice on Port 8000

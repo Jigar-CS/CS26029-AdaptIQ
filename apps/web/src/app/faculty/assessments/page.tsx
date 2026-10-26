@@ -203,10 +203,56 @@ export default function FacultyAssessmentsPage() {
   const [leaderboardModalData, setLeaderboardModalData] = useState<{ id: string; title: string } | null>(null);
 
   // Examination Mode & Coding Problem Engine State
-  const [examMode, setExamMode] = useState<'OBJECTIVE' | 'CODING' | 'HYBRID'>('OBJECTIVE');
+  const [examMode, setExamMode] = useState<'OBJECTIVE' | 'CODING' | 'DESCRIPTIVE' | 'HYBRID'>('OBJECTIVE');
   const [authoredCodingProblems, setAuthoredCodingProblems] = useState<any[]>([]);
   const [isProblemAuthorModalOpen, setIsProblemAuthorModalOpen] = useState(false);
   const [editingProblemIdx, setEditingProblemIdx] = useState<number | null>(null);
+
+  // Authored Descriptive Questions State
+  const [authoredDescriptiveQuestions, setAuthoredDescriptiveQuestions] = useState<
+    Array<{ id: string; title: string; prompt: string; rubric: string; points: number }>
+  >([
+    {
+      id: '1',
+      title: 'Question 1: Explain ACID Properties in DBMS',
+      prompt:
+        'Explain the four ACID (Atomicity, Consistency, Isolation, Durability) properties in Database Management Systems (DBMS). Provide a comprehensive real-world banking transaction example illustrating how transaction rollback prevents data inconsistencies.',
+      rubric: 'Atomicity (2.5M) • Consistency (2.5M) • Isolation (2.5M) • Durability (2.5M)',
+      points: 10,
+    },
+    {
+      id: '2',
+      title: 'Question 2: Database Normalization (1NF to BCNF)',
+      prompt:
+        'Explain Database Normalization and anomalies (Insert, Update, Delete) in unnormalized relations. Illustrate progressive decomposition from 1NF, 2NF, 3NF, up to Boyce-Codd Normal Form (BCNF) using an Employee-Project schema.',
+      rubric: 'Anomalies Explanation (2M) • 1NF & 2NF (3M) • 3NF & BCNF (3M) • Lossless Decomposition (2M)',
+      points: 10,
+    },
+    {
+      id: '3',
+      title: 'Question 3: SQL vs NoSQL & CAP Theorem',
+      prompt:
+        'Compare Relational Databases (RDBMS) with NoSQL architectures (Document, Key-Value, Columnar, Graph). State the CAP Theorem (Consistency, Availability, Partition Tolerance) and discuss system design trade-offs in distributed clusters.',
+      rubric: 'SQL vs NoSQL Comparison (3M) • 4 NoSQL Types (3M) • CAP Theorem Proof & Trade-offs (4M)',
+      points: 10,
+    },
+    {
+      id: '4',
+      title: 'Question 4: Database Indexing & B+ Trees',
+      prompt:
+        'Explain how indexing improves query retrieval performance. Compare Clustered vs Non-Clustered Indexes, and describe the internal tree node structure of a B+ Tree index with an insertion and split example.',
+      rubric: 'Clustered vs Non-Clustered (3M) • B+ Tree Architecture (4M) • Performance Impact & Overhead (3M)',
+      points: 10,
+    },
+    {
+      id: '5',
+      title: 'Question 5: Concurrency Control & Two-Phase Locking',
+      prompt:
+        'Describe Concurrency Control in multi-user DBMS environments. Explain Strict Two-Phase Locking (Strict 2PL), Deadlock Detection vs Deadlock Prevention, and contrast 2PL with Timestamp-based Ordering protocols.',
+      rubric: 'Serializability & Concurrency (2M) • Strict 2PL Protocol (4M) • Deadlock Handling (2M) • Timestamp Ordering (2M)',
+      points: 10,
+    },
+  ]);
 
   // Active Coding Problem Authoring Form Fields
   const [cpTitle, setCpTitle] = useState('');
@@ -232,6 +278,40 @@ export default function FacultyAssessmentsPage() {
   // Problem Inspector Modal State
   const [isInspectModalOpen, setIsInspectModalOpen] = useState(false);
   const [inspectAssessment, setInspectAssessment] = useState<any | null>(null);
+
+  // Handwritten Answer Sheet Review Modal & Manual Grading State
+  const [sheetModalOpen, setSheetModalOpen] = useState(false);
+  const [selectedSubForSheet, setSelectedSubForSheet] = useState<any | null>(null);
+  const [sheetActiveQ, setSheetActiveQ] = useState<string>('Q1');
+  const [sheetStrokes, setSheetStrokes] = useState<any[]>([]);
+  const [sheetTypedText, setSheetTypedText] = useState<string>('');
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const sheetCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const sheetScrollContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [sheetCurrentPage, setSheetCurrentPage] = useState<number>(1);
+  const [sheetViewMode, setSheetViewMode] = useState<'fit' | '100'>('fit');
+
+  const PAGE_HEIGHT = 750;
+  const sheetTotalPages = React.useMemo(() => {
+    let maxY = 0;
+    for (const stroke of sheetStrokes) {
+      const pts = stroke.points || stroke.pts || [];
+      for (const p of pts) {
+        const py = Number(p.y) || 0;
+        if (py > maxY) maxY = py;
+      }
+    }
+    // If student wrote only on 1 page (or empty), show only 1 page (750px)
+    // If student wrote across page 1 boundary (> 750px), calculate exact total pages
+    return Math.max(1, Math.ceil((maxY > 0 ? maxY + 40 : 1) / PAGE_HEIGHT));
+  }, [sheetStrokes]);
+
+  // Interactive Faculty Grading State
+  const [gradingMarks, setGradingMarks] = useState<Record<string, number>>({});
+  const [gradingFeedback, setGradingFeedback] = useState<Record<string, string>>({});
+  const [overallFeedback, setOverallFeedback] = useState('');
+  const [savingGrades, setSavingGrades] = useState(false);
+  const [gradeSuccessMsg, setGradeSuccessMsg] = useState('');
 
   // New assessment form state
   const [newTitle, setNewTitle] = useState('');
@@ -435,6 +515,275 @@ export default function FacultyAssessmentsPage() {
       setAnalyticsLoading(false);
     }
   };
+
+  const openAnswerSheetModal = (sub: any) => {
+    setSelectedSubForSheet(sub);
+    setSheetActiveQ('Q1');
+    setSheetModalOpen(true);
+    setGradeSuccessMsg('');
+
+    // Prepopulate grading marks and feedback from previous evaluation if available
+    const initialMarks: Record<string, number> = {};
+    const initialFeedback: Record<string, string> = {};
+
+    if (sub.answers && Array.isArray(sub.answers)) {
+      sub.answers.forEach((ans: any, idx: number) => {
+        const qKey = `Q${idx + 1}`;
+        initialMarks[qKey] = ans.pointsAwarded ?? 0;
+        initialFeedback[qKey] = ans.feedback || '';
+        if (ans.questionId) {
+          initialMarks[ans.questionId] = ans.pointsAwarded ?? 0;
+          initialFeedback[ans.questionId] = ans.feedback || '';
+        }
+      });
+    }
+
+    setGradingMarks(initialMarks);
+    setGradingFeedback(initialFeedback);
+    setOverallFeedback(sub.feedback || '');
+
+    const firstAns = sub?.answers?.[0];
+    const targetQId = firstAns?.questionId || 'Q1';
+    loadSheetStrokes(sub, 'Q1', targetQId);
+  };
+
+  const handleSaveStudentGrades = async () => {
+    if (!selectedSubForSheet) return;
+    setSavingGrades(true);
+    setGradeSuccessMsg('');
+
+    try {
+      const answersList = selectedSubForSheet?.answers || [];
+      const answersPayload = answersList.map((ans: any, idx: number) => {
+        const qKey = `Q${idx + 1}`;
+        const qId = ans.questionId || ans.id || `q-${qKey}`;
+        const awarded = gradingMarks[qKey] !== undefined 
+          ? gradingMarks[qKey] 
+          : (gradingMarks[qId] !== undefined ? gradingMarks[qId] : (ans?.pointsAwarded ?? 0));
+        const fb = gradingFeedback[qKey] || gradingFeedback[qId] || ans?.feedback || '';
+        return {
+          questionId: qId,
+          pointsAwarded: Number(awarded) || 0,
+          feedback: fb,
+        };
+      });
+
+      const res: any = await api.post(`/assessments/submissions/${selectedSubForSheet.submissionId}/grade`, {
+        answers: answersPayload,
+        overallFeedback,
+        status: 'EVALUATED',
+      });
+
+      setGradeSuccessMsg('Evaluation finalized successfully! Total score and grade updated in cohort records.');
+
+      if (res?.submission) {
+        setSelectedSubForSheet((prev: any) => ({
+          ...prev,
+          score: res.submission.totalScore,
+          percentage: res.submission.percentage,
+          status: res.submission.status,
+          feedback: res.submission.feedback,
+        }));
+      }
+
+      // Refresh active analytics modal data
+      if (activeAnalytics?.assessmentId) {
+        const refreshed = await api.get(`/assessments/${activeAnalytics.assessmentId}/analytics`);
+        setActiveAnalytics(refreshed);
+      }
+    } catch (err: any) {
+      console.error('Failed to save grades', err);
+      alert(err.message || 'Failed to submit grade evaluation');
+    } finally {
+      setSavingGrades(false);
+    }
+  };
+
+  const loadSheetStrokes = async (subOrSession: any, qId: string, targetQuestionId?: string) => {
+    setSheetLoading(true);
+    setSheetCurrentPage(1);
+    setSheetTypedText('');
+    setSheetStrokes([]);
+    if (sheetScrollContainerRef.current) {
+      sheetScrollContainerRef.current.scrollTo({ top: 0 });
+    }
+
+    const subObj = typeof subOrSession === 'object' ? subOrSession : selectedSubForSheet;
+    const qIndex = Math.max(0, Number(qId.replace('Q', '')) - 1);
+
+    // 1. First, check if the student's submission has answerText stored in the DB!
+    let ans = null;
+    if (subObj?.answers && Array.isArray(subObj.answers)) {
+      if (targetQuestionId) {
+        ans = subObj.answers.find((a: any) => a.questionId === targetQuestionId);
+      }
+      if (!ans) {
+        ans = subObj.answers.find((a: any) => a.order === (qIndex + 1)) || subObj.answers[qIndex];
+      }
+    }
+
+    let foundStrokes: any[] = [];
+    let foundText = '';
+
+    if (ans?.answerText) {
+      try {
+        const raw = String(ans.answerText).trim();
+        if (raw.startsWith('{') || raw.startsWith('[')) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            foundStrokes = parsed;
+          } else if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.strokes)) foundStrokes = parsed.strokes;
+            if (parsed.typedText) foundText = parsed.typedText;
+          }
+        } else {
+          foundText = raw;
+        }
+      } catch {
+        foundText = ans.answerText;
+      }
+    }
+
+    // In the faculty review portal, student submissions in DB are final and immutable.
+    // Display what the student actually submitted. If unattempted, display a clean blank sheet.
+    setSheetStrokes(foundStrokes);
+    setSheetTypedText(foundText);
+    setSheetLoading(false);
+  };
+
+  const handleSheetQuestionChange = (qId: string, targetQuestionId?: string) => {
+    setSheetActiveQ(qId);
+    if (selectedSubForSheet) {
+      loadSheetStrokes(selectedSubForSheet, qId, targetQuestionId);
+    }
+  };
+
+  useEffect(() => {
+    if (!sheetModalOpen) return;
+    const canvas = sheetCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const totalHeight = sheetTotalPages * PAGE_HEIGHT;
+    if (canvas.width !== 900 || canvas.height !== totalHeight) {
+      canvas.width = 900;
+      canvas.height = totalHeight;
+    }
+
+    // 1. Draw clean white ruled notebook paper background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 900, totalHeight);
+
+    // 2. Subtle horizontal notebook ruled guidelines (starting at y=48 with 36px spacing)
+    const lineSpacing = 36;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+    ctx.lineWidth = 1.0;
+    for (let y = 48; y < totalHeight; y += lineSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(900, y);
+      ctx.stroke();
+    }
+
+    // 3. Vertical red margin rule at x = 60
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 0);
+    ctx.lineTo(60, totalHeight);
+    ctx.stroke();
+
+    // 4. Page Break Dividers between pages (at y = 750, 1500, etc.)
+    for (let p = 1; p < sheetTotalPages; p++) {
+      const py = p * PAGE_HEIGHT;
+
+      // Distinct page break line
+      ctx.save();
+      ctx.strokeStyle = '#6366F1';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, py);
+      ctx.lineTo(900, py);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Page marker badge: e.g. "— PAGE 2 OF 3 • Q1 —"
+      ctx.fillStyle = '#EEF2FF';
+      ctx.fillRect(280, py - 13, 340, 26);
+      ctx.strokeStyle = '#C7D2FE';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(280, py - 13, 340, 26);
+
+      ctx.fillStyle = '#4F46E5';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`— PAGE ${p + 1} OF ${sheetTotalPages} • ${sheetActiveQ} —`, 450, py);
+      ctx.restore();
+    }
+
+    // 5. Render ALL handwritten student strokes directly with natural coordinates
+    for (const stroke of sheetStrokes) {
+      const pts = stroke.points || stroke.pts || [];
+      if (pts.length === 0) continue;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const toolType = (stroke.toolType || stroke.tool || 'PEN').toUpperCase();
+      if (toolType === 'HIGHLIGHTER') {
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = '#FACC15';
+        ctx.lineWidth = stroke.strokeWidth || stroke.w || 20;
+      } else {
+        ctx.globalAlpha = 1.0;
+        let color = '#0F172A';
+        if (stroke.color) {
+          if (typeof stroke.color === 'number') {
+            const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
+            const r = parseInt(hex.substring(2, 4), 16);
+            const g = parseInt(hex.substring(4, 6), 16);
+            const b = parseInt(hex.substring(6, 8), 16);
+            color = `rgb(${r},${g},${b})`;
+          } else if (typeof stroke.color === 'string') {
+            color = stroke.color;
+          }
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = stroke.strokeWidth || stroke.w || 3.0;
+      }
+
+      // Handle single point (dots on 'i', periods, commas)
+      if (pts.length === 1) {
+        ctx.beginPath();
+        const r = Math.max(1.5, (stroke.strokeWidth || stroke.w || 3.0) / 2);
+        ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+
+      for (let i = 1; i < pts.length; i++) {
+        const p0 = pts[i - 1];
+        const p1 = pts[i];
+        const midX = (p0.x + p1.x) / 2;
+        const midY = (p0.y + p1.y) / 2;
+        ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+      }
+
+      const last = pts[pts.length - 1];
+      ctx.lineTo(last.x, last.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [sheetModalOpen, sheetStrokes, sheetTotalPages, sheetActiveQ]);
 
   const exportMarksCsv = (analyticsData?: any) => {
     const target = analyticsData || activeAnalytics;
@@ -1103,6 +1452,10 @@ export default function FacultyAssessmentsPage() {
       alert('Please author or import at least one coding problem for the coding examination.');
       return;
     }
+    if (examMode === 'DESCRIPTIVE' && authoredDescriptiveQuestions.length === 0) {
+      alert('Please author at least one descriptive question for the examination.');
+      return;
+    }
     if (examMode === 'HYBRID' && selectedQuestionIds.length === 0 && authoredCodingProblems.length === 0) {
       alert('Please add at least one question or coding problem for the hybrid examination.');
       return;
@@ -1119,13 +1472,17 @@ export default function FacultyAssessmentsPage() {
         batch: newBatch,
         rollFilter: newRollFilter,
         durationMinutes: Number(newDuration),
-        totalMarks: Number(newTotalMarks),
+        totalMarks:
+          examMode === 'DESCRIPTIVE'
+            ? authoredDescriptiveQuestions.reduce((acc, q) => acc + (Number(q.points) || 0), 0)
+            : Number(newTotalMarks),
         passingMarks: Number(newPassingMarks),
         examMode,
         status: newStatus,
         randomizeQuestions: newRandomizeQuestions,
-        questionIds: examMode === 'CODING' ? [] : selectedQuestionIds,
-        codingProblems: examMode === 'OBJECTIVE' ? [] : authoredCodingProblems,
+        questionIds: (examMode === 'CODING' || examMode === 'DESCRIPTIVE') ? [] : selectedQuestionIds,
+        codingProblems: (examMode === 'CODING' || examMode === 'HYBRID') ? authoredCodingProblems : [],
+        descriptiveQuestions: examMode === 'DESCRIPTIVE' ? authoredDescriptiveQuestions : [],
       });
 
       setIsModalOpen(false);
@@ -1524,7 +1881,7 @@ export default function FacultyAssessmentsPage() {
                     Select automated code judge or objective question bank
                   </span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Coding Exam Option */}
                   <button
                     type="button"
@@ -1599,6 +1956,35 @@ export default function FacultyAssessmentsPage() {
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-400 font-sans leading-snug">
                       Both theoretical questions and practical coding problems
+                    </p>
+                  </button>
+
+                  {/* Descriptive Ink Exam Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExamMode('DESCRIPTIVE');
+                      if (!newTitle.includes('Descriptive') && !newTitle.includes('✍️')) {
+                        setNewTitle(newTitle ? `${newTitle} (Descriptive)` : 'Database Systems Descriptive Mid-Term Examination');
+                      }
+                    }}
+                    className={`p-3.5 border text-left transition-all ${
+                      examMode === 'DESCRIPTIVE'
+                        ? 'bg-[var(--surface-muted)] border-2 border-emerald-500 shadow-xs'
+                        : 'bg-[var(--surface)] border border-[var(--border)] hover:border-[#4a6fa5]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-display text-sm uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Edit3 className="w-4 h-4 text-emerald-500" />
+                        Descriptive Ink
+                      </span>
+                      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                        MANUAL GRADE
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 font-sans leading-snug">
+                      Digital ink tablet answers with custom rubrics and manual faculty grading
                     </p>
                   </button>
                 </div>
@@ -2055,6 +2441,155 @@ export default function FacultyAssessmentsPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* SECTION: Descriptive Questions Authoring & Rubric (For DESCRIPTIVE mode) */}
+              {examMode === 'DESCRIPTIVE' && (
+                <div className="space-y-4 pt-4 border-t border-[var(--border)]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-muted)] p-4 border border-[var(--border)]">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Edit3 className="w-5 h-5 text-emerald-500" />
+                        <h4 className="font-display text-sm uppercase text-slate-900 dark:text-white">Descriptive Examination Questions & Evaluation Rubrics</h4>
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                          {authoredDescriptiveQuestions.length} Questions • {authoredDescriptiveQuestions.reduce((acc, q) => acc + (q.points || 0), 0)} Total Marks
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-sans mt-1">
+                        Students write descriptive answers on mobile companion canvas in real-time. Submissions require manual faculty grading.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newQNum = authoredDescriptiveQuestions.length + 1;
+                        setAuthoredDescriptiveQuestions([
+                          ...authoredDescriptiveQuestions,
+                          {
+                            id: String(newQNum),
+                            title: `Question ${newQNum}: Custom Descriptive Problem`,
+                            prompt: 'Describe the core concept, provide system diagrams, and analyze constraints.',
+                            rubric: 'Conceptual Definition (3M) • Architecture Diagram (4M) • Practical Application (3M)',
+                            points: 10,
+                          },
+                        ]);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Question</span>
+                    </button>
+                  </div>
+
+                  {/* List of Descriptive Questions */}
+                  <div className="space-y-3">
+                    {authoredDescriptiveQuestions.map((q, idx) => (
+                      <div key={idx} className="p-4 border border-[var(--border)] bg-[var(--surface)] space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span className="font-display text-xs font-bold uppercase text-slate-900 dark:text-white">
+                              Question #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <label className="font-mono text-[10px] text-slate-500 font-bold uppercase">Marks:</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={50}
+                                value={q.points}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setAuthoredDescriptiveQuestions((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, points: val } : item))
+                                  );
+                                }}
+                                className="w-16 p-1 text-xs font-mono font-bold text-center bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                            {authoredDescriptiveQuestions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAuthoredDescriptiveQuestions((prev) => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 rounded transition"
+                                title="Remove question"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Title input */}
+                        <div>
+                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                            Question Title
+                          </label>
+                          <input
+                            type="text"
+                            value={q.title}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setAuthoredDescriptiveQuestions((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, title: val } : item))
+                              );
+                            }}
+                            className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
+                            placeholder="e.g. Question 1: Explain ACID Properties in DBMS"
+                          />
+                        </div>
+
+                        {/* Prompt textarea */}
+                        <div>
+                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                            Question Prompt (Displayed to Student)
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={q.prompt}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setAuthoredDescriptiveQuestions((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, prompt: val } : item))
+                              );
+                            }}
+                            className="w-full p-2.5 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-sans leading-relaxed"
+                            placeholder="Type the comprehensive theoretical prompt or problem statement..."
+                          />
+                        </div>
+
+                        {/* Rubric input */}
+                        <div>
+                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                              <Sparkles className="w-3 h-3" />
+                              Evaluation Rubric / Marks Breakdown (Displayed during Manual Grading)
+                            </span>
+                          </label>
+                          <input
+                            type="text"
+                            value={q.rubric}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setAuthoredDescriptiveQuestions((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, rubric: val } : item))
+                              );
+                            }}
+                            className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-amber-500"
+                            placeholder="e.g. Concept (3M) • Architecture diagram (3M) • Proof & Analysis (4M)"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -2657,6 +3192,8 @@ export default function FacultyAssessmentsPage() {
                   <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
                     Target: <strong className="text-slate-900 dark:text-white font-bold">{newDivision === 'DIV 1' ? 'Division A' : newDivision === 'DIV 2' ? 'Division B' : 'All Divisions'}</strong>{newRollFilter !== 'ALL' && <strong className="text-amber-700 dark:text-amber-300 font-bold ml-1">({newRollFilter === 'ODD' ? 'Odd IDs Only' : 'Even IDs Only'})</strong>} • {examMode === 'CODING' ? (
                       <strong className="text-[#e05033] font-bold">{authoredCodingProblems.length} Problems</strong>
+                    ) : examMode === 'DESCRIPTIVE' ? (
+                      <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{authoredDescriptiveQuestions.length} Descriptive Questions ({authoredDescriptiveQuestions.reduce((acc, q) => acc + (Number(q.points) || 0), 0)} Marks)</strong>
                     ) : examMode === 'HYBRID' ? (
                       <strong className="text-purple-600 dark:text-purple-400 font-bold">{selectedQuestionIds.length} MCQs + {authoredCodingProblems.length} Problems</strong>
                     ) : (
@@ -2706,6 +3243,8 @@ export default function FacultyAssessmentsPage() {
                       creating ||
                       (examMode === 'CODING'
                         ? authoredCodingProblems.length === 0
+                        : examMode === 'DESCRIPTIVE'
+                        ? authoredDescriptiveQuestions.length === 0
                         : examMode === 'HYBRID'
                         ? selectedQuestionIds.length === 0 && authoredCodingProblems.length === 0
                         : selectedQuestionIds.length === 0)
@@ -3511,6 +4050,7 @@ export default function FacultyAssessmentsPage() {
                             <th className="px-4 py-3.5">Status</th>
                             <th className="px-4 py-3.5">AI Proctoring Trust</th>
                             <th className="px-4 py-3.5 text-right">Attempt Date</th>
+                            <th className="px-4 py-3.5 text-right">Evaluation</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 font-medium">
@@ -3600,12 +4140,23 @@ export default function FacultyAssessmentsPage() {
                                     minute: '2-digit',
                                   })}
                                 </td>
+                                <td className="px-4 py-3.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => openAnswerSheetModal(sub)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                                    title="Inspect digital ink handwritten answer sheets"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Answer Sheet</span>
+                                  </button>
+                                </td>
                               </tr>
                             ))}
 
                           {(!activeAnalytics.submissions || activeAnalytics.submissions.length === 0) && (
                             <tr>
-                              <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                              <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                                 No students have completed or submitted this assessment yet.
                               </td>
                             </tr>
@@ -3617,6 +4168,437 @@ export default function FacultyAssessmentsPage() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Handwritten Answer Sheet Inspection Modal */}
+      {sheetModalOpen && selectedSubForSheet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="bg-[#0F172A] border border-slate-700 rounded-3xl w-full max-w-6xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden text-white">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-800 bg-[#1E293B] flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">
+                      Candidate Handwritten Answer Sheet: {selectedSubForSheet.studentName}
+                    </h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
+                      {selectedSubForSheet.enrollmentNumber || selectedSubForSheet.email}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Score: <strong className="text-emerald-400">{selectedSubForSheet.score}/{selectedSubForSheet.totalMarks} ({selectedSubForSheet.percentage}%)</strong> • AI Proctoring Trust: <strong className="text-indigo-400">{selectedSubForSheet.trustScore}%</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const canvas = sheetCanvasRef.current;
+                    if (!canvas) return;
+                    const link = document.createElement('a');
+                    link.download = `${selectedSubForSheet.studentName || 'Student'}_${sheetActiveQ}_Answer_Sheet_${sheetTotalPages}Page.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Sheet (.PNG)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSheetModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Dynamic Question Selector Tabs */}
+            {(() => {
+              const answersList = selectedSubForSheet?.answers || [];
+              const questionsCount = answersList.length > 0 ? answersList.length : 5;
+              const tabs = answersList.map((ans: any, idx: number) => {
+                const qKey = `Q${idx + 1}`;
+                const rawTitle = ans?.question?.title || ans?.questionText || `Question ${idx + 1}`;
+                const cleanTitle = rawTitle.replace(/^Question \d+:\s*/, '');
+                return {
+                  id: qKey,
+                  qIndex: idx,
+                  questionId: ans?.questionId,
+                  title: `${qKey}: ${cleanTitle.slice(0, 22)}${cleanTitle.length > 22 ? '...' : ''}`,
+                  question: ans?.question || {
+                    questionText: ans?.questionText,
+                    explanation: ans?.explanation,
+                    points: ans?.points || 10,
+                  },
+                  ansObj: ans,
+                };
+              });
+
+              const activeQIndex = Math.max(0, Number(sheetActiveQ.replace('Q', '')) - 1);
+              const activeTab = tabs[activeQIndex] || tabs[0];
+              const activeAns = activeTab?.ansObj;
+              const activeQuestion = activeTab?.question;
+              const activeMaxPoints = activeQuestion?.points || activeAns?.points || 10;
+              const totalPossibleMarks = selectedSubForSheet?.totalMarks || (questionsCount * 10);
+              const currentTotalAwarded = tabs.reduce((sum: number, t: any) => {
+                const val = gradingMarks[t.id] !== undefined
+                  ? gradingMarks[t.id]
+                  : (t.questionId && gradingMarks[t.questionId] !== undefined ? gradingMarks[t.questionId] : (t.ansObj?.pointsAwarded ?? 0));
+                return sum + Number(val || 0);
+              }, 0);
+              const totalPercentage = totalPossibleMarks > 0 ? ((currentTotalAwarded / totalPossibleMarks) * 100).toFixed(1) : '0.0';
+
+              return (
+                <>
+                  <div className="flex items-center gap-2 px-6 py-2.5 bg-[#111827] border-b border-slate-800 overflow-x-auto text-xs font-bold">
+                    {tabs.map((q: any) => {
+                      const isActive = sheetActiveQ === q.id;
+                      const awarded = gradingMarks[q.id] !== undefined
+                        ? gradingMarks[q.id]
+                        : (q.questionId && gradingMarks[q.questionId] !== undefined ? gradingMarks[q.questionId] : q.ansObj?.pointsAwarded);
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => handleSheetQuestionChange(q.id, q.questionId)}
+                          className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-2 shrink-0 ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{q.title}</span>
+                          {awarded !== undefined && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                              isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-emerald-400'
+                            }`}>
+                              {awarded}M
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Content Body: Left question prompt & evaluation, Right ruled canvas */}
+                  <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Prompt & Evaluation Rubric */}
+                    <div className="lg:col-span-5 space-y-4">
+                      <div className="p-5 rounded-2xl bg-[#1E293B] border border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-1 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs font-bold">
+                            {sheetActiveQ} • {activeQuestion?.title || activeQuestion?.type || 'Descriptive Theory'}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-bold">
+                            {activeMaxPoints} Marks
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm font-bold text-white leading-relaxed">
+                          {(() => {
+                            const full = activeQuestion?.questionText || activeAns?.questionText || '';
+                            const parts = full.split('\n\n[Marking Rubric:');
+                            return parts[0] || (full ?? `Question ${sheetActiveQ}`);
+                          })()}
+                        </h4>
+
+                        <div className="p-3.5 rounded-xl bg-[#0F172A] border border-slate-800 space-y-1">
+                          <span className="text-[11px] font-bold text-amber-400 block uppercase tracking-wider flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Grading Rubric
+                          </span>
+                          <p className="text-xs text-slate-300 leading-normal">
+                            {(() => {
+                              const full = activeQuestion?.questionText || activeAns?.questionText || '';
+                              const parts = full.split('\n\n[Marking Rubric:');
+                              return parts[1] ? parts[1].replace(']', '').trim() : (activeQuestion?.explanation || activeAns?.explanation || 'Evaluated manually based on accuracy and technical depth.');
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Manual Faculty Grading Card */}
+                      <div className="p-5 rounded-2xl bg-gradient-to-br from-[#1E293B] to-[#111827] border-2 border-emerald-500/40 space-y-4 shadow-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Award className="w-5 h-5 text-emerald-400" />
+                            <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                              Manual Evaluation • {sheetActiveQ}
+                            </h4>
+                          </div>
+                          <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            Non-Automated
+                          </span>
+                        </div>
+
+                        {/* Marks input and Quick Pills */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-slate-300">
+                            Award Marks for {sheetActiveQ} (Max {activeMaxPoints} Marks):
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min={0}
+                              max={activeMaxPoints}
+                              step={0.5}
+                              value={gradingMarks[sheetActiveQ] ?? ''}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setGradingMarks((prev) => ({ ...prev, [sheetActiveQ]: val }));
+                              }}
+                              placeholder="0.0"
+                              className="w-24 p-2.5 rounded-xl bg-[#0F172A] border border-slate-700 text-white font-mono text-base font-bold text-center focus:outline-none focus:border-emerald-500"
+                            />
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {[0, activeMaxPoints * 0.25, activeMaxPoints * 0.5, activeMaxPoints * 0.75, activeMaxPoints].map((mk) => (
+                                <button
+                                  key={mk}
+                                  type="button"
+                                  onClick={() => setGradingMarks((prev) => ({ ...prev, [sheetActiveQ]: mk }))}
+                                  className={`px-2 py-1 rounded-lg text-xs font-mono font-bold border transition ${
+                                    gradingMarks[sheetActiveQ] === mk
+                                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                                      : 'bg-[#0F172A] border-slate-700 text-slate-300 hover:bg-slate-800'
+                                  }`}
+                                >
+                                  +{mk}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Question Feedback Textarea */}
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-bold text-slate-300">
+                            Evaluator Remarks for {sheetActiveQ}:
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={gradingFeedback[sheetActiveQ] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setGradingFeedback((prev) => ({ ...prev, [sheetActiveQ]: val }));
+                            }}
+                            placeholder="e.g. Accurate derivation and clear diagrams. Points awarded."
+                            className="w-full p-2.5 rounded-xl bg-[#0F172A] border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-sans"
+                          />
+                        </div>
+
+                        {/* Overall Submission Score Summary & Evaluation Finalization */}
+                        <div className="pt-3 border-t border-slate-800 space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold uppercase tracking-wider">
+                              Running Total Evaluated:
+                            </span>
+                            <span className="font-mono text-sm font-black text-emerald-400">
+                              {currentTotalAwarded} / {totalPossibleMarks} Marks ({totalPercentage}%)
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-300">
+                              Overall Exam Feedback & Summary:
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={overallFeedback}
+                              onChange={(e) => setOverallFeedback(e.target.value)}
+                              placeholder="Comprehensive feedback reflected in candidate learning portal..."
+                              className="w-full p-2.5 rounded-xl bg-[#0F172A] border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-sans"
+                            />
+                          </div>
+
+                          {gradeSuccessMsg && (
+                            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>{gradeSuccessMsg}</span>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleSaveStudentGrades}
+                            disabled={savingGrades}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
+                          >
+                            {savingGrades ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Finalizing Grades & Syncing Analytics...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-4 h-4" />
+                                <span>Finalize & Save Grades</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-[#1E293B] border border-slate-800 space-y-2">
+                        <span className="text-xs font-bold text-slate-300 block">Inspection Summary</span>
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>Stroke Count:</span>
+                          <strong className="text-emerald-400 font-mono">{sheetStrokes.length} digital ink strokes</strong>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>Pages Written:</span>
+                          <strong className="text-indigo-400 font-mono font-bold">
+                            {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'}
+                          </strong>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-400">
+                          <span>Page Dimensions:</span>
+                          <strong className="text-slate-200 font-mono">
+                            {sheetTotalPages} × (900 × 750 px)
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Answer Sheet Ruled Paper Canvas Pages & Typed Text */}
+                    <div className="lg:col-span-7 space-y-3">
+                      {sheetTypedText && (
+                        <div className="p-4 rounded-2xl bg-[#1E293B] border border-indigo-500/40 space-y-2">
+                          <span className="text-xs font-bold text-indigo-400 block uppercase tracking-wider">
+                            📝 Student Submitted Typed Response:
+                          </span>
+                          <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed font-sans bg-[#0F172A] p-3.5 rounded-xl border border-slate-800">
+                            {sheetTypedText}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-300">Student Submitted Answer Sheet</span>
+                          <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Page Jump Switcher if student wrote more than 1 page */}
+                          {sheetTotalPages > 1 && (
+                            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                              {Array.from({ length: sheetTotalPages }, (_, i) => i + 1).map((pNum) => (
+                                <button
+                                  key={pNum}
+                                  type="button"
+                                  onClick={() => {
+                                    if (sheetScrollContainerRef.current) {
+                                      sheetScrollContainerRef.current.scrollTo({
+                                        top: (pNum - 1) * PAGE_HEIGHT,
+                                        behavior: 'smooth',
+                                      });
+                                      setSheetCurrentPage(pNum);
+                                    }
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                    sheetCurrentPage === pNum ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  Page {pNum}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* View sizing mode: Fit width vs 100% natural */}
+                          <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                            <button
+                              type="button"
+                              onClick={() => setSheetViewMode('fit')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                sheetViewMode === 'fit' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              Fit Width
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSheetViewMode('100')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                sheetViewMode === '100' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              100% Size
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        ref={sheetScrollContainerRef}
+                        onScroll={(e) => {
+                          const top = e.currentTarget.scrollTop;
+                          const currentP = Math.min(
+                            sheetTotalPages,
+                            Math.max(1, Math.floor(top / PAGE_HEIGHT) + 1)
+                          );
+                          setSheetCurrentPage(currentP);
+                        }}
+                        className="relative border-2 border-slate-700 rounded-2xl overflow-y-auto p-3.5 bg-slate-900/90 shadow-2xl max-h-[660px] space-y-4"
+                      >
+                        {/* Unified Multi-Page Answer Sheet Card */}
+                        <div
+                          className={`bg-white rounded-2xl shadow-xl border-2 border-slate-600/70 overflow-hidden relative transition-all ${
+                            sheetViewMode === '100' ? 'w-[900px] mx-auto' : 'w-full'
+                          }`}
+                        >
+                          {/* Page Header Bar */}
+                          <div className="flex items-center justify-between px-5 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-mono font-bold text-slate-700">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                              <span>PAGE {sheetCurrentPage} OF {sheetTotalPages}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">
+                                {sheetActiveQ}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                              CLIAS DIGITAL INK EXAM SHEET ({sheetTotalPages} {sheetTotalPages === 1 ? 'PAGE' : 'PAGES'})
+                            </span>
+                          </div>
+
+                          {/* Ruled Continuous Multi-Page Canvas */}
+                          <canvas
+                            ref={sheetCanvasRef}
+                            className="w-full h-auto block select-none bg-white"
+                          />
+
+                          {/* Page Footer */}
+                          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-[10px] font-mono text-slate-500">
+                            <span>{selectedSubForSheet.studentName} ({selectedSubForSheet.enrollmentNumber || selectedSubForSheet.email})</span>
+                            <span>Total Exam Writing: {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'} • {sheetStrokes.length} Strokes Recorded</span>
+                          </div>
+                        </div>
+
+                        {sheetStrokes.length === 0 && !sheetLoading && (
+                          <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 bg-slate-950/80 rounded-2xl border border-slate-800">
+                            <FileText className="w-12 h-12 text-slate-500 mb-2" />
+                            <p className="font-bold text-sm text-slate-200">No strokes recorded for {sheetActiveQ}</p>
+                            <p className="text-xs text-slate-400 mt-1">The student did not write on this question sheet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

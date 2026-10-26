@@ -42,8 +42,10 @@ import {
   UserX,
   Trophy,
   FileText,
+  PenTool,
 } from 'lucide-react';
 import { AssessmentLeaderboardView } from '@/components/AssessmentLeaderboardModal';
+import { DescriptiveCompanionWorkspace } from '@/components/DescriptiveCompanionWorkspace';
 
 interface FaceFeatureProfile {
   grid: number[][]; // 8x8 normalized [r, g, b] cells
@@ -181,7 +183,110 @@ export default function TakeAssessmentPage() {
   const [codingActiveTab, setCodingActiveTab] = useState<'problem' | 'testcases'>('problem');
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [runOutput, setRunOutput] = useState<any | null>(null);
-  const [activeTestCaseIdx, setActiveTestCaseIdx] = useState<number>(0);
+  // ---------------------------------------------------------------------------
+  // Descriptive Answer Companion & Exit Pass State
+  // ---------------------------------------------------------------------------
+  const [descriptiveStrokeCounts, setDescriptiveStrokeCounts] = useState<Record<string, number>>({});
+  const [exitPassCode, setExitPassCode] = useState<string | null>(null);
+  const [showExitPassModal, setShowExitPassModal] = useState<boolean>(false);
+  const [preflightMobileConnected, setPreflightMobileConnected] = useState<boolean>(false);
+  const [preflightCheckingMobile, setPreflightCheckingMobile] = useState<boolean>(false);
+  const [pairingHost, setPairingHost] = useState<string>('');
+
+  const isCodingTest = Boolean(
+    examData?.questions?.some((q: any) => q.type === 'CODING' || q.codingProblem)
+  );
+
+  const isDescriptiveTest = Boolean(
+    examData?.assessment?.examMode === 'DESCRIPTIVE' ||
+    examData?.questions?.some((q: any) => q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE')
+  );
+
+  const companionSession =
+    examData?.companionSessionToken ||
+    (examData?.studentEnrollment ? `CLIAS-${examData.studentEnrollment.toUpperCase()}` : null) ||
+    (user?.studentDetails?.enrollmentNumber ? `CLIAS-${user.studentDetails.enrollmentNumber.toUpperCase()}` : null) ||
+    (user?.id ? `CLIAS-${user.id.slice(0, 6).toUpperCase()}` : 'clias-session-9842');
+
+  const checkMobileStatus = React.useCallback(async () => {
+    setPreflightCheckingMobile(true);
+    try {
+      const res = await fetch(`/api/v1/companion/status?sessionId=${encodeURIComponent(companionSession)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPreflightMobileConnected(Boolean(data.mobileConnected));
+        if (data?.publicHost) {
+          setPairingHost(data.publicHost);
+        }
+      }
+    } catch {
+      // ignore network errors during preflight
+    } finally {
+      setPreflightCheckingMobile(false);
+    }
+  }, [companionSession]);
+
+  // Dynamic pairing host from backend
+  useEffect(() => {
+    fetch(`/api/v1/companion/status?sessionId=${encodeURIComponent(companionSession)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.publicHost) {
+          setPairingHost(data.publicHost);
+        } else if (data?.localIp) {
+          setPairingHost(`${data.localIp}:4000`);
+        } else if (typeof window !== 'undefined') {
+          setPairingHost(`${window.location.hostname}:4000`);
+        }
+      })
+      .catch(() => {
+        if (typeof window !== 'undefined') {
+          setPairingHost(`${window.location.hostname}:4000`);
+        }
+      });
+  }, [companionSession]);
+
+  // Monitor phone companion connectivity during PreFlight for descriptive tests
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isDescriptiveTest) return;
+
+    checkMobileStatus();
+    const interval = setInterval(checkMobileStatus, 3000);
+
+    const hostToUse = pairingHost || `${window.location.hostname}:4000`;
+    const cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const isSecure =
+      window.location.protocol === 'https:' ||
+      cleanHost.includes('onrender.com') ||
+      cleanHost.includes('vercel.app') ||
+      !cleanHost.includes(':');
+    const wsProto = isSecure ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
+      companionSession,
+    )}`;
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'INITIAL_STATE') {
+            setPreflightMobileConnected(msg.mobileStatus === 'connected');
+          } else if (msg.type === 'MOBILE_STATUS') {
+            setPreflightMobileConnected(msg.status === 'connected');
+          }
+        } catch {}
+      };
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      try {
+        ws?.close();
+      } catch {}
+    };
+  }, [isDescriptiveTest, checkMobileStatus, pairingHost, companionSession]);
 
   // ---------------------------------------------------------------------------
   // Phase 9: AI Proctoring & Multi-Modal Telemetry State
@@ -273,6 +378,37 @@ export default function TakeAssessmentPage() {
     }
   }, [assessmentId]);
 
+  // Listen for question switches initiated remotely from paired mobile companion
+  useEffect(() => {
+    if (typeof window === 'undefined' || !examData) return;
+    const sId = examData.submissionId || examData.assessment?.id;
+    if (!sId) return;
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(
+        `ws://${window.location.hostname}:4000/companion?role=viewer&sessionId=${encodeURIComponent(sId)}`,
+      );
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'ACTIVE_QUESTION_CHANGED' && msg.questionId) {
+            const num = parseInt(msg.questionId.replace(/\D/g, ''), 10);
+            if (!isNaN(num) && num >= 1 && num <= (examData.questions?.length || 5)) {
+              setCurrentIdx(num - 1);
+            }
+          }
+        } catch {}
+      };
+    } catch {}
+
+    return () => {
+      try {
+        ws?.close();
+      } catch {}
+    };
+  }, [examData]);
+
   // Clean up media streams and audio context on unmount
   useEffect(() => {
     return () => {
@@ -328,6 +464,25 @@ export default function TakeAssessmentPage() {
           }
         });
         setCodingAnswers(initialCoding);
+      }
+
+      // If descriptive test, wipe any stale strokes and register real questions
+      const isDescriptive = Boolean(
+        data.assessment?.examMode === 'DESCRIPTIVE' ||
+        data.questions?.some((q: any) => q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE')
+      );
+      if (isDescriptive) {
+        fetch(`/api/v1/companion/reset?sessionId=${encodeURIComponent(companionSession)}`, { method: 'POST' }).catch(() => {});
+        const qList = (data.questions || []).map((q: any, i: number) => ({
+          id: `Q${i + 1}`,
+          label: `Q${i + 1}`,
+          title: `Q${i + 1}: ${q.topicName || q.questionText?.slice(0, 35) || 'Descriptive Question'}`,
+        }));
+        fetch('/api/v1/companion/register-questions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: companionSession, questions: qList }),
+        }).catch(() => {});
       }
     } catch (err: any) {
       const msg = err.message || '';
@@ -437,6 +592,20 @@ export default function TakeAssessmentPage() {
   };
 
   const handleConfirmAndEnterExam = async () => {
+    if (isDescriptiveTest && !preflightMobileConnected) {
+      alert('Phone companion must be paired and connected before starting this descriptive examination.');
+      return;
+    }
+
+    if (isDescriptiveTest) {
+      try {
+        // Reset companion server session buffer so previous test's strokes are wiped
+        await fetch(`/api/v1/companion/reset?sessionId=${encodeURIComponent(companionSession)}`, { method: 'POST' });
+      } catch (err) {
+        console.warn('Could not reset companion session:', err);
+      }
+    }
+
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
@@ -568,9 +737,14 @@ export default function TakeAssessmentPage() {
   // ---------------------------------------------------------------------------
   // Real-Time Browser Integrity Monitoring Listeners
   // ---------------------------------------------------------------------------
-  const isCodingTest = Boolean(
-    examData?.questions?.some((q: any) => q.type === 'CODING' || q.codingProblem)
-  );
+  const handleSwitchQuestion = (idx: number) => {
+    setCurrentIdx(idx);
+    setRunOutput(null);
+    const qLabel = `Q${idx + 1}`;
+    fetch(`/api/v1/companion/switch-question?sessionId=${encodeURIComponent(companionSession)}&questionId=${qLabel}`, {
+      method: 'POST',
+    }).catch(() => {});
+  };
 
   const handleDismissTabSwitchModal = () => {
     if (tabSwitchAlertModal?.isTerminated) return;
@@ -900,7 +1074,11 @@ export default function TakeAssessmentPage() {
               return true;
             });
 
-            if (phone) {
+            const isDescriptiveExam = examData?.questions?.some(
+              (q: any) => q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE',
+            );
+
+            if (phone && !isDescriptiveExam) {
               consecutiveMobileDetectionRef.current += 1;
               // Require 2 consecutive cycles of confirmed detection to eliminate sensor glitches
               if (consecutiveMobileDetectionRef.current >= 2) {
@@ -971,15 +1149,17 @@ export default function TakeAssessmentPage() {
                           updateUnauthorizedPerson(null);
                         }
                       } else {
-                        // Anything other than registered face -> Report strictly as Face Not Visible
-                        isPersonFound = false;
-                        consecutiveMismatchRef.current += 1;
-                        updateUnauthorizedPerson('IDENTITY_MISMATCH');
-                        reportViolation(
-                          'NO_FACE',
-                          'HIGH',
-                          'Face not visible: Registered candidate face is not recognized in camera view.'
-                        );
+                        // Anything other than registered face -> In descriptive exams, candidate looks down to write
+                        if (!isDescriptiveTest) {
+                          isPersonFound = false;
+                          consecutiveMismatchRef.current += 1;
+                          updateUnauthorizedPerson('IDENTITY_MISMATCH');
+                          reportViolation(
+                            'NO_FACE',
+                            'HIGH',
+                            'Face not visible: Registered candidate face is not recognized in camera view.'
+                          );
+                        }
                       }
                     } else {
                       isPersonFound = false;
@@ -1060,7 +1240,7 @@ export default function TakeAssessmentPage() {
         // -------------------------------------------------------------
         // C. 2-Strike Mobile Phone Policy & Automatic Test Termination
         // -------------------------------------------------------------
-        if (isMobileDetected) {
+        if (isMobileDetected && !isDescriptiveTest) {
           const now = Date.now();
           if (now - lastMobileStrikeTimeRef.current >= 4500 && !isAutoSubmittingRef.current) {
             lastMobileStrikeTimeRef.current = now;
@@ -1113,9 +1293,9 @@ export default function TakeAssessmentPage() {
               sum += dataArray[i];
             }
             const avgAudioVolume = sum / bufferLen;
-            if (avgAudioVolume > 65) {
+            if (avgAudioVolume > 78 && !isDescriptiveTest) {
               consecutiveAudioAlertRef.current += 1;
-              if (consecutiveAudioAlertRef.current >= 2) {
+              if (consecutiveAudioAlertRef.current >= 3) {
                 reportViolation(
                   'AUDIO_ANOMALY',
                   'MEDIUM',
@@ -1133,15 +1313,20 @@ export default function TakeAssessmentPage() {
         // E. Face Absence 3-Strike Policy Enforcement
         // -------------------------------------------------------------
         if (!isPersonFound) {
-          consecutiveFaceAbsentRef.current += 1;
-          if (consecutiveFaceAbsentRef.current >= 2) {
-            setFacePresent(false);
+          if (isDescriptiveTest) {
+            // When candidate is in descriptive exam with mobile companion, looking down at writing pad is normal
+            setFacePresent(true);
+            consecutiveFaceAbsentRef.current = 0;
+          } else {
+            consecutiveFaceAbsentRef.current += 1;
+            if (consecutiveFaceAbsentRef.current >= 2) {
+              setFacePresent(false);
 
-            if (!faceModalActiveRef.current && !isAutoSubmittingRef.current) {
-              faceModalActiveRef.current = true;
-              const nextStrike = faceStrikeCountRef.current + 1;
-              faceStrikeCountRef.current = nextStrike;
-              setFaceStrikeCount(nextStrike);
+              if (!faceModalActiveRef.current && !isAutoSubmittingRef.current) {
+                faceModalActiveRef.current = true;
+                const nextStrike = faceStrikeCountRef.current + 1;
+                faceStrikeCountRef.current = nextStrike;
+                setFaceStrikeCount(nextStrike);
 
               if (nextStrike === 1) {
                 reportViolation('NO_FACE', 'LOW', 'Face not visible in camera frame (Warning 1/3).');
@@ -1160,10 +1345,11 @@ export default function TakeAssessmentPage() {
               }
             }
           }
-        } else {
-          consecutiveFaceAbsentRef.current = 0;
-          setFacePresent(true);
         }
+      } else {
+        consecutiveFaceAbsentRef.current = 0;
+        setFacePresent(true);
+      }
       } catch (err) {
         // catch canvas / detection safety
       } finally {
@@ -1301,14 +1487,86 @@ export default function TakeAssessmentPage() {
       mediaStream.getTracks().forEach((track) => track.stop());
     }
 
-    const answerPayload = examData.questions.map((q: any) => ({
-      questionId: q.id,
-      selectedOptionId: answers[q.id] || null,
-      sourceCode: codingAnswers[q.id]?.sourceCode || undefined,
-      code: codingAnswers[q.id]?.sourceCode || undefined,
-      language: codingAnswers[q.id]?.language || 'PYTHON',
-      timeSpentSeconds: 30,
-    }));
+    // Call companion gateway to notify mobile client and generate random 6-digit Exit Pass
+    try {
+      const companionSessionToken = companionSession;
+      const companionRes = await fetch(
+        `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSessionToken)}&submissionId=${examData.submissionId}`,
+        { method: 'POST' },
+      );
+      if (companionRes.ok) {
+        const passData = await companionRes.json();
+        if (passData?.exitPass) {
+          setExitPassCode(passData.exitPass);
+          setShowExitPassModal(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Companion exit pass call:', e);
+      const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
+      setExitPassCode(fallbackPass);
+      setShowExitPassModal(true);
+    }
+
+    // Assemble answers including digital ink strokes and typed text for descriptive questions
+    const answerPayload = await Promise.all(
+      examData.questions.map(async (q: any, idx: number) => {
+        const qKey = `Q${idx + 1}`;
+        let answerText: string | undefined = undefined;
+        const isDescriptive =
+          q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE' || !q.options || q.options.length === 0;
+
+        if (isDescriptive) {
+          try {
+            let sRes = await fetch(
+              `/api/v1/companion/strokes?sessionId=${encodeURIComponent(companionSession)}&questionId=${qKey}`,
+            );
+            let strokesData: any[] = [];
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData?.strokes && sData.strokes.length > 0) {
+                strokesData = sData.strokes;
+              }
+            }
+            // Fallback check by submissionId if companionSession had 0 strokes
+            if (strokesData.length === 0 && examData.submissionId) {
+              try {
+                const subRes = await fetch(
+                  `/api/v1/companion/strokes?sessionId=${encodeURIComponent(examData.submissionId)}&questionId=${qKey}`,
+                );
+                if (subRes.ok) {
+                  const subData = await subRes.json();
+                  if (subData?.strokes && subData.strokes.length > 0) {
+                    strokesData = subData.strokes;
+                  }
+                }
+              } catch (_) {}
+            }
+            if (strokesData.length > 0) {
+              answerText = JSON.stringify({
+                type: 'DIGITAL_INK',
+                questionId: qKey,
+                strokesCount: strokesData.length,
+                strokes: strokesData,
+                lastUpdated: Date.now(),
+              });
+            }
+          } catch (e) {
+            console.warn('Could not package descriptive answer for', qKey, e);
+          }
+        }
+
+        return {
+          questionId: q.id,
+          selectedOptionId: answers[q.id] || null,
+          answerText,
+          sourceCode: codingAnswers[q.id]?.sourceCode || undefined,
+          code: codingAnswers[q.id]?.sourceCode || undefined,
+          language: codingAnswers[q.id]?.language || 'PYTHON',
+          timeSpentSeconds: 30,
+        };
+      }),
+    );
 
     try {
       await api.post(`/assessments/submissions/${examData.submissionId}/submit`, {
@@ -1461,9 +1719,105 @@ export default function TakeAssessmentPage() {
                   </span>
                   <span className="text-amber-600 dark:text-amber-400 font-bold">Enforced on Entry</span>
                 </div>
+
+                {isDescriptiveTest && (
+                  <div
+                    className={`flex items-center justify-between p-2 border transition-all ${
+                      preflightMobileConnected
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : 'bg-amber-500/10 border-amber-500/30'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
+                      <Smartphone
+                        className={`w-4 h-4 ${
+                          preflightMobileConnected ? 'text-emerald-500' : 'text-amber-500 animate-pulse'
+                        }`}
+                      />
+                      <span>Phone Companion</span>
+                    </span>
+                    {preflightMobileConnected ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Connected
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Required
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
+
+          {/* Mobile Companion Pairing Card for Descriptive Tests */}
+          {isDescriptiveTest && (
+            <div
+              className={`p-4 rounded-2xl border-2 transition-all space-y-3 ${
+                preflightMobileConnected
+                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-200'
+                  : 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200 animate-in fade-in'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`p-2 rounded-xl ${
+                      preflightMobileConnected
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                    }`}
+                  >
+                    <Smartphone className={`w-5 h-5 ${preflightMobileConnected ? '' : 'animate-bounce'}`} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">
+                      {preflightMobileConnected
+                        ? 'Mobile Digital Ink Companion Connected'
+                        : 'Descriptive Examination: Mobile Phone Connection Required'}
+                    </h4>
+                    <p className="text-[11px] opacity-80 mt-0.5 font-sans leading-relaxed">
+                      {preflightMobileConnected
+                        ? 'Handwritten answers written on your phone will sync live to this examination in real time.'
+                        : 'You must connect your phone running the CLIAS Companion app to submit handwritten answers before entering the test.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={checkMobileStatus}
+                  disabled={preflightCheckingMobile}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                    preflightMobileConnected
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20'
+                  }`}
+                >
+                  {preflightCheckingMobile ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>{preflightMobileConnected ? 'Re-verify Phone' : 'Check Phone Connection'}</span>
+                </button>
+              </div>
+
+              {!preflightMobileConnected && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-black/20 p-3 rounded-xl border border-amber-500/20 font-mono">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">1. Companion Host</span>
+                    <span className="font-bold text-amber-300">{pairingHost || 'localhost:4000'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">2. Session Token</span>
+                    <span className="font-bold text-emerald-400">{companionSession}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Face Enrollment Action */}
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
@@ -1534,11 +1888,25 @@ export default function TakeAssessmentPage() {
           <button
             type="button"
             onClick={handleConfirmAndEnterExam}
-            disabled={!integrityPledge || cameraPermission !== 'granted' || !faceEnrolled}
+            disabled={
+              !integrityPledge ||
+              cameraPermission !== 'granted' ||
+              !faceEnrolled ||
+              (isDescriptiveTest && !preflightMobileConnected)
+            }
             className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-amber-600/20 transition flex items-center justify-center gap-2"
           >
-            <Lock className="w-4 h-4" />
-            <span>Confirm & Enter Fullscreen Assessment</span>
+            {isDescriptiveTest && !preflightMobileConnected ? (
+              <>
+                <Smartphone className="w-4 h-4 animate-pulse" />
+                <span>Connect Phone Companion to Begin Test</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4" />
+                <span>Confirm & Enter Fullscreen Assessment</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1555,12 +1923,18 @@ export default function TakeAssessmentPage() {
           <div className="panel p-8 shadow-2xl text-center">
             <div
               className={`w-16 h-16 mx-auto flex items-center justify-center mb-4 ${
-                result.passed
+                result.isPendingFacultyGrading || result.status === 'SUBMITTED'
+                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30'
+                  : result.passed
                   ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
                   : 'bg-rose-500/10 text-rose-500 border border-rose-500/30'
               }`}
             >
-              <Award className="w-8 h-8" />
+              {result.isPendingFacultyGrading || result.status === 'SUBMITTED' ? (
+                <PenTool className="w-8 h-8" />
+              ) : (
+                <Award className="w-8 h-8" />
+              )}
             </div>
 
             <span className="font-mono text-xs uppercase font-bold tracking-wider text-slate-600 dark:text-slate-400">
@@ -1568,36 +1942,69 @@ export default function TakeAssessmentPage() {
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold font-mono uppercase tracking-wider mt-1">{result.assessmentTitle}</h1>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-4 sm:gap-6">
-              <div className="panel px-6 py-4">
-                <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">YOUR SCORE</span>
-                <span className="text-2xl font-black font-mono">
-                  {result.totalScore} / {result.totalMarks}
+            {result.isPendingFacultyGrading || result.status === 'SUBMITTED' ? (
+              <div className="mt-6 p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/15 to-transparent border-2 border-amber-500/40 max-w-2xl mx-auto text-center space-y-3 shadow-lg">
+                <span className="inline-block px-3 py-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 rounded-full font-mono text-xs font-bold uppercase tracking-wider">
+                  Digital Ink Answers Submitted • Awaiting Evaluation
                 </span>
+                <h3 className="text-xl font-bold text-amber-800 dark:text-amber-200">
+                  Descriptive Examination Under Manual Faculty Evaluation
+                </h3>
+                <p className="text-xs text-slate-700 dark:text-slate-300 max-w-lg mx-auto leading-relaxed">
+                  Your handwritten digital ink strokes and answer sheets have been securely submitted to the faculty review portal. Descriptive question answers are manually graded by your course instructor according to official rubrics. Your final grade and evaluator remarks will appear once reviewed.
+                </p>
+                <div className="flex items-center justify-center gap-6 pt-2 font-mono text-xs text-slate-600 dark:text-slate-400">
+                  <span>Proctoring Trust: <strong className="text-emerald-500 font-bold">{trustScore}%</strong></span>
+                  <span>Total Exam Marks: <strong className="text-slate-900 dark:text-white font-bold">{result.totalMarks} M</strong></span>
+                  <span>Status: <strong className="text-amber-600 dark:text-amber-400 font-bold">AWAITING FACULTY REVIEW</strong></span>
+                </div>
               </div>
-              <div className="panel px-6 py-4">
-                <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">PERCENTAGE</span>
-                <span className="text-2xl font-black font-mono text-[var(--primary)]">
-                  {result.percentage}%
+            ) : (
+              <div className="mt-6 flex flex-wrap justify-center gap-4 sm:gap-6">
+                <div className="panel px-6 py-4">
+                  <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">YOUR SCORE</span>
+                  <span className="text-2xl font-black font-mono">
+                    {result.totalScore} / {result.totalMarks}
+                  </span>
+                </div>
+                <div className="panel px-6 py-4">
+                  <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">PERCENTAGE</span>
+                  <span className="text-2xl font-black font-mono text-[var(--primary)]">
+                    {result.percentage}%
+                  </span>
+                </div>
+                <div className="panel px-6 py-4">
+                  <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">PROCTORING TRUST</span>
+                  <span className={`text-2xl font-black font-mono ${trustScore >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {trustScore}%
+                  </span>
+                </div>
+                <div className="panel px-6 py-4">
+                  <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">OUTCOME</span>
+                  <span
+                    className={`text-2xl font-black font-mono ${
+                      result.passed ? 'text-emerald-500' : 'text-rose-500'
+                    }`}
+                  >
+                    {result.passed ? 'PASSED' : 'RETAKE'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {exitPassCode && (
+              <div className="mt-6 p-6 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-amber-500/10 border-2 border-amber-500/40 max-w-md mx-auto text-center space-y-2 shadow-lg animate-in fade-in zoom-in-95">
+                <span className="font-mono text-xs uppercase tracking-widest text-amber-600 dark:text-amber-400 font-extrabold block flex items-center justify-center gap-1.5">
+                  <Smartphone className="w-4 h-4" /> Proctor Exit Pass for Mobile Companion
                 </span>
+                <div className="font-mono text-4xl sm:text-5xl font-black text-amber-600 dark:text-amber-300 tracking-[0.25em] py-1 select-all">
+                  {exitPassCode}
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Enter this 6-digit verification code on your mobile phone to safely exit Kiosk Lockdown mode.
+                </p>
               </div>
-              <div className="panel px-6 py-4">
-                <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">PROCTORING TRUST</span>
-                <span className={`text-2xl font-black font-mono ${trustScore >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
-                  {trustScore}%
-                </span>
-              </div>
-              <div className="panel px-6 py-4">
-                <span className="font-mono text-xs text-slate-600 dark:text-slate-400 block font-bold">OUTCOME</span>
-                <span
-                  className={`text-2xl font-black font-mono ${
-                    result.passed ? 'text-emerald-500' : 'text-rose-500'
-                  }`}
-                >
-                  {result.passed ? 'PASSED' : 'RETAKE'}
-                </span>
-              </div>
-            </div>
+            )}
 
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <button
@@ -1660,62 +2067,94 @@ export default function TakeAssessmentPage() {
           {resultTab === 'review' && (
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Question Itemization & Explanations</h3>
-              {result.answers?.map((ans: any, idx: number) => (
-                <div
-                  key={ans.questionId}
-                  className={`rounded-2xl border p-6 ${
-                    ans.isCorrect
-                      ? 'bg-white dark:bg-slate-900 border-emerald-500/30 shadow-xs'
-                      : 'bg-white dark:bg-slate-900 border-rose-500/30 shadow-xs'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                      Question {idx + 1} • {ans.topicName}
-                    </span>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                        ans.isCorrect
-                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-                      }`}
-                    >
-                      {ans.isCorrect ? `+${ans.pointsAwarded} pts (Correct)` : '0 pts (Incorrect)'}
-                    </span>
-                  </div>
+              {result.answers?.map((ans: any, idx: number) => {
+                const isDescriptive = !ans.correctOptionText && !ans.options?.length;
+                const isPending = (result.isPendingFacultyGrading || result.status === 'SUBMITTED') && isDescriptive && (ans.pointsAwarded === null || ans.pointsAwarded === undefined || (ans.pointsAwarded === 0 && !ans.feedback));
 
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed mb-4">
-                    {ans.questionText}
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
-                    <div className={`p-3.5 rounded-xl border ${
-                      ans.isCorrect
-                        ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
-                        : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40'
-                    }`}>
-                      <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Your Selection:</span>
-                      <span className={`block font-bold text-sm ${ans.isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                        {ans.selectedOptionText || 'No answer selected'}
+                return (
+                  <div
+                    key={ans.questionId}
+                    className={`rounded-2xl border p-6 ${
+                      isPending
+                        ? 'bg-white dark:bg-slate-900 border-amber-500/40 shadow-xs'
+                        : ans.isCorrect || ans.pointsAwarded > 0
+                        ? 'bg-white dark:bg-slate-900 border-emerald-500/30 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-rose-500/30 shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        Question {idx + 1} {ans.topicName ? `• ${ans.topicName}` : ''}
+                      </span>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                          isPending
+                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                            : ans.isCorrect || ans.pointsAwarded > 0
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                        }`}
+                      >
+                        {isPending
+                          ? 'Under Faculty Evaluation'
+                          : ans.pointsAwarded !== undefined
+                          ? `+${ans.pointsAwarded} pts Awarded`
+                          : ans.isCorrect
+                          ? 'Correct'
+                          : '0 pts (Incorrect)'}
                       </span>
                     </div>
-                    <div className="p-3.5 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40">
-                      <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Correct Solution:</span>
-                      <span className="text-emerald-700 dark:text-emerald-400 font-bold text-sm block">{ans.correctOptionText}</span>
-                    </div>
-                  </div>
 
-                  {ans.explanation && (
-                    <div className="bg-indigo-50/80 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-500/20 text-xs text-slate-700 dark:text-indigo-200 leading-relaxed font-sans">
-                      <strong className="text-indigo-950 dark:text-white block mb-1 font-bold text-xs flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                        Pedagogical Explanation:
-                      </strong>
-                      {ans.explanation}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed mb-4">
+                      {ans.questionText}
+                    </p>
+
+                    {isDescriptive ? (
+                      <div className="space-y-3 mb-4">
+                        <div className="p-3.5 rounded-xl border bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-xs">
+                          <span className="text-slate-500 dark:text-slate-400 block font-semibold mb-1">Response Mode:</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            Digital Ink Handwritten Canvas Answer Sheet (Synchronized via S-Pen Mobile Companion)
+                          </span>
+                        </div>
+                        {ans.feedback && (
+                          <div className="p-3.5 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-xs">
+                            <span className="text-emerald-800 dark:text-emerald-300 block font-bold mb-1">Faculty Evaluator Remarks:</span>
+                            <p className="text-slate-700 dark:text-slate-300 font-sans">{ans.feedback}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-4">
+                        <div className={`p-3.5 rounded-xl border ${
+                          ans.isCorrect
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                            : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40'
+                        }`}>
+                          <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Your Selection:</span>
+                          <span className={`block font-bold text-sm ${ans.isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                            {ans.selectedOptionText || 'No answer selected'}
+                          </span>
+                        </div>
+                        <div className="p-3.5 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40">
+                          <span className="text-slate-600 dark:text-slate-400 block font-semibold mb-1">Correct Solution:</span>
+                          <span className="text-emerald-700 dark:text-emerald-400 font-bold text-sm block">{ans.correctOptionText}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {ans.explanation && (
+                      <div className="bg-indigo-50/80 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-500/20 text-xs text-slate-700 dark:text-indigo-200 leading-relaxed font-sans">
+                        <strong className="text-indigo-950 dark:text-white block mb-1 font-bold text-xs flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          Evaluation Rubric / Pedagogical Note:
+                        </strong>
+                        {ans.explanation}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -2653,6 +3092,22 @@ export default function TakeAssessmentPage() {
                     )}
                   </div>
                 </div>
+              ) : (currentQ.type === 'SHORT_ANSWER' || currentQ.type === 'DESCRIPTIVE' || !currentQ.options || currentQ.options.length === 0) ? (
+                /* DESCRIPTIVE DIGITAL INK COMPANION WORKSPACE */
+                <DescriptiveCompanionWorkspace
+                  question={currentQ}
+                  questionNumber={currentIdx + 1}
+                  sessionId={companionSession}
+                  pairingHost={pairingHost}
+                  onActiveQuestionChange={(qNum) => handleSwitchQuestion(qNum - 1)}
+                  onStrokeCountChange={(qId, count) => {
+                    setDescriptiveStrokeCounts((prev) => ({
+                      ...prev,
+                      [qId]: count,
+                      [`Q${currentIdx + 1}`]: count,
+                    }));
+                  }}
+                />
               ) : (
                 /* MCQ Question Options */
                 <div className="space-y-3 pt-2">
@@ -2692,10 +3147,7 @@ export default function TakeAssessmentPage() {
                 <button
                   type="button"
                   disabled={currentIdx === 0}
-                  onClick={() => {
-                    setCurrentIdx((prev) => Math.max(0, prev - 1));
-                    setRunOutput(null);
-                  }}
+                  onClick={() => handleSwitchQuestion(Math.max(0, currentIdx - 1))}
                   className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -2705,10 +3157,7 @@ export default function TakeAssessmentPage() {
                 <button
                   type="button"
                   disabled={currentIdx === qList.length - 1}
-                  onClick={() => {
-                    setCurrentIdx((prev) => Math.min(qList.length - 1, prev + 1));
-                    setRunOutput(null);
-                  }}
+                  onClick={() => handleSwitchQuestion(Math.min(qList.length - 1, currentIdx + 1))}
                   className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition disabled:opacity-40"
                 >
                   <span>Next</span>
@@ -2727,23 +3176,23 @@ export default function TakeAssessmentPage() {
               {qList.map((q: any, idx: number) => {
                 const isAnswered = (q.type === 'CODING' || q.codingProblem)
                   ? !!codingAnswers[q.id]?.sourceCode?.trim()
+                  : (q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE' || !q.options || q.options.length === 0)
+                  ? (descriptiveStrokeCounts[q.id] || 0) > 0 ||
+                    (descriptiveStrokeCounts[`Q${idx + 1}`] || 0) > 0
                   : !!answers[q.id];
                 const isCurrent = idx === currentIdx;
                 const isFlag = !!flagged[idx];
 
                 let btnClass = 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700';
-                if (isAnswered) btnClass = 'bg-amber-600 text-white border-amber-500 font-bold';
+                if (isAnswered) btnClass = 'bg-emerald-600 text-white border-emerald-500 font-bold';
                 if (isFlag) btnClass = 'bg-amber-100 dark:bg-amber-500/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500 font-bold';
-                if (isCurrent) btnClass += ' ring-2 ring-amber-600 dark:ring-white';
+                if (isCurrent) btnClass += ' ring-2 ring-emerald-500 dark:ring-white';
 
                 return (
                   <button
                     key={q.id}
                     type="button"
-                    onClick={() => {
-                      setCurrentIdx(idx);
-                      setRunOutput(null);
-                    }}
+                    onClick={() => handleSwitchQuestion(idx)}
                     className={`h-10 rounded-xl border text-xs font-semibold flex items-center justify-center transition ${btnClass}`}
                   >
                     {idx + 1}
@@ -2769,6 +3218,43 @@ export default function TakeAssessmentPage() {
           </div>
         </div>
       </div>
+
+      {/* Dynamic Proctor Exit Pass Modal */}
+      {showExitPassModal && exitPassCode && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-extrabold block">
+                EXAMINATION SUBMITTED SUCCESSFULLY
+              </span>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                Proctor Exit Pass Code
+              </h3>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="font-mono text-4xl sm:text-5xl font-black text-emerald-600 dark:text-emerald-400 tracking-[0.25em] py-2 select-all">
+                {exitPassCode}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+                Enter this 6-digit verification code on your mobile companion phone to safely unlock Kiosk Lockdown mode.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowExitPassModal(false)}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
+            >
+              <span>Done • View Full Results</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

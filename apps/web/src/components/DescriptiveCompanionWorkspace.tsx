@@ -1,0 +1,493 @@
+'use client';
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  FileText,
+  Smartphone,
+  RefreshCw,
+  Download,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  Maximize2,
+  Layers,
+  Sparkles,
+  ZoomIn,
+  ZoomOut,
+  Radio,
+} from 'lucide-react';
+
+export interface StrokePoint {
+  x: number;
+  y: number;
+  p?: number;
+}
+
+export interface StrokeItem {
+  id: string;
+  points?: StrokePoint[];
+  pts?: StrokePoint[];
+  color?: string | number;
+  strokeWidth?: number;
+  w?: number;
+  toolType?: string;
+  tool?: string;
+}
+
+interface DescriptiveWorkspaceProps {
+  question: {
+    id: string;
+    questionText: string;
+    explanation?: string;
+    points?: number;
+    topicName?: string;
+    difficulty?: string;
+  };
+  questionNumber: number;
+  sessionId: string;
+  pairingHost?: string;
+  onStrokeCountChange?: (questionId: string, count: number) => void;
+  onActiveQuestionChange?: (questionNumber: number) => void;
+}
+
+export function DescriptiveCompanionWorkspace({
+  question,
+  questionNumber,
+  sessionId,
+  pairingHost: propPairingHost,
+  onStrokeCountChange,
+  onActiveQuestionChange,
+}: DescriptiveWorkspaceProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [strokes, setStrokes] = useState<StrokeItem[]>([]);
+  const [mobileConnected, setMobileConnected] = useState(false);
+  const [pairingHost, setPairingHost] = useState(propPairingHost || '');
+  const [isClearing, setIsClearing] = useState(false);
+  const [viewMode, setViewMode] = useState<'fit' | 'actual'>('fit');
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [docDimensions, setDocDimensions] = useState({ width: 900, height: 2400 });
+  const socketRef = useRef<WebSocket | null>(null);
+
+  const activeQId = `Q${questionNumber}`;
+
+  // Keep pairingHost updated if passed from parent
+  useEffect(() => {
+    if (propPairingHost) {
+      setPairingHost(propPairingHost);
+    }
+  }, [propPairingHost]);
+
+  // Dynamically expand canvas bounds if any received strokes exceed default 900x2400 dimensions
+  useEffect(() => {
+    let w = 900;
+    let h = 2400;
+    for (const stroke of strokes) {
+      const pts = stroke.points || stroke.pts || [];
+      for (const p of pts) {
+        if (p.x + 50 > w) w = Math.ceil(p.x + 50);
+        if (p.y + 80 > h) h = Math.ceil(p.y + 80);
+      }
+    }
+    setDocDimensions({ width: w, height: h });
+  }, [strokes]);
+
+  // 1. Determine local host for pairing via backend status
+  useEffect(() => {
+    fetch(`/api/v1/companion/status?sessionId=${encodeURIComponent(sessionId)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.publicHost) {
+          setPairingHost(data.publicHost);
+        } else if (data?.localIp) {
+          setPairingHost(`${data.localIp}:4000`);
+        } else if (typeof window !== 'undefined') {
+          setPairingHost(`${window.location.hostname}:4000`);
+        }
+        if (data?.mobileConnected) {
+          setMobileConnected(true);
+        }
+      })
+      .catch(() => {
+        if (!pairingHost && typeof window !== 'undefined') {
+          setPairingHost(`${window.location.hostname}:4000`);
+        }
+      });
+  }, [sessionId]);
+
+  // 2. Fetch existing strokes for this question upon question change
+  const fetchStrokes = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/v1/companion/strokes?sessionId=${encodeURIComponent(sessionId)}&questionId=${activeQId}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.strokes)) {
+          setStrokes(data.strokes);
+          onStrokeCountChange?.(question.id, data.strokes.length);
+        } else {
+          setStrokes([]);
+          onStrokeCountChange?.(question.id, 0);
+        }
+      }
+    } catch (err) {
+      console.warn('[DescriptiveWorkspace] Could not fetch cached strokes:', err);
+    }
+  }, [sessionId, activeQId, question.id, onStrokeCountChange]);
+
+  useEffect(() => {
+    fetchStrokes();
+  }, [fetchStrokes]);
+
+  // 3. Connect to Companion WebSocket as a Viewer to receive live strokes from phone
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hostToUse = pairingHost || `${window.location.hostname}:4000`;
+    const cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const isSecure =
+      window.location.protocol === 'https:' ||
+      cleanHost.includes('onrender.com') ||
+      cleanHost.includes('vercel.app') ||
+      !cleanHost.includes(':');
+    const wsProto = isSecure ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
+      sessionId,
+    )}&questionId=${activeQId}`;
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'INITIAL_STATE') {
+            setMobileConnected(msg.mobileStatus === 'connected');
+            if (msg.data && Array.isArray(msg.data.strokes)) {
+              setStrokes(msg.data.strokes);
+              onStrokeCountChange?.(question.id, msg.data.strokes.length);
+            }
+          } else if (msg.type === 'MOBILE_STATUS') {
+            setMobileConnected(msg.status === 'connected');
+          } else if (msg.type === 'CANVAS_UPDATE') {
+            setMobileConnected(true);
+            if (msg.questionId === activeQId) {
+              if (Array.isArray(msg.allStrokes)) {
+                setStrokes(msg.allStrokes);
+                onStrokeCountChange?.(question.id, msg.allStrokes.length);
+              }
+            }
+          } else if (msg.type === 'ACTIVE_QUESTION_CHANGED') {
+            const match = (msg.questionId || '').match(/Q(\d+)/i);
+            if (match) {
+              const qNum = parseInt(match[1], 10);
+              if (qNum && qNum !== questionNumber) {
+                onActiveQuestionChange?.(qNum);
+              }
+            }
+          } else if (msg.type === 'CANVAS_CLEAR') {
+            if (msg.questionId === activeQId) {
+              setStrokes([]);
+              onStrokeCountChange?.(question.id, 0);
+            }
+          }
+        } catch (e) {
+          console.error('[DescriptiveWorkspace] WebSocket message error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        // Handle viewer close
+      };
+    } catch (e) {
+      console.warn('[DescriptiveWorkspace] WebSocket initialization error:', e);
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [sessionId, activeQId, question.id, questionNumber, onStrokeCountChange, onActiveQuestionChange]);
+
+  // 4. Render digital ruled paper canvas with live strokes received from phone
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (canvas.width !== docDimensions.width || canvas.height !== docDimensions.height) {
+      canvas.width = docDimensions.width;
+      canvas.height = docDimensions.height;
+    }
+
+    // Background clean white notebook ruled paper
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle horizontal notebook ruled guidelines (spaced every 36px, starting at y=48)
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 1;
+    for (let y = 48; y < canvas.height; y += 36) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    // Vertical red margin rule at x = 60
+    ctx.strokeStyle = '#fee2e2';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 0);
+    ctx.lineTo(60, canvas.height);
+    ctx.stroke();
+
+    // Page break markers every 750px
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    for (let p = 1; p * 750 < canvas.height; p++) {
+      const py = p * 750;
+      ctx.beginPath();
+      ctx.moveTo(0, py);
+      ctx.lineTo(canvas.width, py);
+      ctx.stroke();
+      ctx.fillText(`— PAGE ${p + 1} —`, canvas.width - 120, py - 10);
+    }
+
+    // Render strokes with smooth quadratic bezier curves
+    for (const stroke of strokes) {
+      const pts = stroke.points || stroke.pts;
+      if (!pts || pts.length === 0) continue;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (stroke.toolType === 'highlighter' || stroke.tool === 'highlighter') {
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+        ctx.lineWidth = stroke.strokeWidth || stroke.w || 20;
+        ctx.globalCompositeOperation = 'multiply';
+      } else if (stroke.toolType === 'eraser' || stroke.tool === 'eraser') {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = stroke.strokeWidth || stroke.w || 24;
+      } else {
+        let color = '#0f172a';
+        if (stroke.color) {
+          if (typeof stroke.color === 'number') {
+            const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
+            const r = parseInt(hex.substring(2, 4), 16);
+            const g = parseInt(hex.substring(4, 6), 16);
+            const b = parseInt(hex.substring(6, 8), 16);
+            color = `rgb(${r},${g},${b})`;
+          } else if (typeof stroke.color === 'string') {
+            color = stroke.color;
+          }
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = stroke.strokeWidth || stroke.w || 2.8;
+      }
+
+      if (pts.length === 1) {
+        ctx.beginPath();
+        const r = Math.max(1.5, (stroke.strokeWidth || stroke.w || 3) / 2);
+        ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+
+      for (let i = 1; i < pts.length; i++) {
+        const p0 = pts[i - 1];
+        const p1 = pts[i];
+        const midX = (p0.x + p1.x) / 2;
+        const midY = (p0.y + p1.y) / 2;
+        ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+      }
+
+      const last = pts[pts.length - 1];
+      ctx.lineTo(last.x, last.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [strokes, docDimensions]);
+
+  // Handle Clear Canvas
+  const handleClear = async () => {
+    if (!window.confirm(`Clear all handwritten strokes for ${activeQId}?`)) return;
+    setIsClearing(true);
+    try {
+      await fetch(
+        `/api/v1/companion/clear?sessionId=${encodeURIComponent(sessionId)}&questionId=${activeQId}`,
+        { method: 'POST' },
+      );
+      setStrokes([]);
+      onStrokeCountChange?.(question.id, 0);
+    } catch (e) {
+      console.error('Failed to clear canvas:', e);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  // Handle PNG Download
+  const handleDownload = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `CLIAS_${activeQId}_Answer_Sheet.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  // Parse prompt and rubric from questionText
+  const parts = question.questionText.split('\n\n[Marking Rubric:');
+  const mainPrompt = parts[0];
+  const rubric = parts[1] ? parts[1].replace(']', '').trim() : question.explanation || '';
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Left Column: Descriptive Prompt & Rubric Card + Mobile Status */}
+      <div className="lg:col-span-5 space-y-4">
+        {/* Question Header Card */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold uppercase tracking-wider">
+              {activeQId} • Descriptive
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+              {question.points ?? 10} Marks
+            </span>
+          </div>
+
+          <div className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line">
+            {mainPrompt}
+          </div>
+
+          {rubric && (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Evaluation Rubric
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-normal">{rubric}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Companion Connection Status Card */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-indigo-500/30 shadow-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-bold tracking-wide">Phone Companion Stream</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 border border-slate-700 text-[10px]">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  mobileConnected ? 'bg-emerald-400 shadow-sm shadow-emerald-400 animate-pulse' : 'bg-rose-500'
+                }`}
+              />
+              <span className="font-semibold text-slate-300">
+                {mobileConnected ? 'Phone Connected (Live Streaming)' : 'Waiting for Device'}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            All answers for this descriptive test must be written on your paired mobile companion in landscape mode.
+            Your strokes are mirrored live onto this digital answer sheet.
+          </p>
+
+          <div className="p-3 rounded-xl bg-black/50 border border-slate-800 space-y-1.5 font-mono text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Endpoint:</span>
+              <span className="text-cyan-300 font-bold">{pairingHost || 'localhost:4000'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Session ID:</span>
+              <span className="text-indigo-300">{sessionId}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Active Question:</span>
+              <span className="text-emerald-400 font-bold">{activeQId}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Read-Only Digital Ruled Answer Sheet Mirror */}
+      <div className="lg:col-span-7 space-y-3">
+        {/* Toolbar with Zoom & Controls (No laptop writing options) */}
+        <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-indigo-500" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Live Digital Answer Sheet ({activeQId})
+            </span>
+            <span className="text-[11px] font-mono text-slate-500">
+              • {strokes.length} strokes
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === 'fit' ? 'actual' : 'fit')}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>{viewMode === 'fit' ? '100% Size' : 'Fit Width'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={strokes.length === 0 || isClearing}
+              className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-30 transition"
+              title="Clear canvas"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+              title="Download PNG sheet"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Read-Only Ruled Answer Sheet Container (Pointer events disabled on laptop screen) */}
+        <div
+          className={`relative rounded-2xl border border-slate-300 dark:border-slate-700 overflow-auto bg-slate-100 dark:bg-slate-950 p-2 shadow-inner select-none ${
+            viewMode === 'fit' ? 'max-h-[680px]' : 'max-h-[780px]'
+          }`}
+        >
+          <canvas
+            ref={canvasRef}
+            className="mx-auto rounded-xl shadow-md transition-all pointer-events-none"
+            style={{
+              width: viewMode === 'fit' ? '100%' : `${docDimensions.width}px`,
+              height: 'auto',
+              display: 'block',
+              backgroundColor: '#ffffff',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -629,12 +629,23 @@ async function main() {
             });
 
             // 3. StudentProfile
+            const existingProfileByAuth = await prisma.studentProfile.findUnique({
+              where: { authorizedStudentId: authStudent.id },
+            });
+            if (existingProfileByAuth && existingProfileByAuth.userId !== sUser.id) {
+              await prisma.studentProfile.delete({
+                where: { id: existingProfileByAuth.id },
+              });
+            }
+
             await prisma.studentProfile.upsert({
               where: { userId: sUser.id },
-              update: { authorizedStudentId: authStudent.id },
+              update: {
+                authorizedStudent: { connect: { id: authStudent.id } },
+              },
               create: {
-                userId: sUser.id,
-                authorizedStudentId: authStudent.id,
+                user: { connect: { id: sUser.id } },
+                authorizedStudent: { connect: { id: authStudent.id } },
               },
             });
 

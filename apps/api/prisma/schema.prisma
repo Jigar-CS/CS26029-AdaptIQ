@@ -536,6 +536,8 @@ model AssessmentSubmission {
   totalScore         Float              @default(0.0)
   percentage         Float              @default(0.0)
   passed             Boolean            @default(false)
+  feedback           String?            @db.Text
+  evaluatedAt        DateTime?
   answers            SubmissionAnswer[]
   proctoringSession  ProctoringSession?
   createdAt          DateTime           @default(now())
@@ -552,6 +554,9 @@ model SubmissionAnswer {
   question         Question             @relation(fields: [questionId], references: [id], onDelete: Cascade)
   selectedOptionId String?
   selectedOption   QuestionOption?      @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  answerText       String?              @db.LongText
+  feedback         String?              @db.Text
+  evaluatedBy      String?
   isCorrect        Boolean              @default(false)
   pointsAwarded    Float                @default(0.0)
   timeSpentSeconds Int                  @default(0)

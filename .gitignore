@@ -39,3 +39,4 @@ yarn-error.log*
 Thumbs.db
 commits.txt
 ~$*
+companion_strokes_cache.json
