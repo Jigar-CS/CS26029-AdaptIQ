@@ -34,6 +34,7 @@ interface QuestionItem {
   questionText: string;
   topic: string;
   courseCode: string;
+  type?: string;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   bloomLevel: 'REMEMBER' | 'UNDERSTAND' | 'APPLY' | 'ANALYZE' | 'EVALUATE';
   options: {
@@ -124,6 +125,7 @@ export default function FacultyQuestionBankPage() {
           questionText: q.questionText,
           topic: q.topic?.name || 'General Curriculum',
           courseCode: courseCode,
+          type: q.type || ((q.options && q.options.length > 0) ? 'MULTIPLE_CHOICE' : 'DESCRIPTIVE'),
           difficulty: (q.difficulty as any) || 'MEDIUM',
           bloomLevel: q.bloomLevel || 'APPLY',
           options: (q.options || []).map((opt: any) => ({
@@ -542,6 +544,15 @@ export default function FacultyQuestionBankPage() {
                           {q.topic}
                         </span>
                         <span
+                          className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                            q.type === 'DESCRIPTIVE' || q.type === 'SHORT_ANSWER' || !q.options || q.options.length === 0
+                              ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30'
+                              : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30'
+                          }`}
+                        >
+                          {q.type === 'SHORT_ANSWER' ? 'SHORT ANSWER' : (!q.options || q.options.length === 0 || q.type === 'DESCRIPTIVE' ? 'DESCRIPTIVE' : 'MCQ')}
+                        </span>
+                        <span
                           className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${getDifficultyBadge(
                             q.difficulty,
                           )}`}
@@ -568,39 +579,56 @@ export default function FacultyQuestionBankPage() {
                       {q.questionText}
                     </div>
 
-                    {/* Options Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
-                      {q.options.map((opt, oIdx) => (
-                        <div
-                          key={opt.id}
-                          className={`p-3 rounded-xl border text-xs transition ${
-                            opt.isCorrect
-                              ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200 font-medium'
-                              : 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-750 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <span
-                              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
-                                opt.isCorrect
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                              }`}
-                            >
-                              {String.fromCharCode(65 + oIdx)}
-                            </span>
-                            <div className="space-y-1">
-                              <span>{opt.text}</span>
-                              {opt.misconception && (
-                                <p className="print:hidden text-[10px] text-rose-600 dark:text-rose-400 font-normal">
-                                  Distractor trap: {opt.misconception}
-                                </p>
-                              )}
+                    {/* Options Grid for MCQs or Model Solution for Descriptive */}
+                    {q.options && q.options.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                        {q.options.map((opt, oIdx) => (
+                          <div
+                            key={opt.id}
+                            className={`p-3 rounded-xl border text-xs transition ${
+                              opt.isCorrect
+                                ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200 font-medium'
+                                : 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-750 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span
+                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${
+                                  opt.isCorrect
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {String.fromCharCode(65 + oIdx)}
+                              </span>
+                              <div className="space-y-1">
+                                <span>{opt.text}</span>
+                                {opt.misconception && (
+                                  <p className="print:hidden text-[10px] text-rose-600 dark:text-rose-400 font-normal">
+                                    Distractor trap: {opt.misconception}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/60 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            Descriptive Model Answer & Grading Rubric
+                          </span>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                            OFFICIAL SOLUTION KEY
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-sans whitespace-pre-wrap bg-white/80 dark:bg-slate-900/80 p-3.5 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                          {q.explanation || 'Evaluated manually based on key theoretical principles, technical accuracy, and derivations.'}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Explanation Toggle */}
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">

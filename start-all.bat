@@ -30,6 +30,7 @@ start "CLIAS 3 - NestJS API (Port 4000)" /d "%~dp0apps\api" cmd /k "color 0E && 
 
 :: 4. Start Next.js Frontend on Port 3000
 echo [4/4] Starting Next.js Web Frontend on Port 3000...
+if exist "%~dp0apps\web\.next" rmdir /s /q "%~dp0apps\web\.next"
 start "CLIAS 4 - Next.js Web (Port 3000)" /d "%~dp0apps\web" cmd /k "color 0D && echo Starting Next.js Frontend... && npm run dev"
 
 echo ===================================================

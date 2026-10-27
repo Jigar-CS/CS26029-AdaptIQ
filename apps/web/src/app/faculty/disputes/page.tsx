@@ -315,37 +315,51 @@ export default function FacultyDisputesPage() {
                         </p>
 
                         <div className="space-y-1.5 pt-2">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                            Options:
-                          </span>
-                          {dispute.question.options.map((opt, idx) => (
-                            <div
-                              key={opt.id}
-                              className={`p-2.5 rounded-lg text-xs flex items-center justify-between border ${opt.isCorrect
-                                  ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-200 font-bold'
-                                  : opt.id === dispute.selectedOptionId
-                                    ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-500/40 text-amber-900 dark:text-amber-200 font-semibold'
-                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                                }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-[11px] font-bold">
-                                  {String.fromCharCode(65 + idx)}.
-                                </span>
-                                <span>{opt.optionText}</span>
-                              </div>
-                              {opt.isCorrect && (
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 font-bold">
-                                  Marked Correct
-                                </span>
-                              )}
-                              {!opt.isCorrect && opt.id === dispute.selectedOptionId && (
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold">
-                                  Student Picked
-                                </span>
-                              )}
+                          {dispute.question.options && dispute.question.options.length > 0 ? (
+                            <>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                Options:
+                              </span>
+                              {dispute.question.options.map((opt, idx) => (
+                                <div
+                                  key={opt.id}
+                                  className={`p-2.5 rounded-lg text-xs flex items-center justify-between border ${
+                                    opt.isCorrect
+                                      ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-200 font-bold'
+                                      : opt.id === dispute.selectedOptionId
+                                        ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-500/40 text-amber-900 dark:text-amber-200 font-semibold'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[11px] font-bold">
+                                      {String.fromCharCode(65 + idx)}.
+                                    </span>
+                                    <span>{opt.optionText}</span>
+                                  </div>
+                                  {opt.isCorrect && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 font-bold">
+                                      Marked Correct
+                                    </span>
+                                  )}
+                                  {!opt.isCorrect && opt.id === dispute.selectedOptionId && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold">
+                                      Student Picked
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </>
+                          ) : (
+                            <div className="p-3 rounded-xl border bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800/60 space-y-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
+                                Descriptive Question Model Answer & Rubric:
+                              </span>
+                              <p className="text-xs text-slate-800 dark:text-slate-200 font-sans leading-relaxed">
+                                {dispute.question.explanation || 'Evaluated manually based on technical accuracy and derivations.'}
+                              </p>
                             </div>
-                          ))}
+                          )}
                         </div>
 
                         <div className="pt-2 text-[11px] text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-800">

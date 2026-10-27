@@ -625,27 +625,94 @@ export default function FacultyAssessmentsPage() {
     let foundStrokes: any[] = [];
     let foundText = '';
 
-    if (ans?.answerText) {
-      try {
-        const raw = String(ans.answerText).trim();
-        if (raw.startsWith('{') || raw.startsWith('[')) {
+    const parseAnswerPayload = (rawPayload: any) => {
+      if (!rawPayload) return;
+      const raw = String(rawPayload).trim();
+      if (!raw) return;
+
+      if (raw.startsWith('{') || raw.startsWith('[')) {
+        try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            foundStrokes = parsed;
+            if (parsed.length > 0 && (parsed[0].pts || parsed[0].points || parsed[0].x !== undefined)) {
+              if (parsed[0].x !== undefined) {
+                foundStrokes = [{ id: 'stroke-1', pts: parsed }];
+              } else {
+                foundStrokes = parsed;
+              }
+            } else if (parsed.length > 0 && typeof parsed[0] === 'string') {
+              foundText = parsed.join('\n');
+            }
           } else if (parsed && typeof parsed === 'object') {
             if (Array.isArray(parsed.strokes)) foundStrokes = parsed.strokes;
-            if (parsed.typedText) foundText = parsed.typedText;
+            else if (Array.isArray(parsed.allStrokes)) foundStrokes = parsed.allStrokes;
+
+            // Extract any text / typed response field variations
+            const textCandidate =
+              parsed.typedText ||
+              parsed.text ||
+              parsed.answer ||
+              parsed.answerText ||
+              parsed.descriptiveAnswer ||
+              parsed.studentAnswer ||
+              parsed.response ||
+              parsed.studentResponse ||
+              parsed.content ||
+              parsed.value ||
+              parsed.solution;
+
+            if (textCandidate && typeof textCandidate === 'string') {
+              foundText = textCandidate;
+            } else if (textCandidate && typeof textCandidate === 'object') {
+              foundText = JSON.stringify(textCandidate, null, 2);
+            }
           }
-        } else {
-          foundText = raw;
-        }
-      } catch {
-        foundText = ans.answerText;
+          return;
+        } catch (_) {}
+      }
+      foundText = raw;
+    };
+
+    if (ans) {
+      if (ans.answerText) parseAnswerPayload(ans.answerText);
+      if (!foundText && ans.text) parseAnswerPayload(ans.text);
+      if (!foundText && ans.typedText) parseAnswerPayload(ans.typedText);
+      if (!foundText && ans.studentAnswer) parseAnswerPayload(ans.studentAnswer);
+      if (!foundText && ans.sourceCode) parseAnswerPayload(ans.sourceCode);
+      if (!foundText && ans.selectedOptionText && !ans.selectedOptionId?.startsWith('opt-')) {
+        parseAnswerPayload(ans.selectedOptionText);
+      }
+      if (!foundText && typeof ans.selectedOptionId === 'string' && !ans.selectedOptionId?.startsWith('opt-') && ans.selectedOptionId.length > 10) {
+        parseAnswerPayload(ans.selectedOptionId);
       }
     }
 
-    // In the faculty review portal, student submissions in DB are final and immutable.
-    // Display what the student actually submitted. If unattempted, display a clean blank sheet.
+    // 2. If strokes not in DB record, check the companion sync server buffer as a resilient fallback
+    if (foundStrokes.length === 0 && subObj) {
+      const candidates = [
+        subObj.submissionId,
+        subObj.id,
+        subObj.enrollmentNumber ? `CLIAS-${subObj.enrollmentNumber}` : null,
+        subObj.enrollmentNumber,
+        subObj.studentName ? `CLIAS-${subObj.studentName}` : null,
+        'clias-session-9842',
+        'clias-session-default',
+      ].filter(Boolean);
+
+      for (const sId of candidates) {
+        try {
+          const res = await fetch(`/api/v1/companion/strokes?sessionId=${encodeURIComponent(sId!)}&questionId=${qId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.strokes && Array.isArray(data.strokes) && data.strokes.length > 0) {
+              foundStrokes = data.strokes;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     setSheetStrokes(foundStrokes);
     setSheetTypedText(foundText);
     setSheetLoading(false);
@@ -783,7 +850,7 @@ export default function FacultyAssessmentsPage() {
       ctx.stroke();
       ctx.restore();
     }
-  }, [sheetModalOpen, sheetStrokes, sheetTotalPages, sheetActiveQ]);
+  }, [sheetModalOpen, sheetStrokes, sheetTotalPages, sheetActiveQ, sheetViewMode]);
 
   const exportMarksCsv = (analyticsData?: any) => {
     const target = analyticsData || activeAnalytics;
@@ -3811,7 +3878,9 @@ export default function FacultyAssessmentsPage() {
 
             <div className="p-6 overflow-y-auto space-y-4">
               <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-xs text-cyan-200">
-                This assessment is configured with the <strong>CLIAS Automated In-Browser Code Judge</strong>. Students will write code directly in the browser editor and evaluate against sample cases before submitting for final automated grading.
+                {inspectAssessment.examMode === 'DESCRIPTIVE' || inspectAssessment.questions?.some((q: any) => q.question?.type === 'DESCRIPTIVE' || q.question?.type === 'SHORT_ANSWER' || !q.question?.options?.length)
+                  ? 'This assessment is configured with descriptive problems. Candidates submit answers via handwritten digital companion strokes or typed submissions for manual faculty grading.'
+                  : 'This assessment is configured with the CLIAS Automated In-Browser Code Judge. Students will write code directly in the browser editor and evaluate against sample cases before submitting for final automated grading.'}
               </div>
 
               {inspectAssessment.questions && inspectAssessment.questions.length > 0 ? (
@@ -3862,6 +3931,18 @@ export default function FacultyAssessmentsPage() {
                                   <div><span className="text-slate-400">Expected:</span> <span className="text-white">{stc.expectedOutput}</span></div>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {(!parsedMeta?.sampleTestCases || parsedMeta.sampleTestCases.length === 0) && aq.question?.explanation && (
+                          <div className="p-3.5 bg-[#0F172A] rounded-xl border border-emerald-500/30 text-xs space-y-1">
+                            <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              Descriptive Model Solution & Grading Rubric:
+                            </span>
+                            <div className="text-slate-200 font-sans leading-relaxed whitespace-pre-wrap">
+                              {aq.question.explanation}
                             </div>
                           </div>
                         )}
@@ -4101,7 +4182,12 @@ export default function FacultyAssessmentsPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3.5">
-                                  {sub.passed ? (
+                                  {sub.status === 'SUBMITTED' ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
+                                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                      PENDING REVIEW
+                                    </span>
+                                  ) : sub.passed ? (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                       <CheckCircle2 className="w-3.5 h-3.5" />
                                       PASSED
@@ -4471,17 +4557,24 @@ export default function FacultyAssessmentsPage() {
                     </div>
 
                     {/* Right: Answer Sheet Ruled Paper Canvas Pages & Typed Text */}
-                    <div className="lg:col-span-7 space-y-3">
+                    <div className="lg:col-span-7 space-y-4">
                       {sheetTypedText && (
-                        <div className="p-4 rounded-2xl bg-[#1E293B] border border-indigo-500/40 space-y-2">
-                          <span className="text-xs font-bold text-indigo-400 block uppercase tracking-wider">
-                            📝 Student Submitted Typed Response:
-                          </span>
-                          <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed font-sans bg-[#0F172A] p-3.5 rounded-xl border border-slate-800">
+                        <div className="p-5 rounded-2xl bg-gradient-to-br from-[#1E293B] to-[#111827] border-2 border-emerald-500/50 shadow-xl space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-emerald-400" />
+                              Student Submitted Descriptive Response
+                            </span>
+                            <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                              TYPED / TEXT SUBMISSION
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-100 whitespace-pre-wrap leading-relaxed font-sans bg-[#0F172A] p-4 rounded-xl border border-slate-700/80 max-h-80 overflow-y-auto select-text shadow-inner">
                             {sheetTypedText}
                           </div>
                         </div>
                       )}
+
                       <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-slate-300">Student Submitted Answer Sheet</span>
@@ -4587,11 +4680,25 @@ export default function FacultyAssessmentsPage() {
                         </div>
 
                         {sheetStrokes.length === 0 && !sheetLoading && (
-                          <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 bg-slate-950/80 rounded-2xl border border-slate-800">
-                            <FileText className="w-12 h-12 text-slate-500 mb-2" />
-                            <p className="font-bold text-sm text-slate-200">No strokes recorded for {sheetActiveQ}</p>
-                            <p className="text-xs text-slate-400 mt-1">The student did not write on this question sheet.</p>
-                          </div>
+                          sheetTypedText ? (
+                            <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/30 text-xs text-slate-300 flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                <CheckCircle2 className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-white text-xs">Descriptive Response Recorded Above</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                  Candidate completed this descriptive question via typed response. No handwriting strokes were captured on the digital companion pad.
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 bg-slate-950/80 rounded-2xl border border-slate-800">
+                              <FileText className="w-12 h-12 text-slate-500 mb-2" />
+                              <p className="font-bold text-sm text-slate-200">No response recorded for {sheetActiveQ}</p>
+                              <p className="text-xs text-slate-400 mt-1">The student did not submit written digital ink strokes or typed text for this question.</p>
+                            </div>
+                          )
                         )}
                       </div>
                     </div>
