@@ -1397,7 +1397,7 @@ export class AssessmentService {
           submissionId: submission.id,
           questionId: ans.questionId,
           selectedOptionId: null,
-          answerText: ans.answerText || ans.sourceCode || (ans.selectedOptionId ? String(ans.selectedOptionId) : null),
+          answerText: ans.answerText || ans.sourceCode || (ans.selectedOptionId && !String(ans.selectedOptionId).startsWith('opt-') ? String(ans.selectedOptionId) : null),
           isCorrect: false,
           pointsAwarded: 0.0,
           timeSpentSeconds: ans.timeSpentSeconds || 0,

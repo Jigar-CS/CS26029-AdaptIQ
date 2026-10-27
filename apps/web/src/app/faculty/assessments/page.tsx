@@ -293,6 +293,7 @@ export default function FacultyAssessmentsPage() {
 
   const PAGE_HEIGHT = 750;
   const sheetTotalPages = React.useMemo(() => {
+    if (!sheetStrokes || sheetStrokes.length === 0) return 0;
     let maxY = 0;
     for (const stroke of sheetStrokes) {
       const pts = stroke.points || stroke.pts || [];
@@ -301,8 +302,6 @@ export default function FacultyAssessmentsPage() {
         if (py > maxY) maxY = py;
       }
     }
-    // If student wrote only on 1 page (or empty), show only 1 page (750px)
-    // If student wrote across page 1 boundary (> 750px), calculate exact total pages
     return Math.max(1, Math.ceil((maxY > 0 ? maxY + 40 : 1) / PAGE_HEIGHT));
   }, [sheetStrokes]);
 
@@ -521,6 +520,8 @@ export default function FacultyAssessmentsPage() {
     setSheetActiveQ('Q1');
     setSheetModalOpen(true);
     setGradeSuccessMsg('');
+    setSheetStrokes([]);
+    setSheetTypedText('');
 
     // Prepopulate grading marks and feedback from previous evaluation if available
     const initialMarks: Record<string, number> = {};
@@ -611,24 +612,53 @@ export default function FacultyAssessmentsPage() {
     const subObj = typeof subOrSession === 'object' ? subOrSession : selectedSubForSheet;
     const qIndex = Math.max(0, Number(qId.replace('Q', '')) - 1);
 
-    // 1. First, check if the student's submission has answerText stored in the DB!
+    // 1. Strict Question Resolution: Find the answer specifically belonging to this question
     let ans = null;
     if (subObj?.answers && Array.isArray(subObj.answers)) {
       if (targetQuestionId) {
-        ans = subObj.answers.find((a: any) => a.questionId === targetQuestionId);
-      }
-      if (!ans) {
-        ans = subObj.answers.find((a: any) => a.order === (qIndex + 1)) || subObj.answers[qIndex];
+        ans = subObj.answers.find((a: any) => a.questionId === targetQuestionId) || null;
+      } else {
+        ans = subObj.answers.find((a: any) => a.order === (qIndex + 1)) || subObj.answers[qIndex] || null;
       }
     }
 
     let foundStrokes: any[] = [];
     let foundText = '';
 
+    const isSystemBoilerplate = (str: any) => {
+      if (!str || typeof str !== 'string') return true;
+      const lower = str.toLowerCase().trim();
+      return (
+        lower === 'digital ink ruled sheet submission' ||
+        lower === 'automated code submission' ||
+        lower.startsWith('graded according to marking rubric') ||
+        lower.startsWith('opt-') ||
+        lower.startsWith('ans-')
+      );
+    };
+
     const parseAnswerPayload = (rawPayload: any) => {
       if (!rawPayload) return;
+      if (typeof rawPayload === 'object' && rawPayload !== null) {
+        if (Array.isArray(rawPayload.strokes)) foundStrokes = rawPayload.strokes;
+        else if (Array.isArray(rawPayload.allStrokes)) foundStrokes = rawPayload.allStrokes;
+        const textCandidate =
+          rawPayload.typedText ||
+          rawPayload.text ||
+          rawPayload.answer ||
+          rawPayload.descriptiveAnswer ||
+          rawPayload.studentAnswer ||
+          rawPayload.studentResponse ||
+          rawPayload.content ||
+          rawPayload.solution;
+        if (textCandidate && typeof textCandidate === 'string' && !isSystemBoilerplate(textCandidate)) {
+          foundText = textCandidate;
+        }
+        return;
+      }
+
       const raw = String(rawPayload).trim();
-      if (!raw) return;
+      if (!raw || isSystemBoilerplate(raw)) return;
 
       if (raw.startsWith('{') || raw.startsWith('[')) {
         try {
@@ -647,21 +677,17 @@ export default function FacultyAssessmentsPage() {
             if (Array.isArray(parsed.strokes)) foundStrokes = parsed.strokes;
             else if (Array.isArray(parsed.allStrokes)) foundStrokes = parsed.allStrokes;
 
-            // Extract any text / typed response field variations
             const textCandidate =
               parsed.typedText ||
               parsed.text ||
               parsed.answer ||
-              parsed.answerText ||
               parsed.descriptiveAnswer ||
               parsed.studentAnswer ||
-              parsed.response ||
               parsed.studentResponse ||
               parsed.content ||
-              parsed.value ||
               parsed.solution;
 
-            if (textCandidate && typeof textCandidate === 'string') {
+            if (textCandidate && typeof textCandidate === 'string' && !isSystemBoilerplate(textCandidate)) {
               foundText = textCandidate;
             } else if (textCandidate && typeof textCandidate === 'object') {
               foundText = JSON.stringify(textCandidate, null, 2);
@@ -670,33 +696,27 @@ export default function FacultyAssessmentsPage() {
           return;
         } catch (_) {}
       }
-      foundText = raw;
+
+      if (!isSystemBoilerplate(raw)) {
+        foundText = raw;
+      }
     };
 
     if (ans) {
       if (ans.answerText) parseAnswerPayload(ans.answerText);
-      if (!foundText && ans.text) parseAnswerPayload(ans.text);
       if (!foundText && ans.typedText) parseAnswerPayload(ans.typedText);
       if (!foundText && ans.studentAnswer) parseAnswerPayload(ans.studentAnswer);
       if (!foundText && ans.sourceCode) parseAnswerPayload(ans.sourceCode);
-      if (!foundText && ans.selectedOptionText && !ans.selectedOptionId?.startsWith('opt-')) {
-        parseAnswerPayload(ans.selectedOptionText);
-      }
-      if (!foundText && typeof ans.selectedOptionId === 'string' && !ans.selectedOptionId?.startsWith('opt-') && ans.selectedOptionId.length > 10) {
-        parseAnswerPayload(ans.selectedOptionId);
-      }
+      if (!foundText && ans.text && !isSystemBoilerplate(ans.text)) parseAnswerPayload(ans.text);
     }
 
-    // 2. If strokes not in DB record, check the companion sync server buffer as a resilient fallback
-    if (foundStrokes.length === 0 && subObj) {
+    // 2. Only check companion sync buffer if this submission had ZERO answers persisted in DB (legacy/un-synced)
+    const hasAnyPersistedDbAnswers = subObj?.answers?.some((a: any) => a.answerText || a.sourceCode);
+    if (!hasAnyPersistedDbAnswers && foundStrokes.length === 0 && subObj) {
       const candidates = [
         subObj.submissionId,
         subObj.id,
         subObj.enrollmentNumber ? `CLIAS-${subObj.enrollmentNumber}` : null,
-        subObj.enrollmentNumber,
-        subObj.studentName ? `CLIAS-${subObj.studentName}` : null,
-        'clias-session-9842',
-        'clias-session-default',
       ].filter(Boolean);
 
       for (const sId of candidates) {
@@ -4332,7 +4352,7 @@ export default function FacultyAssessmentsPage() {
               });
 
               const activeQIndex = Math.max(0, Number(sheetActiveQ.replace('Q', '')) - 1);
-              const activeTab = tabs[activeQIndex] || tabs[0];
+              const activeTab = tabs.find((t: any) => t.id === sheetActiveQ) || tabs[activeQIndex] || tabs[0];
               const activeAns = activeTab?.ansObj;
               const activeQuestion = activeTab?.question;
               const activeMaxPoints = activeQuestion?.points || activeAns?.points || 10;
@@ -4575,80 +4595,84 @@ export default function FacultyAssessmentsPage() {
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-300">Student Submitted Answer Sheet</span>
-                          <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                            {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'}
-                          </span>
-                        </div>
+                      {sheetStrokes.length > 0 && (
+                        <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-300">Student Submitted Answer Sheet</span>
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'}
+                            </span>
+                          </div>
 
-                        <div className="flex items-center gap-2">
-                          {/* Page Jump Switcher if student wrote more than 1 page */}
-                          {sheetTotalPages > 1 && (
+                          <div className="flex items-center gap-2">
+                            {/* Page Jump Switcher if student wrote more than 1 page */}
+                            {sheetTotalPages > 1 && (
+                              <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                                {Array.from({ length: sheetTotalPages }, (_, i) => i + 1).map((pNum) => (
+                                  <button
+                                    key={pNum}
+                                    type="button"
+                                    onClick={() => {
+                                      if (sheetScrollContainerRef.current) {
+                                        sheetScrollContainerRef.current.scrollTo({
+                                          top: (pNum - 1) * PAGE_HEIGHT,
+                                          behavior: 'smooth',
+                                        });
+                                        setSheetCurrentPage(pNum);
+                                      }
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                      sheetCurrentPage === pNum ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Page {pNum}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* View sizing mode: Fit width vs 100% natural */}
                             <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                              {Array.from({ length: sheetTotalPages }, (_, i) => i + 1).map((pNum) => (
-                                <button
-                                  key={pNum}
-                                  type="button"
-                                  onClick={() => {
-                                    if (sheetScrollContainerRef.current) {
-                                      sheetScrollContainerRef.current.scrollTo({
-                                        top: (pNum - 1) * PAGE_HEIGHT,
-                                        behavior: 'smooth',
-                                      });
-                                      setSheetCurrentPage(pNum);
-                                    }
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
-                                    sheetCurrentPage === pNum ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-                                  }`}
-                                >
-                                  Page {pNum}
-                                </button>
-                              ))}
+                              <button
+                                type="button"
+                                onClick={() => setSheetViewMode('fit')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                  sheetViewMode === 'fit' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                Fit Width
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSheetViewMode('100')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                                  sheetViewMode === '100' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                100% Size
+                              </button>
                             </div>
-                          )}
-
-                          {/* View sizing mode: Fit width vs 100% natural */}
-                          <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                            <button
-                              type="button"
-                              onClick={() => setSheetViewMode('fit')}
-                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
-                                sheetViewMode === 'fit' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              Fit Width
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSheetViewMode('100')}
-                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
-                                sheetViewMode === '100' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              100% Size
-                            </button>
                           </div>
                         </div>
-                      </div>
+                      )}
 
                       <div
                         ref={sheetScrollContainerRef}
                         onScroll={(e) => {
                           const top = e.currentTarget.scrollTop;
                           const currentP = Math.min(
-                            sheetTotalPages,
+                            Math.max(1, sheetTotalPages),
                             Math.max(1, Math.floor(top / PAGE_HEIGHT) + 1)
                           );
                           setSheetCurrentPage(currentP);
                         }}
                         className="relative border-2 border-slate-700 rounded-2xl overflow-y-auto p-3.5 bg-slate-900/90 shadow-2xl max-h-[660px] space-y-4"
                       >
-                        {/* Unified Multi-Page Answer Sheet Card */}
+                        {/* Unified Multi-Page Answer Sheet Card - Hidden when 0 strokes recorded */}
                         <div
                           className={`bg-white rounded-2xl shadow-xl border-2 border-slate-600/70 overflow-hidden relative transition-all ${
+                            sheetStrokes.length === 0 ? 'hidden' : 'block'
+                          } ${
                             sheetViewMode === '100' ? 'w-[900px] mx-auto' : 'w-full'
                           }`}
                         >
@@ -4656,13 +4680,13 @@ export default function FacultyAssessmentsPage() {
                           <div className="flex items-center justify-between px-5 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-mono font-bold text-slate-700">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
-                              <span>PAGE {sheetCurrentPage} OF {sheetTotalPages}</span>
+                              <span>PAGE {sheetCurrentPage} OF {Math.max(1, sheetTotalPages)}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">
                                 {sheetActiveQ}
                               </span>
                             </div>
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                              CLIAS DIGITAL INK EXAM SHEET ({sheetTotalPages} {sheetTotalPages === 1 ? 'PAGE' : 'PAGES'})
+                              CLIAS DIGITAL INK EXAM SHEET ({Math.max(1, sheetTotalPages)} {sheetTotalPages <= 1 ? 'PAGE' : 'PAGES'})
                             </span>
                           </div>
 

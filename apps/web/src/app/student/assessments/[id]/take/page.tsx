@@ -1556,6 +1556,11 @@ export default function TakeAssessmentPage() {
           }
         }
 
+        const candidateTyped = answers[q.id];
+        if (!answerText && typeof candidateTyped === 'string' && candidateTyped.trim().length > 0 && !candidateTyped.startsWith('opt-')) {
+          answerText = candidateTyped.trim();
+        }
+
         return {
           questionId: q.id,
           selectedOptionId: answers[q.id] || null,
