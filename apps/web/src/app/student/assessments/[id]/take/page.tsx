@@ -54,8 +54,10 @@ import { AssessmentLeaderboardView } from '@/components/AssessmentLeaderboardMod
 import { DescriptiveCompanionWorkspace } from '@/components/DescriptiveCompanionWorkspace';
 
 interface FaceFeatureProfile {
+  descriptor?: number[]; // 128-d deep facial biometric descriptor vector (ResNet / ArcFace)
   grid: number[][]; // 8x8 normalized [r, g, b] cells
   colorHist: number[]; // 16-bin color distribution
+  gradientProfile?: number[]; // 16-bin structural edge orientation gradients
   skinRatio: number;
   avgBrightness: number;
 }
@@ -80,6 +82,7 @@ function extractFaceProfileFromCanvas(
     const gridCols = 8;
     const grid = Array.from({ length: gridRows * gridCols }, () => [0, 0, 0, 0]);
     const colorHist = new Array(16).fill(0);
+    const gradientProfile = new Array(16).fill(0);
     let totalBrightness = 0;
     let skinCount = 0;
 
@@ -104,6 +107,18 @@ function extractFaceProfileFromCanvas(
         const bin = Math.min(15, Math.floor(r / 64) * 4 + Math.floor(g / 64));
         colorHist[bin]++;
 
+        // Sobel edge gradient to capture invariant facial feature geometry
+        if (x > 0 && x < sw - 1 && y > 0 && y < sh - 1) {
+          const leftIdx = (y * sw + (x - 1)) * 4;
+          const rightIdx = (y * sw + (x + 1)) * 4;
+          const upIdx = ((y - 1) * sw + x) * 4;
+          const downIdx = ((y + 1) * sw + x) * 4;
+          const dx = Math.abs(data[rightIdx] - data[leftIdx]);
+          const dy = Math.abs(data[downIdx] - data[upIdx]);
+          const gradBin = Math.min(15, Math.floor((dx + dy) / 16));
+          gradientProfile[gradBin]++;
+        }
+
         if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 10 && (r - b) > 15) {
           skinCount++;
         }
@@ -116,10 +131,13 @@ function extractFaceProfileFromCanvas(
     });
 
     const normalizedHist = colorHist.map((v) => v / totalPixels);
+    const gradTotal = gradientProfile.reduce((a, b) => a + b, 0) || 1;
+    const normalizedGrad = gradientProfile.map((v) => v / gradTotal);
 
     return {
       grid: normalizedGrid,
       colorHist: normalizedHist,
+      gradientProfile: normalizedGrad,
       skinRatio: skinCount / totalPixels,
       avgBrightness: totalBrightness / totalPixels,
     };
@@ -131,10 +149,39 @@ function extractFaceProfileFromCanvas(
 function compareFaceProfiles(p1: FaceFeatureProfile, p2: FaceFeatureProfile): number {
   if (!p1 || !p2) return 0;
 
-  // Spatial grid cosine similarity
-  let dot = 0;
-  let mag1 = 0;
-  let mag2 = 0;
+  // 1. High-Precision 128-d Deep Biometric Embedding Distance (ResNet / ArcFace)
+  if (
+    Array.isArray(p1.descriptor) &&
+    Array.isArray(p2.descriptor) &&
+    p1.descriptor.length === 128 &&
+    p2.descriptor.length === 128
+  ) {
+    let sumSq = 0;
+    for (let i = 0; i < 128; i++) {
+      const diff = p1.descriptor[i] - p2.descriptor[i];
+      sumSq += diff * diff;
+    }
+    const dist = Math.sqrt(sumSq);
+    // Face-API standard:
+    // Distance < 0.58 indicates same person. Distance >= 0.65 indicates different person/imposter.
+    const sim = Math.max(0, 1 - dist / 0.70);
+    return sim;
+  }
+
+  // 2. Structural Edge Gradient Cosine Similarity
+  let gradSim = 0;
+  if (p1.gradientProfile && p2.gradientProfile) {
+    let gDot = 0, gMag1 = 0, gMag2 = 0;
+    for (let i = 0; i < p1.gradientProfile.length; i++) {
+      gDot += p1.gradientProfile[i] * p2.gradientProfile[i];
+      gMag1 += p1.gradientProfile[i] * p1.gradientProfile[i];
+      gMag2 += p2.gradientProfile[i] * p2.gradientProfile[i];
+    }
+    gradSim = gMag1 > 0 && gMag2 > 0 ? gDot / (Math.sqrt(gMag1) * Math.sqrt(gMag2)) : 0;
+  }
+
+  // 3. Spatial Grid Cosine Similarity
+  let dot = 0, mag1 = 0, mag2 = 0;
   for (let i = 0; i < p1.grid.length; i++) {
     for (let j = 0; j < 3; j++) {
       const v1 = p1.grid[i][j];
@@ -146,10 +193,8 @@ function compareFaceProfiles(p1: FaceFeatureProfile, p2: FaceFeatureProfile): nu
   }
   const gridSim = mag1 > 0 && mag2 > 0 ? dot / (Math.sqrt(mag1) * Math.sqrt(mag2)) : 0;
 
-  // Color histogram cosine similarity
-  let hDot = 0;
-  let hMag1 = 0;
-  let hMag2 = 0;
+  // 4. Color Histogram Cosine Similarity
+  let hDot = 0, hMag1 = 0, hMag2 = 0;
   for (let i = 0; i < p1.colorHist.length; i++) {
     hDot += p1.colorHist[i] * p2.colorHist[i];
     hMag1 += p1.colorHist[i] * p1.colorHist[i];
@@ -157,11 +202,12 @@ function compareFaceProfiles(p1: FaceFeatureProfile, p2: FaceFeatureProfile): nu
   }
   const histSim = hMag1 > 0 && hMag2 > 0 ? hDot / (Math.sqrt(hMag1) * Math.sqrt(hMag2)) : 0;
 
-  // Skin ratio delta similarity
-  const skinDiff = Math.abs(p1.skinRatio - p2.skinRatio);
-  const skinSim = Math.max(0, 1 - skinDiff * 3);
+  // Prioritize structural gradients over raw surface color
+  if (gradSim > 0) {
+    return gradSim * 0.50 + gridSim * 0.30 + histSim * 0.20;
+  }
 
-  return gridSim * 0.55 + histSim * 0.35 + skinSim * 0.10;
+  return gridSim * 0.55 + histSim * 0.45;
 }
 
 export default function TakeAssessmentPage() {
@@ -359,6 +405,14 @@ export default function TakeAssessmentPage() {
   const [unauthorizedPerson, setUnauthorizedPerson] = useState<'MULTIPLE_FACES' | 'IDENTITY_MISMATCH' | null>(null);
   const unauthorizedPersonRef = useRef<'MULTIPLE_FACES' | 'IDENTITY_MISMATCH' | null>(null);
   const baselineFaceProfileRef = useRef<FaceFeatureProfile | null>(null);
+  const baselineFaceDescriptorRef = useRef<Float32Array | null>(null);
+  const faceApiModelLoadedRef = useRef<boolean>(false);
+  const lastBlinkTimeRef = useRef<number>(Date.now());
+  const eyeBlinkCounterRef = useRef<number>(0);
+  const isEyeClosedRef = useRef<boolean>(false);
+  const lastHeadPoseViolationTimeRef = useRef<number>(0);
+  const [virtualCamWarning, setVirtualCamWarning] = useState<string | null>(null);
+  const [multiMonitorWarning, setMultiMonitorWarning] = useState<string | null>(null);
   const consecutiveMismatchRef = useRef<number>(0);
   const consecutiveUnauthorizedRef = useRef<number>(0);
   const consecutiveMobileDetectionRef = useRef<number>(0);
@@ -546,6 +600,27 @@ export default function TakeAssessmentPage() {
         console.warn('Acoustic monitoring initialization bypassed:', audioErr);
       }
 
+      // Detect virtual camera drivers / fake media injectors
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+        const blockedKeywords = ['obs', 'virtual', 'manycam', 'vmix', 'fake', 'droidcam', 'iriun', 'camo', 'splitcam'];
+        const foundVirtual = videoDevices.find((v) =>
+          blockedKeywords.some((b) => v.label.toLowerCase().includes(b))
+        );
+        if (foundVirtual && videoDevices.length > 1) {
+          console.warn('Virtual camera driver detected:', foundVirtual.label);
+          setVirtualCamWarning(`Virtual camera detected: "${foundVirtual.label}". Please ensure your primary physical webcam is selected.`);
+        } else {
+          setVirtualCamWarning(null);
+        }
+      } catch {}
+
+      // Multi-monitor detection
+      if (typeof window !== 'undefined' && ((window.screen as any)?.isExtended || (window as any).screenDetails)) {
+        setMultiMonitorWarning('Multiple monitors detected. Extended secondary screens are monitored.');
+      }
+
       // Detect if camera is detached mid-exam
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
@@ -582,12 +657,33 @@ export default function TakeAssessmentPage() {
         snapshotUrl = canvas.toDataURL('image/jpeg', 0.85);
         setBaselineSnapshot(snapshotUrl);
 
-        // 2. Extract baseline candidate facial feature profile (center 60% of frame)
+        // 2. Extract baseline candidate facial feature profile & deep biometric descriptor
         const sx = Math.floor(canvas.width * 0.15);
         const sy = Math.floor(canvas.height * 0.10);
         const sw = Math.floor(canvas.width * 0.70);
         const sh = Math.floor(canvas.height * 0.80);
         const profile = extractFaceProfileFromCanvas(canvas, sx, sy, sw, sh);
+
+        // Extract deep 128-d biometric descriptor if faceapi is ready
+        const faceapi = (window as any).faceapi;
+        if (faceapi && faceApiModelLoadedRef.current) {
+          try {
+            const det = await faceapi
+              .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }))
+              .withFaceLandmarks(true)
+              .withFaceDescriptor();
+            if (det?.descriptor) {
+              baselineFaceDescriptorRef.current = det.descriptor;
+              if (profile) {
+                profile.descriptor = Array.from(det.descriptor);
+              }
+              console.log('Enrolled candidate 128-d biometric descriptor captured successfully.');
+            }
+          } catch (detErr) {
+            console.warn('Pre-flight face-api descriptor extraction error:', detErr);
+          }
+        }
+
         if (profile) {
           baselineFaceProfileRef.current = profile;
         }
@@ -735,11 +831,54 @@ export default function TakeAssessmentPage() {
           const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
           if (active) {
             visionModelRef.current = m;
-            console.log('AI Proctoring Vision Model loaded successfully.');
+            console.log('AI Proctoring Vision Model (COCO-SSD) loaded successfully.');
+          }
+        }
+
+        // Load Face-API for high-precision biometrics, 68 landmarks & liveness
+        if (!(window as any).faceapi) {
+          await loadScriptWithFallback([
+            'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js',
+            'https://unpkg.com/@vladmandic/face-api@1.7.12/dist/face-api.js',
+          ]);
+        }
+
+        const faceapi = (window as any).faceapi;
+        if (active && faceapi && !faceApiModelLoadedRef.current) {
+          const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          ]);
+          if (active) {
+            faceApiModelLoadedRef.current = true;
+            console.log('AI Face Biometric Models (TinyFace + Landmarks68 + ResNet Recognition) loaded successfully.');
+
+            // If baseline snapshot was captured while model was loading, extract descriptor now
+            if (baselineSnapshot && !baselineFaceDescriptorRef.current) {
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.src = baselineSnapshot;
+              img.onload = async () => {
+                try {
+                  const det = await faceapi
+                    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 }))
+                    .withFaceLandmarks(true)
+                    .withFaceDescriptor();
+                  if (det?.descriptor) {
+                    baselineFaceDescriptorRef.current = det.descriptor;
+                    console.log('Baseline 128-d biometric descriptor extracted from snapshot post-model load.');
+                  }
+                } catch (e) {
+                  console.warn('Post-load baseline descriptor extraction failed:', e);
+                }
+              };
+            }
           }
         }
       } catch (err) {
-        console.warn('COCO-SSD model fallback active (local computer vision heuristic will operate):', err);
+        console.warn('Vision model initialization fallback active (local computer vision heuristic will operate):', err);
       }
     };
 
@@ -748,6 +887,47 @@ export default function TakeAssessmentPage() {
       active = false;
     };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Secure Browser Lockdown: Clipboard, Right-Click, and DevTools Protection
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!examData || result || showPreFlight) return;
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleCopyCut = (e: ClipboardEvent) => {
+      if (!isCodingTest) {
+        e.preventDefault();
+        reportViolation('WINDOW_BLUR', 'LOW', 'Clipboard action (copy/paste) blocked during examination.');
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
+        (e.ctrlKey && e.key.toUpperCase() === 'U')
+      ) {
+        e.preventDefault();
+        reportViolation('TAB_SWITCH', 'MEDIUM', 'Prohibited developer tool shortcut combination blocked.');
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopyCut);
+    document.addEventListener('cut', handleCopyCut);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopyCut);
+      document.removeEventListener('cut', handleCopyCut);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [examData, result, showPreFlight, isCodingTest]);
 
   // ---------------------------------------------------------------------------
   // Real-Time Browser Integrity Monitoring Listeners
@@ -1105,131 +1285,198 @@ export default function TakeAssessmentPage() {
               consecutiveMobileDetectionRef.current = 0;
             }
 
-            // 2. Strict Person & Facial Identity Matching
-            const persons = predictions.filter((p: any) => {
-              return (p.class || '').toLowerCase() === 'person' && p.score >= 0.38;
-            });
-
-            if (persons.length === 0) {
-              // 0 persons detected -> Registered candidate is not in frame
-              isPersonFound = false;
-              consecutiveUnauthorizedRef.current = 0;
-              consecutiveMismatchRef.current = 0;
-              if (unauthorizedPersonRef.current !== null) {
-                updateUnauthorizedPerson(null);
-              }
-            } else if (persons.length > 1) {
-              // Multiple people in camera frame -> Candidate not solely present
-              isPersonFound = false;
-              consecutiveUnauthorizedRef.current += 1;
-              updateUnauthorizedPerson('MULTIPLE_FACES');
-              reportViolation(
-                'MULTIPLE_FACES',
-                'HIGH',
-                `Multiple individuals (${persons.length}) detected within primary examination workspace.`
-              );
-            } else if (persons.length === 1) {
-              // Exactly 1 person. Verify against the screenshotted baseline face!
-              if (baselineFaceProfileRef.current) {
-                try {
-                  canvas.width = 160;
-                  canvas.height = 120;
-                  const cCtx = canvas.getContext('2d');
-                  if (cCtx) {
-                    cCtx.drawImage(video, 0, 0, 160, 120);
-                    const p0 = persons[0];
-                    let sx = Math.floor(160 * 0.15);
-                    let sy = Math.floor(120 * 0.10);
-                    let sw = Math.floor(160 * 0.70);
-                    let sh = Math.floor(120 * 0.80);
-
-                    if (Array.isArray(p0.bbox) && p0.bbox.length === 4) {
-                      const scaleX = 160 / video.videoWidth;
-                      const scaleY = 120 / video.videoHeight;
-                      sx = Math.max(0, Math.floor(p0.bbox[0] * scaleX));
-                      sy = Math.max(0, Math.floor(p0.bbox[1] * scaleY));
-                      sw = Math.min(160 - sx, Math.floor(p0.bbox[2] * scaleX));
-                      sh = Math.min(120 - sy, Math.floor(p0.bbox[3] * scaleY * 0.65));
-                    }
-
-                    const currentProfile = extractFaceProfileFromCanvas(canvas, sx, sy, sw, sh);
-                    if (currentProfile) {
-                      const sim = compareFaceProfiles(baselineFaceProfileRef.current, currentProfile);
-                      if (sim >= 0.50) {
-                        // Registered enrolled face verified!
-                        isPersonFound = true;
-                        consecutiveMismatchRef.current = 0;
-                        consecutiveUnauthorizedRef.current = 0;
-                        if (unauthorizedPersonRef.current !== null) {
-                          updateUnauthorizedPerson(null);
-                        }
-                      } else {
-                        // Anything other than registered face -> In descriptive exams, candidate looks down to write
-                        if (!isDescriptiveTest) {
-                          isPersonFound = false;
-                          consecutiveMismatchRef.current += 1;
-                          updateUnauthorizedPerson('IDENTITY_MISMATCH');
-                          reportViolation(
-                            'NO_FACE',
-                            'HIGH',
-                            'Face not visible: Registered candidate face is not recognized in camera view.'
-                          );
-                        }
-                      }
-                    } else {
-                      isPersonFound = false;
-                    }
-                  }
-                } catch (profileErr) {
-                  console.warn('Face comparison cycle error:', profileErr);
-                  isPersonFound = false;
-                }
-              } else {
-                isPersonFound = true;
-              }
-            }
           } catch (modelErr) {
             console.warn('Vision detection cycle error:', modelErr);
           }
         }
 
         // -------------------------------------------------------------
-        // B. Canvas Computer Vision Baseline Telemetry (Skin Tone & Luminance)
-        // Runs on every frame regardless of external AI model status
+        // B. High-Precision Biometric Face Verification & Imposter Detection via Face-API
         // -------------------------------------------------------------
-        canvas.width = 128;
-        canvas.height = 96;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, 128, 96);
-          const frame = ctx.getImageData(0, 0, 128, 96);
-          const data = frame.data;
-          let totalBrightness = 0;
-          let skinCount = 0;
-          const totalPixels = data.length / 4;
+        const faceapi = (window as any).faceapi;
+        let faceApiCycleExecuted = false;
 
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            const pxBrightness = (r + g + b) / 3;
-            totalBrightness += pxBrightness;
+        if (faceapi && faceApiModelLoadedRef.current) {
+          try {
+            faceApiCycleExecuted = true;
+            const tinyOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.38 });
+            const allFaces = await faceapi.detectAllFaces(video, tinyOpts);
 
-            // Skin tone color range
-            if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 10 && (r - b) > 15) {
-              skinCount++;
+            if (allFaces.length === 0) {
+              // 0 faces detected in camera frame
+              isPersonFound = false;
+              consecutiveUnauthorizedRef.current = 0;
+              consecutiveMismatchRef.current = 0;
+              if (unauthorizedPersonRef.current !== null) {
+                updateUnauthorizedPerson(null);
+              }
+            } else if (allFaces.length > 1) {
+              // Multiple faces detected!
+              isPersonFound = false;
+              consecutiveUnauthorizedRef.current += 1;
+              updateUnauthorizedPerson('MULTIPLE_FACES');
+              reportViolation(
+                'MULTIPLE_FACES',
+                'HIGH',
+                `Multiple individuals (${allFaces.length}) detected within primary examination workspace.`
+              );
+            } else if (allFaces.length === 1) {
+              // Exactly 1 face. Verify landmarks, liveness, and deep descriptor!
+              const singleFace = await faceapi
+                .detectSingleFace(video, tinyOpts)
+                .withFaceLandmarks(true)
+                .withFaceDescriptor();
+
+              if (singleFace) {
+                const landmarks = singleFace.landmarks;
+                const leftEye = landmarks.getLeftEye();
+                const rightEye = landmarks.getRightEye();
+
+                // 1. Passive Liveness (Eye Aspect Ratio - EAR)
+                if (leftEye.length >= 6 && rightEye.length >= 6) {
+                  const earL =
+                    (Math.hypot(leftEye[1].x - leftEye[5].x, leftEye[1].y - leftEye[5].y) +
+                      Math.hypot(leftEye[2].x - leftEye[4].x, leftEye[2].y - leftEye[4].y)) /
+                    (2.0 * Math.hypot(leftEye[0].x - leftEye[3].x, leftEye[0].y - leftEye[3].y));
+                  const earR =
+                    (Math.hypot(rightEye[1].x - rightEye[5].x, rightEye[1].y - rightEye[5].y) +
+                      Math.hypot(rightEye[2].x - rightEye[4].x, rightEye[2].y - rightEye[4].y)) /
+                    (2.0 * Math.hypot(rightEye[0].x - rightEye[3].x, rightEye[0].y - rightEye[3].y));
+                  const ear = (earL + earR) / 2.0;
+
+                  if (ear < 0.20) {
+                    isEyeClosedRef.current = true;
+                  } else if (isEyeClosedRef.current && ear >= 0.24) {
+                    isEyeClosedRef.current = false;
+                    lastBlinkTimeRef.current = Date.now();
+                    eyeBlinkCounterRef.current += 1;
+                  }
+
+                  const timeSinceBlink = Date.now() - lastBlinkTimeRef.current;
+                  if (timeSinceBlink > 40000 && !isDescriptiveTest) {
+                    reportViolation(
+                      'IDENTITY_MISMATCH',
+                      'MEDIUM',
+                      'Liveness anomaly: Natural eye blinking absent for > 40 seconds (static portrait/photo suspected).'
+                    );
+                    lastBlinkTimeRef.current = Date.now() - 25000;
+                  }
+                }
+
+                // 2. Head Pose & Gaze Direction
+                const nose = landmarks.getNose();
+                if (nose.length >= 4 && leftEye.length > 0 && rightEye.length > 0) {
+                  const noseTip = nose[3];
+                  const dLeft = Math.hypot(noseTip.x - leftEye[0].x, noseTip.y - leftEye[0].y);
+                  const dRight = Math.hypot(noseTip.x - rightEye[3].x, noseTip.y - rightEye[3].y);
+                  const yawRatio = dLeft / Math.max(1, dRight);
+
+                  if ((yawRatio < 0.38 || yawRatio > 2.6) && !isDescriptiveTest) {
+                    const now = Date.now();
+                    if (now - lastHeadPoseViolationTimeRef.current > 7000) {
+                      lastHeadPoseViolationTimeRef.current = now;
+                      reportViolation(
+                        'WINDOW_BLUR',
+                        'LOW',
+                        'Gaze anomaly: Candidate head pose turned away from assessment monitor.'
+                      );
+                    }
+                  }
+                }
+
+                // 3. Deep Biometric Descriptor Identity Verification
+                if (baselineFaceDescriptorRef.current && singleFace.descriptor) {
+                  const distance = faceapi.euclideanDistance(
+                    baselineFaceDescriptorRef.current,
+                    singleFace.descriptor
+                  );
+
+                  // Distance < 0.58 = Enrolled Candidate Verified!
+                  // Distance >= 0.58 = IMPOSTER / DIFFERENT PERSON!
+                  if (distance < 0.58) {
+                    isPersonFound = true;
+                    consecutiveMismatchRef.current = 0;
+                    consecutiveUnauthorizedRef.current = 0;
+                    if (unauthorizedPersonRef.current !== null) {
+                      updateUnauthorizedPerson(null);
+                    }
+                  } else {
+                    // Different person detected!
+                    if (!isDescriptiveTest) {
+                      isPersonFound = false;
+                      consecutiveMismatchRef.current += 1;
+                      if (consecutiveMismatchRef.current >= 2) {
+                        updateUnauthorizedPerson('IDENTITY_MISMATCH');
+
+                        let imposterSnap = '';
+                        try {
+                          canvas.width = 320;
+                          canvas.height = 240;
+                          const sCtx = canvas.getContext('2d');
+                          if (sCtx) {
+                            sCtx.drawImage(video, 0, 0, 320, 240);
+                            imposterSnap = canvas.toDataURL('image/jpeg', 0.65);
+                          }
+                        } catch {}
+
+                        reportViolation(
+                          'IDENTITY_MISMATCH',
+                          'SEVERE',
+                          `Biometric mismatch: Active test-taker face does not match the enrolled candidate (Distance: ${distance.toFixed(2)}).`,
+                          imposterSnap
+                        );
+                      }
+                    } else {
+                      isPersonFound = true;
+                    }
+                  }
+                } else {
+                  isPersonFound = true;
+                  if (unauthorizedPersonRef.current !== null) {
+                    updateUnauthorizedPerson(null);
+                  }
+                }
+              } else {
+                isPersonFound = false;
+              }
             }
+          } catch (fErr) {
+            console.warn('Face-api detection cycle error:', fErr);
+            faceApiCycleExecuted = false;
           }
+        }
 
-          const avgBrightness = totalBrightness / totalPixels;
-          const skinRatio = skinCount / totalPixels;
+        // Fallback: If Face-API is still loading, use resilient computer vision heuristic
+        if (!faceApiCycleExecuted) {
+          canvas.width = 128;
+          canvas.height = 96;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, 128, 96);
+            const frame = ctx.getImageData(0, 0, 128, 96);
+            const data = frame.data;
+            let totalBrightness = 0;
+            let skinCount = 0;
+            const totalPixels = data.length / 4;
 
-          // Camera covered or blacked out
-          if (avgBrightness < 12) {
-            isPersonFound = false;
-          } else if (!visionModelRef.current) {
-            // Fallback face presence when AI model is loading
-            if (baselineFaceProfileRef.current) {
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              const pxBrightness = (r + g + b) / 3;
+              totalBrightness += pxBrightness;
+
+              if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 10 && (r - b) > 15) {
+                skinCount++;
+              }
+            }
+
+            const avgBrightness = totalBrightness / totalPixels;
+            const skinRatio = skinCount / totalPixels;
+
+            if (avgBrightness < 12) {
+              isPersonFound = false;
+            } else if (baselineFaceProfileRef.current) {
               const currentProfile = extractFaceProfileFromCanvas(canvas, 20, 15, 88, 70);
               if (currentProfile) {
                 const sim = compareFaceProfiles(baselineFaceProfileRef.current, currentProfile);
@@ -1246,8 +1493,6 @@ export default function TakeAssessmentPage() {
               } else {
                 isPersonFound = false;
               }
-            } else if (skinRatio >= 0.035) {
-              isPersonFound = true;
             }
           }
         }
