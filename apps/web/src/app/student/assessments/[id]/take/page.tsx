@@ -43,6 +43,12 @@ import {
   Trophy,
   FileText,
   PenTool,
+  Copy,
+  Activity,
+  Radio,
+  Wifi,
+  Fingerprint,
+  Scan,
 } from 'lucide-react';
 import { AssessmentLeaderboardView } from '@/components/AssessmentLeaderboardModal';
 import { DescriptiveCompanionWorkspace } from '@/components/DescriptiveCompanionWorkspace';
@@ -192,6 +198,15 @@ export default function TakeAssessmentPage() {
   const [preflightMobileConnected, setPreflightMobileConnected] = useState<boolean>(false);
   const [preflightCheckingMobile, setPreflightCheckingMobile] = useState<boolean>(false);
   const [pairingHost, setPairingHost] = useState<string>('');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, field: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    }
+  };
 
   const isCodingTest = Boolean(
     examData?.questions?.some((q: any) => q.type === 'CODING' || q.codingProblem)
@@ -1478,69 +1493,53 @@ export default function TakeAssessmentPage() {
     }
   };
 
+  const handleManualSubmitClick = () => {
+    if (submitting || !examData) return;
+    const answeredCount = Object.keys(answers).length + Object.keys(codingAnswers).length;
+    const totalCount = examData.questions?.length || 0;
+    const promptMsg =
+      answeredCount < totalCount
+        ? `You have answered ${answeredCount} of ${totalCount} questions. Are you sure you want to finish and submit your exam?`
+        : 'Are you sure you want to finish and submit your exam? Once submitted, answers cannot be edited.';
+    if (confirm(promptMsg)) {
+      submitExam();
+    }
+  };
+
   const submitExam = async () => {
-    if (!examData) return;
+    if (!examData || submitting) return;
     setSubmitting(true);
 
     // Stop webcam stream tracks upon exam submission
     if (mediaStream) {
-      mediaStream.getTracks().forEach((track) => track.stop());
+      try {
+        mediaStream.getTracks().forEach((track) => track.stop());
+      } catch (_) {}
     }
 
-    // Call companion gateway to notify mobile client and generate random 6-digit Exit Pass
-    try {
-      const companionSessionToken = companionSession;
-      const companionRes = await fetch(
-        `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSessionToken)}&submissionId=${examData.submissionId}`,
-        { method: 'POST' },
-      );
-      if (companionRes.ok) {
-        const passData = await companionRes.json();
-        if (passData?.exitPass) {
-          setExitPassCode(passData.exitPass);
-          setShowExitPassModal(true);
-        }
-      }
-    } catch (e) {
-      console.warn('Companion exit pass call:', e);
-      const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
-      setExitPassCode(fallbackPass);
-      setShowExitPassModal(true);
-    }
-
-    // Assemble answers including digital ink strokes and typed text for descriptive questions
+    // Assemble answers including digital ink strokes ONLY for descriptive exams
     const answerPayload = await Promise.all(
       examData.questions.map(async (q: any, idx: number) => {
         const qKey = `Q${idx + 1}`;
         let answerText: string | undefined = undefined;
-        const isDescriptive =
-          q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE' || !q.options || q.options.length === 0;
 
-        if (isDescriptive) {
+        // Digital ink companion strokes ONLY queried for descriptive questions in descriptive mode
+        if (isDescriptiveTest && (q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE')) {
           try {
-            let sRes = await fetch(
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3500);
+            const sRes = await fetch(
               `/api/v1/companion/strokes?sessionId=${encodeURIComponent(companionSession)}&questionId=${qKey}`,
-            );
+              { signal: controller.signal },
+            ).catch(() => null);
+            clearTimeout(timeout);
+
             let strokesData: any[] = [];
-            if (sRes.ok) {
-              const sData = await sRes.json();
+            if (sRes && sRes.ok) {
+              const sData = await sRes.json().catch(() => null);
               if (sData?.strokes && sData.strokes.length > 0) {
                 strokesData = sData.strokes;
               }
-            }
-            // Fallback check by submissionId if companionSession had 0 strokes
-            if (strokesData.length === 0 && examData.submissionId) {
-              try {
-                const subRes = await fetch(
-                  `/api/v1/companion/strokes?sessionId=${encodeURIComponent(examData.submissionId)}&questionId=${qKey}`,
-                );
-                if (subRes.ok) {
-                  const subData = await subRes.json();
-                  if (subData?.strokes && subData.strokes.length > 0) {
-                    strokesData = subData.strokes;
-                  }
-                }
-              } catch (_) {}
             }
             if (strokesData.length > 0) {
               answerText = JSON.stringify({
@@ -1574,14 +1573,61 @@ export default function TakeAssessmentPage() {
     );
 
     try {
-      await api.post(`/assessments/submissions/${examData.submissionId}/submit`, {
+      // 1. Submit attempt to backend
+      const submitRes = await api.post(`/assessments/submissions/${examData.submissionId}/submit`, {
         answers: answerPayload,
       });
-      // Fetch full itemized result
-      const detailedResult = await api.get(`/assessments/submissions/${examData.submissionId}/result`);
-      setResult(detailedResult);
-    } catch (err) {
-      console.error('Failed to submit exam', err);
+
+      // 2. Fetch full itemized result
+      try {
+        const detailedResult = await api.get(`/assessments/submissions/${examData.submissionId}/result`);
+        setResult(detailedResult);
+      } catch (resultErr) {
+        console.warn('Direct itemized result fetch failed, using submission response fallback', resultErr);
+        // Fallback: build a complete result object so the student view is NEVER stuck
+        setResult({
+          submissionId: examData.submissionId,
+          assessmentTitle: examData.assessment?.title || 'Assessment',
+          assessmentCode: examData.assessment?.code || '',
+          courseCode: examData.assessment?.code?.split('-')?.[0] || 'COURSE',
+          attemptNumber: examData.attemptNumber || 1,
+          status: submitRes?.status || (isDescriptiveTest ? 'SUBMITTED' : 'EVALUATED'),
+          isPendingFacultyGrading: isDescriptiveTest || submitRes?.status === 'SUBMITTED',
+          totalScore: submitRes?.totalScore ?? 0,
+          totalMarks: examData.assessment?.totalMarks ?? 100,
+          percentage: submitRes?.percentage ?? 0,
+          passed: Boolean(submitRes?.passed),
+          startedAt: examData.startedAt || new Date().toISOString(),
+          submittedAt: submitRes?.submittedAt || new Date().toISOString(),
+          answers: [],
+        });
+      }
+
+      // 3. For descriptive tests with mobile companion, notify companion gateway and generate exit pass
+      if (isDescriptiveTest) {
+        try {
+          const companionRes = await fetch(
+            `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSession)}&submissionId=${examData.submissionId}`,
+            { method: 'POST' },
+          ).catch(() => null);
+          if (companionRes && companionRes.ok) {
+            const passData = await companionRes.json().catch(() => null);
+            if (passData?.exitPass) {
+              setExitPassCode(passData.exitPass);
+            }
+          } else {
+            const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
+            setExitPassCode(fallbackPass);
+          }
+        } catch (_) {
+          const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
+          setExitPassCode(fallbackPass);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to submit exam:', err);
+      const errMsg = err?.message || 'Failed to submit exam. Please try again.';
+      alert(`Submission notice: ${errMsg}\n\nPlease click Submit Exam again.`);
     } finally {
       setSubmitting(false);
     }
@@ -1626,128 +1672,240 @@ export default function TakeAssessmentPage() {
   // Pre-Flight Device & Face Enrollment Modal
   // ---------------------------------------------------------------------------
   if (showPreFlight) {
+    const totalSteps = isDescriptiveTest ? 4 : 3;
+    const completedSteps =
+      (cameraPermission === 'granted' && micPermission === 'granted' ? 1 : 0) +
+      (isDescriptiveTest ? (preflightMobileConnected ? 1 : 0) : 0) +
+      (faceEnrolled ? 1 : 0) +
+      (integrityPledge ? 1 : 0);
+    const progressPercent = Math.round((completedSteps / totalSteps) * 100);
+
+    const canEnterExam =
+      integrityPledge &&
+      cameraPermission === 'granted' &&
+      faceEnrolled &&
+      (!isDescriptiveTest || preflightMobileConnected);
+
     return (
-      <div className="min-h-screen bg-transparent text-[#1a2540] dark:text-[#e8edf5] flex items-center justify-center p-4 relative z-10 font-sans">
-        <div className="max-w-2xl w-full panel p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto selection:bg-cyan-500/30 selection:text-cyan-800 dark:selection:text-cyan-200">
+        {/* Ambient atmospheric glows */}
+        <div className="fixed -top-40 -left-40 w-96 h-96 bg-cyan-500/10 dark:bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/5 dark:bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-3xl w-full my-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-5 sm:p-7 space-y-5 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+          {/* Top glowing laser line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-teal-400 to-indigo-500 shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
+
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[var(--grid-line)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[var(--primary)] text-white">
-                <Shield className="w-6 h-6" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+            <div className="flex items-center gap-3.5">
+              <div className="relative p-3 rounded-2xl bg-cyan-50 border border-cyan-200 text-cyan-600 dark:bg-cyan-500/20 dark:border-cyan-500/30 dark:text-cyan-400 shadow-xs">
+                <ShieldCheck className="w-6 h-6" />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500" />
+                </span>
               </div>
               <div>
-                <h1 className="text-xl font-extrabold font-mono uppercase tracking-wider">AI PROCTORING & PRE-EXAM SETUP</h1>
-                <p className="font-mono text-xs text-slate-600 dark:text-slate-400 font-medium">
-                  {examData?.assessment?.title} • {examData?.assessment?.code}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20">
+                    AI PROCTORING PROTOCOL
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-medium">
+                    SECURE SESSION
+                  </span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white mt-1">
+                  Biometric Proctoring Gateway
+                </h1>
+                <p className="font-mono text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  {examData?.assessment?.title || 'Examination'} •{' '}
+                  <span className="text-cyan-700 dark:text-cyan-400 font-bold">{examData?.assessment?.code || 'EXAM-SEC'}</span>
                 </p>
               </div>
             </div>
-            <span className="px-2.5 py-1 font-mono text-xs font-bold border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              {examData?.assessment?.durationMinutes} MINS
-            </span>
+
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 dark:bg-slate-800/80 dark:border-slate-700/80 dark:text-amber-400 font-mono text-xs font-bold shadow-xs">
+                <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>{examData?.assessment?.durationMinutes || 60} MINS</span>
+              </div>
+            </div>
           </div>
 
-          {/* Camera Preview and Device Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Live Camera View */}
-            <div className="relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
+          {/* Interactive Readiness Meter */}
+          <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-mono uppercase tracking-wider text-slate-700 dark:text-slate-400 text-[11px] font-bold flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                Readiness Verification
+              </span>
+              <span className="font-mono text-[11px] font-bold text-cyan-700 dark:text-cyan-300">
+                {completedSteps} / {totalSteps} Protocols Verified ({progressPercent}%)
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 transition-all duration-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Camera Preview and Diagnostics Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Viewfinder: 7 cols on lg */}
+            <div
+              data-keep-dark
+              className="lg:col-span-7 relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-cyan-500/40 shadow-md flex items-center justify-center group"
+            >
               {cameraPermission === 'granted' ? (
-                <video
-                  ref={preflightVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover mirror"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
+                <>
+                  <video
+                    ref={preflightVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
+                  {/* HUD Corner Brackets */}
+                  <div className="absolute top-3 left-3 w-5 h-5 border-t-2 border-l-2 border-cyan-400 pointer-events-none" />
+                  <div className="absolute top-3 right-3 w-5 h-5 border-t-2 border-r-2 border-cyan-400 pointer-events-none" />
+                  <div className="absolute bottom-3 left-3 w-5 h-5 border-b-2 border-l-2 border-cyan-400 pointer-events-none" />
+                  <div className="absolute bottom-3 right-3 w-5 h-5 border-b-2 border-r-2 border-cyan-400 pointer-events-none" />
+
+                  {/* Biometric center reticle */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-28 h-36 border-2 border-dashed border-cyan-400/50 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-cyan-400/60" />
+                    </div>
+                  </div>
+
+                  {/* Live Stream Status Badge */}
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1.5 border border-emerald-500/30 shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>LIVE AI SENSOR</span>
+                  </div>
+
+                  {/* Sensor Resolution Tag */}
+                  <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-[10px] font-mono font-bold text-cyan-400 flex items-center gap-1.5 border border-cyan-500/30 shadow-xs">
+                    <Sparkles className="w-3 h-3 text-cyan-400" />
+                    <span>30 FPS • HD</span>
+                  </div>
+
+                  {/* Viewfinder Guidance Pill */}
+                  <div className="absolute bottom-2 inset-x-0 text-center pointer-events-none">
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-950/80 backdrop-blur-xs text-[10px] font-mono text-slate-200">
+                      Align face within reticle
+                    </span>
+                  </div>
+                </>
               ) : (
-                <div className="text-center p-4 space-y-2">
-                  <CameraOff className="w-8 h-8 text-rose-500 mx-auto" />
-                  <p className="text-xs text-rose-300 font-medium">Camera access not granted</p>
+                <div className="text-center p-6 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+                    <CameraOff className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-rose-300 font-bold">Webcam Stream Offline</p>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                      Camera access is mandatory for continuous identity & multi-face verification.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={requestDevicePermissions}
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg transition"
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-mono text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition cursor-pointer"
                   >
-                    Allow Camera
+                    Grant Camera Permission
                   </button>
                 </div>
               )}
-
-              {/* Status Overlay */}
-              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] font-bold text-emerald-400 flex items-center gap-1.5 border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live Camera Feed
-              </div>
             </div>
 
-            {/* Checklist */}
-            <div className="space-y-3 bg-slate-50 dark:bg-slate-950/60 p-4 border border-slate-200 dark:border-slate-800 text-xs">
-              <h3 className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-                Pre-Exam Diagnostics
-              </h3>
+            {/* Diagnostics Telemetry: 5 cols on lg */}
+            <div className="lg:col-span-5 flex flex-col justify-between bg-slate-50 dark:bg-slate-950/70 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 text-xs space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/60 pb-2">
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] font-mono flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                  Sensor Diagnostics
+                </h3>
+                <span className="text-[10px] font-mono text-emerald-800 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-500/20 font-bold">
+                  SYS ACTIVE
+                </span>
+              </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <Camera className="w-4 h-4 text-slate-500" /> Webcam Feed
+                {/* Camera Feed */}
+                <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-xl">
+                  <span className="flex items-center gap-2 text-slate-800 dark:text-slate-300 font-medium text-xs">
+                    <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    <span>Camera Stream</span>
                   </span>
                   {cameraPermission === 'granted' ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400 text-[11px] font-mono font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> READY
                     </span>
                   ) : (
-                    <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
-                      <XCircle className="w-3.5 h-3.5" /> Required
+                    <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400 text-[11px] font-mono font-bold flex items-center gap-1">
+                      <XCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> REQUIRED
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <Mic className="w-4 h-4 text-slate-500" /> Microphone
+                {/* Microphone */}
+                <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-xl">
+                  <span className="flex items-center gap-2 text-slate-800 dark:text-slate-300 font-medium text-xs">
+                    <Mic className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    <span>Audio Input</span>
                   </span>
                   {micPermission === 'granted' ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400 text-[11px] font-mono font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> READY
                     </span>
                   ) : (
-                    <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
-                      <XCircle className="w-3.5 h-3.5" /> Required
+                    <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400 text-[11px] font-mono font-bold flex items-center gap-1">
+                      <XCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" /> REQUIRED
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <Maximize2 className="w-4 h-4 text-slate-500" /> Fullscreen Lockdown
+                {/* Fullscreen Lockdown */}
+                <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-xl">
+                  <span className="flex items-center gap-2 text-slate-800 dark:text-slate-300 font-medium text-xs">
+                    <Maximize2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span>Secure Kiosk</span>
                   </span>
-                  <span className="text-amber-600 dark:text-amber-400 font-bold">Enforced on Entry</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300 text-[11px] font-mono font-bold">
+                    ENFORCED
+                  </span>
                 </div>
 
+                {/* Phone Companion (if descriptive) */}
                 {isDescriptiveTest && (
                   <div
-                    className={`flex items-center justify-between p-2 border transition-all ${
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
                       preflightMobileConnected
-                        ? 'bg-emerald-500/10 border-emerald-500/30'
-                        : 'bg-amber-500/10 border-amber-500/30'
+                        ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/30'
+                        : 'bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30'
                     }`}
                   >
-                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
+                    <span className="flex items-center gap-2 text-slate-800 dark:text-slate-300 font-medium text-xs">
                       <Smartphone
                         className={`w-4 h-4 ${
-                          preflightMobileConnected ? 'text-emerald-500' : 'text-amber-500 animate-pulse'
+                          preflightMobileConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400 animate-pulse'
                         }`}
                       />
-                      <span>Phone Companion</span>
+                      <span>Mobile Link</span>
                     </span>
                     {preflightMobileConnected ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Connected
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400 text-[11px] font-mono font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> PAIRED
                       </span>
                     ) : (
-                      <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 animate-pulse">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Required
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300 text-[11px] font-mono font-bold flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" /> PENDING
                       </span>
                     )}
                   </div>
@@ -1759,33 +1917,44 @@ export default function TakeAssessmentPage() {
           {/* Mobile Companion Pairing Card for Descriptive Tests */}
           {isDescriptiveTest && (
             <div
-              className={`p-4 rounded-2xl border-2 transition-all space-y-3 ${
+              className={`p-5 rounded-2xl border transition-all space-y-4 ${
                 preflightMobileConnected
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-200'
-                  : 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200 animate-in fade-in'
+                  ? 'bg-emerald-50/80 border-2 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-500/40'
+                  : 'bg-amber-50/70 border-2 border-amber-300 dark:bg-amber-950/20 dark:border-amber-500/40'
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3.5">
                   <div
-                    className={`p-2 rounded-xl ${
+                    className={`p-3 rounded-xl shrink-0 ${
                       preflightMobileConnected
-                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30'
+                        : 'bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30'
                     }`}
                   >
                     <Smartphone className={`w-5 h-5 ${preflightMobileConnected ? '' : 'animate-bounce'}`} />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        {preflightMobileConnected
+                          ? 'Digital Ink Companion Connected'
+                          : 'Mobile Companion Connection Required'}
+                      </h4>
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                          preflightMobileConnected
+                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                            : 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30 animate-pulse'
+                        }`}
+                      >
+                        {preflightMobileConnected ? 'SYNC ACTIVE' : 'AWAITING PAIRING'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
                       {preflightMobileConnected
-                        ? 'Mobile Digital Ink Companion Connected'
-                        : 'Descriptive Examination: Mobile Phone Connection Required'}
-                    </h4>
-                    <p className="text-[11px] opacity-80 mt-0.5 font-sans leading-relaxed">
-                      {preflightMobileConnected
-                        ? 'Handwritten answers written on your phone will sync live to this examination in real time.'
-                        : 'You must connect your phone running the CLIAS Companion app to submit handwritten answers before entering the test.'}
+                        ? 'Handwritten answers written on your phone stylus will stream live to this test in real time.'
+                        : 'Open the CLIAS Companion on your phone and enter the pairing host and session token below.'}
                     </p>
                   </div>
                 </div>
@@ -1794,10 +1963,10 @@ export default function TakeAssessmentPage() {
                   type="button"
                   onClick={checkMobileStatus}
                   disabled={preflightCheckingMobile}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                  className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-md ${
                     preflightMobileConnected
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                      : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/25 dark:bg-gradient-to-r dark:from-amber-500 dark:to-amber-600'
                   }`}
                 >
                   {preflightCheckingMobile ? (
@@ -1805,51 +1974,124 @@ export default function TakeAssessmentPage() {
                   ) : (
                     <RefreshCw className="w-3.5 h-3.5" />
                   )}
-                  <span>{preflightMobileConnected ? 'Re-verify Phone' : 'Check Phone Connection'}</span>
+                  <span>{preflightMobileConnected ? 'Re-verify Link' : 'Check Phone Connection'}</span>
                 </button>
               </div>
 
               {!preflightMobileConnected && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-black/20 p-3 rounded-xl border border-amber-500/20 font-mono">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">1. Companion Host</span>
-                    <span className="font-bold text-amber-300">{pairingHost || 'localhost:4000'}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/95 dark:bg-slate-950/80 p-4 rounded-xl border border-amber-200 dark:border-slate-800">
+                  {/* Host */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                      <Wifi className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      1. Companion Host
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-amber-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-amber-200 dark:border-slate-700/80">
+                      <span className="font-mono text-xs font-bold text-amber-950 dark:text-amber-300 select-all break-all">
+                        {pairingHost || 'localhost:4000'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(pairingHost || 'localhost:4000', 'host')}
+                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-amber-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                        title="Copy Companion Host"
+                      >
+                        {copiedField === 'host' ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                            <Check className="w-3.5 h-3.5" /> COPIED
+                          </span>
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">2. Session Token</span>
-                    <span className="font-bold text-emerald-400">{companionSession}</span>
+
+                  {/* Token */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                      <Fingerprint className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      2. Session Token
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-emerald-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-500/30">
+                      <span className="font-mono text-xs font-black text-emerald-950 dark:text-emerald-400 tracking-wider select-all break-all">
+                        {companionSession}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(companionSession, 'token')}
+                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-emerald-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                        title="Copy Session Token"
+                      >
+                        {copiedField === 'token' ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                            <Check className="w-3.5 h-3.5" /> COPIED
+                          </span>
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Face Enrollment Action */}
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <Eye className="w-4 h-4 text-amber-400" /> Identity Enrollment & Reference Snapshot
-                </h4>
-                <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
-                  Capture a clear baseline photo. The AI proctor continuously verifies that the same candidate remains in view. If an unauthorized individual appears, the exam screen is automatically blurred.
-                </p>
+          {/* Biometric Identity Enrollment Card */}
+          <div
+            className={`p-5 rounded-2xl border transition-all space-y-4 ${
+              faceEnrolled
+                ? 'bg-emerald-50/80 border-2 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-500/40'
+                : 'bg-slate-50 border-2 border-slate-200 dark:bg-slate-950/70 dark:border-slate-800/80'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div
+                  className={`p-3 rounded-xl shrink-0 ${
+                    faceEnrolled
+                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30'
+                      : 'bg-cyan-100 text-cyan-700 border border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-400 dark:border-cyan-500/30'
+                  }`}
+                >
+                  <Scan className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Biometric Facial Reference Enrollment
+                    </h4>
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                        faceEnrolled
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                          : 'bg-cyan-100 text-cyan-900 border border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/30'
+                      }`}
+                    >
+                      {faceEnrolled ? 'ENROLLED' : 'ACTION REQUIRED'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+                    Capture a reference snapshot. The AI continuously verifies candidate continuity. If an unrecognized individual or multi-face is detected, the exam screen blurs immediately.
+                  </p>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleCaptureFace}
                 disabled={cameraPermission !== 'granted' || enrollingFace}
-                className={`px-4 py-2 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 ${
+                className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold shrink-0 transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
                   faceEnrolled
-                    ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/40'
-                    : 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20'
-                }`}
+                    ? 'bg-slate-200 hover:bg-slate-300 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700'
+                    : 'bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-cyan-600/20 dark:bg-gradient-to-r dark:from-cyan-500 dark:to-teal-500 dark:text-slate-950 dark:font-black'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {enrollingFace ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : faceEnrolled ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <RefreshCw className="w-3.5 h-3.5" />
                 ) : (
                   <Camera className="w-3.5 h-3.5" />
                 )}
@@ -1858,18 +2100,23 @@ export default function TakeAssessmentPage() {
             </div>
 
             {baselineSnapshot && (
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 animate-in fade-in duration-200">
-                <img
-                  src={baselineSnapshot}
-                  alt="Enrolled Reference"
-                  className="w-14 h-11 object-cover rounded-lg border border-emerald-500/50"
-                />
-                <div className="text-xs">
-                  <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Candidate Photo Enrolled
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-emerald-300 dark:border-emerald-500/30 animate-in fade-in duration-300">
+                <div className="relative">
+                  <img
+                    src={baselineSnapshot}
+                    alt="Enrolled Reference"
+                    className="w-16 h-14 object-cover rounded-lg border-2 border-emerald-500 shadow-sm shrink-0"
+                  />
+                  <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-emerald-500 text-white dark:text-slate-950">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-emerald-800 dark:text-emerald-400 font-bold flex items-center gap-1.5 text-xs font-mono">
+                    BIOMETRIC IDENTITY SIGNATURE REGISTERED
                   </span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Continuous facial match active. You must remain in frame alone throughout the exam.
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">
+                    Continuous neural verification active. Remain centered in camera frame throughout the session.
                   </p>
                 </div>
               </div>
@@ -1877,39 +2124,62 @@ export default function TakeAssessmentPage() {
           </div>
 
           {/* Academic Integrity Pledge */}
-          <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 cursor-pointer text-xs text-slate-300 select-none">
+          <label
+            className={`flex items-start gap-3.5 p-4 rounded-2xl border-2 transition-all cursor-pointer text-xs select-none ${
+              integrityPledge
+                ? 'bg-cyan-50 border-cyan-400 text-slate-900 dark:bg-cyan-500/10 dark:border-cyan-500/40 dark:text-slate-200 shadow-sm'
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-950/60 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900/80'
+            }`}
+          >
             <input
               type="checkbox"
               checked={integrityPledge}
               onChange={(e) => setIntegrityPledge(e.target.checked)}
-              className="mt-0.5 rounded border-slate-700 text-amber-600 focus:ring-amber-500"
+              className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-cyan-600 dark:text-cyan-500 focus:ring-cyan-500 w-4 h-4 accent-cyan-600 dark:accent-cyan-500 shrink-0 cursor-pointer"
             />
-            <span>
-              I pledge to maintain academic integrity throughout this exam. I understand that tab switches, exiting fullscreen, and multi-face anomalies are recorded in the <strong>Faculty Proctoring Audit Console</strong>.
+            <span className="leading-relaxed">
+              I solemnly pledge to uphold academic integrity. I understand that tab switches, unauthorized keyboard combinations, exiting fullscreen, and multi-face anomalies are recorded directly to the{' '}
+              <strong className="font-bold text-slate-950 dark:text-white underline decoration-cyan-500 decoration-1">
+                Faculty Proctoring Audit Console
+              </strong>.
             </span>
           </label>
 
-          {/* Enter Assessment CTA */}
+          {/* Primary Launch Action CTA */}
           <button
             type="button"
             onClick={handleConfirmAndEnterExam}
-            disabled={
-              !integrityPledge ||
-              cameraPermission !== 'granted' ||
-              !faceEnrolled ||
-              (isDescriptiveTest && !preflightMobileConnected)
-            }
-            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-amber-600/20 transition flex items-center justify-center gap-2"
+            disabled={!canEnterExam}
+            className={`w-full py-4 rounded-2xl font-mono font-black uppercase tracking-wider text-xs transition-all duration-300 flex items-center justify-center gap-2.5 cursor-pointer shadow-lg ${
+              !canEnterExam
+                ? 'bg-slate-200 text-slate-500 border border-slate-300 dark:bg-slate-800/80 dark:text-slate-500 dark:border-slate-700/60 cursor-not-allowed opacity-75'
+                : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white dark:from-emerald-500 dark:via-teal-500 dark:to-cyan-500 dark:text-slate-950 shadow-[0_0_35px_rgba(16,185,129,0.35)] hover:scale-[1.01] active:scale-[0.99]'
+            }`}
           >
-            {isDescriptiveTest && !preflightMobileConnected ? (
+            {cameraPermission !== 'granted' ? (
               <>
-                <Smartphone className="w-4 h-4 animate-pulse" />
-                <span>Connect Phone Companion to Begin Test</span>
+                <CameraOff className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                <span>Grant Camera Permission to Continue</span>
+              </>
+            ) : isDescriptiveTest && !preflightMobileConnected ? (
+              <>
+                <Smartphone className="w-4 h-4 animate-pulse text-amber-600 dark:text-amber-400" />
+                <span>Connect Phone Companion to Unlock Assessment</span>
+              </>
+            ) : !faceEnrolled ? (
+              <>
+                <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <span>Capture Biometric Snapshot to Unlock</span>
+              </>
+            ) : !integrityPledge ? (
+              <>
+                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>Sign Academic Integrity Pledge to Proceed</span>
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Confirm & Enter Fullscreen Assessment</span>
+                <span>Confirm & Enter Fullscreen Assessment →</span>
               </>
             )}
           </button>
@@ -2705,12 +2975,12 @@ export default function TakeAssessmentPage() {
 
           <button
             type="button"
-            onClick={submitExam}
+            onClick={handleManualSubmitClick}
             disabled={submitting}
-            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            <span>Submit Exam</span>
+            <span>{submitting ? 'Submitting Exam...' : 'Submit Exam'}</span>
           </button>
         </div>
       </header>

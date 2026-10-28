@@ -1,0 +1,1497 @@
+commit 0dc54cf8021d51670ff40ea15b826bf84cf7d9da
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-23 08:06:09 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-23 08:06:09 +0530
+
+    Revised Logic of Placement Score and Fixed Jumbling of Questions
+
+commit 141f39a2d16b280d067993aabf9b5e4d1183f3c7
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-22 19:59:42 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-22 19:59:42 +0530
+
+    fix(auth): allow students to provide full name and prevent fetching legacy batch names
+
+commit 7d8cf1694efb351982dbe032d4c0a5d249f54760
+Merge: 87b2abd ba24207
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-22 16:01:41 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-22 16:01:41 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+
+commit ba242073d3479093bd01635cac2eb8d9d42ea060
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-22 10:52:46 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-22 10:52:46 +0530
+
+    added toaster messages
+
+commit df922faa27ff362d9a9ee565cc4a26e4b5d82edb
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-22 10:21:36 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-22 10:21:36 +0530
+
+    added loader
+
+commit 5194b7b624abcad1d3cb1057db295d42bebf6570
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-22 09:37:35 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-22 09:37:35 +0530
+
+    added more meta data for better SEO
+
+commit 87b2abdc3d9d88f8935089aead97ea79551cf0d7
+Merge: 89d1bd1 c35819b
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-22 09:24:34 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-22 09:24:34 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+
+commit 89d1bd1be9f901f65ba471b367ae5e9c7cee7e3d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-22 09:16:16 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-22 09:16:16 +0530
+
+    Checked some features
+
+commit c35819b1f80703b313b26762f4a47ad3b4348832
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 23:16:57 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 23:16:57 +0530
+
+    added sitemap.xml and robots.txt
+
+commit 2d46953b0eb9873f8e8c66820f5f096cedbce928
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 23:04:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 23:04:18 +0530
+
+    add google search console verification file to public folder
+
+commit 092b2e0fc13ce55a07797f36086008d6472f368a
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 22:59:50 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 22:59:50 +0530
+
+    added google console file
+
+commit b8400c98d53b2cebf8ebf4a1216a80ac70ba25c2
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 22:56:56 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 22:56:56 +0530
+
+    added meta data for SEO
+
+commit b8b9ceedbb48e88c6c77cd11f3c33b6bd568fdaf
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 22:47:50 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 22:47:50 +0530
+
+    use next/script for Google Tag
+
+commit d83619fc9f220d3c8136814db1cf274cda985616
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 22:42:02 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 22:42:02 +0530
+
+    added G-Tag
+
+commit e2604a85b8118fdfd8121f586fdb4cb52a257d7e
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 22:38:02 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 22:38:02 +0530
+
+    removed unwanted banners
+
+commit 03c79fd57baf01cf6fae51dd25b13d3ab734e5ce
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 21:43:03 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 21:43:03 +0530
+
+    removed CO-PO
+
+commit a8066f5a1bd3cd2df914d57c1f6ee33a90333b9c
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 21:17:42 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 21:17:42 +0530
+
+    fixed UI patches
+
+commit 1113db20a56e34bc250622139d7f545da8ac4772
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-21 11:55:49 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-21 11:55:49 +0530
+
+    Adaptive Practice Fixed
+
+commit 3224a6892a3504ecc02aa675f8b938d2c3880d56
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 10:36:05 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 10:36:05 +0530
+
+    remove cognitive intelligence advice from frontend
+
+commit da45ef952380ad58aced6ecce7fa8109a4571b59
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 09:55:45 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 09:55:45 +0530
+
+    HOD and counsellor panel subtext removed
+
+commit 969fccc4b8b4b887447d62cf5a6e6fda28078dd9
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 09:50:12 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 09:50:12 +0530
+
+    fac panel subtexts removed
+
+commit 70d99577ae50d2c6268b2ba699b58ded89e97be6
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 09:39:49 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 09:39:49 +0530
+
+    student panel subtexts removed
+
+commit 3319e3ed8effdd65965b2a4f92e025c738d0f073
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-21 09:03:28 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-21 09:03:28 +0530
+
+    cleaner fac panel
+
+commit 8dc990423c5b6ebf058103ab8138ccd9f3fee637
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-20 22:49:01 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-20 22:49:01 +0530
+
+    removed partial subtexts
+
+commit 3247728b5371748b6033feceeccccd2fccfff4fe
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-20 20:49:12 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-20 20:49:12 +0530
+
+    fix: resolve course not found in RAG import and ensure all service windows launch in start-all
+
+commit 7c96f59ffba0ac3ccab135ae4f448ea85af39b36
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 14:37:02 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 14:37:02 +0530
+
+    Automatic name fetching stopped
+
+commit 41041d53b5ab45a47a587b8150385914f79ea3d7
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 13:26:28 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 13:26:28 +0530
+
+    Optimize email deliverability headers and anti-spam compliance
+
+commit 489ab39ef2c7e7e03858e3be9973b912a38f1a30
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 13:14:09 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 13:14:09 +0530
+
+    Enable Brevo HTTPS email service
+
+commit 24bfdb35d8a88ad24ee9e6ec6484673af063f638
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 12:52:15 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 12:52:15 +0530
+
+    Fix SMTP IPv4 connection to prevent ENETUNREACH on deployment
+
+commit 23bd97e976cb8c9974b4a70a88163a9ab173f22e
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 12:43:42 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 12:43:42 +0530
+
+    Login Page Fixed
+
+commit 1d4cb3a1c12e708ed520fdc2932bdbdb382087b4
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 12:06:14 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 12:06:14 +0530
+
+    fixed server errors and invigilation UI issues
+
+commit ba7cb00c1cae9b077d819fe870b2dbd2d9cad5ac
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 11:44:21 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 11:44:21 +0530
+
+    fix(proctoring): implement complete invigilator review decision logic with trust score restoration, violation resolution, and student notification
+
+commit 08c9299d7fb93506cc97333b7af1a222e69182a5
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 11:34:19 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 11:34:19 +0530
+
+    fix(invigilation): resolve visibility and contrast issues in session cards, timeline items, and review panel
+
+commit de2a7c501e06aec965b9430309bd4bbaa4e726b4
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 11:27:04 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 11:27:04 +0530
+
+    fix(sse): eliminate ECONNRESET proxy errors by streaming directly to API and adding immediate ping keepalive
+
+commit 4f4d2f6f9df2f3415902c1b37b7ba93e1aa125a2
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 11:20:47 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 11:20:47 +0530
+
+    updated create assessment logic
+
+commit e6a1cbfcb01a1568d68cc2f04f5826e01d7afd2f
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 10:49:02 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 10:49:02 +0530
+
+    removed plagarism
+
+commit 113a3b72ef25a07810484bbd36965889942d45f1
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 10:03:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 10:03:18 +0530
+
+    fixed leaderboard and db issues
+
+commit 97bb90573f6f63b5e52de0945fe74647c288335a
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 09:32:25 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 09:32:25 +0530
+
+    fixed backend issues
+
+commit a5b04013ee26a6fca3b5296e433480cb717ed876
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-19 09:28:10 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-19 09:28:10 +0530
+
+    fixed edit assesment issues
+
+commit d545127b9a71201b5444860b70e1a5940f039a72
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-19 09:13:12 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-19 09:13:12 +0530
+
+    Real time oriented dashboard greeting fixed
+
+commit d73d8313b85a01a805cab9d074c8cfec27f0c11f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-17 23:40:45 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-17 23:40:45 +0530
+
+    fix(admin): resolve upload timeout for counsellor allocations with bulk lookups and extended client timeout
+
+commit ac4639dfa71d334ee933fd5c808049c1c145a35b
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-17 23:14:37 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-17 23:14:37 +0530
+
+    docs(admin): add counsellor-student allocation excel and csv files for testing manual allocation upload
+
+commit 5ab811e156d8ea527563dcb96178be456f011bac
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-17 23:07:27 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-17 23:07:27 +0530
+
+    feat(assessments): add department-aware student batch allocation in faculty assessment panel and student portal
+
+commit 80b6f9bbdd09c47f60443b222a7e4d27171e2998
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-17 22:08:31 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-17 22:08:31 +0530
+
+    Optimize full hierarchy seeding script with bcrypt caching and robust profile upserts
+
+commit 07bbb353dca29dd4cda30bc6c19a4c0d179d5fed
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-17 14:43:19 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-17 14:43:19 +0530
+
+    Updated UI
+
+commit 4bf0b0c77208e9e1e311ff9729910c614ef0cb48
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-17 13:24:42 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-17 13:24:42 +0530
+
+    UI & coding arena fixes
+
+commit 956eb68c8c8077ed25f084b530c226e3c50943a7
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-16 22:23:33 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-16 22:23:33 +0530
+
+    Add Resend HTTPS Email service support for Render deployments
+
+commit 646cee3d245f66ab943adc72c763c72228aa82f9
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-16 22:13:03 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-16 22:13:03 +0530
+
+    Enhance Nodemailer configuration with service gmail, connection timeouts and startup verification
+
+commit 5eff75ce63faee35da4e1bb05925f106eeb2e814
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-16 21:30:29 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-16 21:30:29 +0530
+
+    Fix AssessmentItem type error in student assessments page
+
+commit bdee8b49cf1ee24ee637e99947105c5c2547dfcc
+Merge: cb4e38a 22a2384
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-16 20:44:57 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-16 20:44:57 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+
+commit cb4e38a871f015e95ba343e91efe646242ed1820
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-16 20:44:31 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-16 20:44:31 +0530
+
+    Backend deploy error fixed
+
+commit 22a238421f3629065792ffc068c47a6ef590d7d2
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-10-16 18:07:16 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-10-16 18:07:16 +0530
+
+    Add Priya Sharma and Aarav Desai as active student accounts in seed.ts
+
+commit 67c4250ca671d2fef66afce88413c5efab37e256
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-10-16 17:36:14 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-10-16 17:36:14 +0530
+
+    Fix nest not found on Render by including CLI in dependencies and --include=dev
+
+commit 326e9684e7b6539b5d414cfecc570364374d3a82
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-10-16 17:31:44 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-10-16 17:31:44 +0530
+
+    Configure free cloud deployment for Render and TiDB MySQL
+
+commit 1cb99f550b271f2644181a9c1270c97f5087f124
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-12 12:54:01 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-12 12:54:01 +0530
+
+    Fixed placement scoring
+
+commit a1526d2d35e2ed53f163d59dd1514a9e7b1e5fbf
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-12 00:25:18 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-12 00:25:18 +0530
+
+    UI errors fixed
+
+commit e4a62c526c8e926e0622e57287b1aab245a0b1fa
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 21:51:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 21:51:18 +0530
+
+    Updated UI
+
+commit 0dab49559a231178397d84a414ae8e6234d2628f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-11 16:09:02 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-11 16:09:02 +0530
+
+    Errors Fixed
+
+commit cb7db17ecd2b33c355e0c4e21545fd894dfdfcae
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 13:08:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 13:08:18 +0530
+
+    updated fac,counsellor & hod panel
+
+commit bc62a0958af0060904be252641acd681efc7ae86
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 12:34:55 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 12:34:55 +0530
+
+    feat: add db:seed-hierarchy script and auto-create faculty_course_assignments table
+
+commit c45920115f75ad0c29421cf0ffa29bf25883898d
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 12:02:47 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 12:02:47 +0530
+
+    implemented initial RBAC & cross dept and inst data
+
+commit 8fd34d720a4267e25eb88f2ca3ead74111d77a0d
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 11:17:03 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 11:17:03 +0530
+
+    counsellor panel logistics fixed
+
+commit 5f09771007996e3cfb4813868bf12ee243ea022b
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 10:31:34 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 10:31:34 +0530
+
+    initial counsellor panel fixes
+
+commit 1b37fe75b6b0cb6b0dd799c08322c6d4fb825ffe
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 10:04:26 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 10:04:26 +0530
+
+    fixed proctored test issues
+
+commit 545c2493732f92218c853c98cb2a1d35cfff0c7c
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-11 09:36:48 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-11 09:36:48 +0530
+
+    Fixed notification panel
+
+commit c31c4c030486fa70e01eec75052081add6088698
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-11 02:38:51 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-11 02:38:51 +0530
+
+    Faculty panel fixed
+
+commit 64d1a896ff6b7acee41b82be18ea10d90e2979a1
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-10 23:17:39 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-10 23:17:39 +0530
+
+    fixed test logistics
+
+commit c1ed65babb154f947809ff2f7aa52391b8c8bc6c
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-10 22:26:26 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-10 22:26:26 +0530
+
+    RAG fixed
+
+commit 638d2b2cac8c580660e744ed45e06570633e071d
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-10 21:16:27 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-10 21:16:27 +0530
+
+    fixed exam studio
+
+commit b2424652197ce0b2d7bd832305cbb3a2f013be99
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-10 19:07:12 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-10 19:07:12 +0530
+
+    Student Panel Tested and Fixed
+
+commit ea091ed312a4676262e8d65af021173e70b6cb61
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-10 12:47:06 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-10 12:47:06 +0530
+
+    Proctoring Fixed
+
+commit 8c292ae536390522c600253c48d30e6b4dc0d891
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-10 10:32:53 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-10 10:32:53 +0530
+
+    Fixed panel
+
+commit c6ebed7d088128dd68ad477d9f01a385567db57b
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-10-10 09:10:52 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-10-10 09:10:52 +0530
+
+    Fixed coding arena
+
+commit e630c5ba7489b4e249344b0bf060e9a465eca496
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-09 22:33:56 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-09 22:33:56 +0530
+
+    fix(coding-arena): resolve code runner compilation errors and enhance evaluation engine
+
+commit e6d60c17417d11c653129b0ccc5a00db57c46a82
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-09 13:30:37 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-09 13:30:37 +0530
+
+    Improved Latency and backend fixed
+
+commit ae576f84ab8fb8dd4150497ea65b34794d5c8105
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-08 22:40:27 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-08 22:40:27 +0530
+
+    Coding Arena Fixed
+
+commit d6d4955cd5660a8200d942def12bcb8fc50f4975
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-07 23:15:46 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-07 23:15:46 +0530
+
+    Deploying the website
+
+commit 40dd3206e6d14ac01b0621884399e49620dbf81b
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-07 19:08:35 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-07 19:08:35 +0530
+
+    Proctoring Issues Fixed
+
+commit 3152996ce6d6b939edd687bdc603f252721bea27
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-07 17:35:08 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-07 17:35:08 +0530
+
+    Proctored Exam Functionality Completed
+
+commit 4bb20fbb98ea9332dfaa3381035f0f1a7bf09a9e
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-06 23:51:59 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-06 23:51:59 +0530
+
+    feat: exam studio division allocation, question bank topic filtering, dark UI overhaul, and gemini integration
+
+commit 43e95f4a1177259cbf2d11b8b6a79fd3d3c513a3
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-06 16:44:27 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-06 16:44:27 +0530
+
+    Quick Fixes in Student Panel Completed
+
+commit a4a98a8fe2ef4a26ccd3f1d5d512026878271e9d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-06 00:41:37 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-06 00:41:37 +0530
+
+    Student Panel Fully Functioned
+
+commit ee0c7f139d69bdfe3d190a2477afddb513baa79b
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 22:26:30 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 22:26:30 +0530
+
+    fix: make Placement Readiness and Skill Gap Analyzer dynamic
+
+commit c2bab9a0e9cb47596fcc0c6d0a9e9313d1e39de2
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 22:06:37 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 22:06:37 +0530
+
+    fix: remove mock cohort peer names, connect leaderboard directly to database
+
+commit ed7ad186bd0a5c88955fb89473ad2aca4c15925d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 22:00:11 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 22:00:11 +0530
+
+    fix: remove New Student Baseline Entry badge from leaderboard
+
+commit 6ddb9c0c4f372f5c30aa99860e8e4c21c69fc21c
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 21:56:45 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 21:56:45 +0530
+
+    fix: eliminate hardcoded leaderboard metrics for newly registered students
+
+commit 79749353a791ee51c149453342614ef8c0d942aa
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 21:24:51 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 21:24:51 +0530
+
+    feat: add db:clean-seed script for pristine system initialization
+
+commit 64fd62f4b87160212729731e24a464280eb335b2
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 21:20:36 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 21:20:36 +0530
+
+    feat: add db:clean-activity script to clear all demo activity and reset metrics to zero
+
+commit 2cc465e27fae5f16f973a3fc1a08074261aecdb7
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 21:08:03 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 21:08:03 +0530
+
+    feat: real-time dynamic Cognitive Intelligence Advice and dynamic Conceptual Focus Areas
+
+commit 2e1dfb7e11ddea84d3ea0be0f39d11c5bbc21728
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 20:58:09 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 20:58:09 +0530
+
+    fix: render flat 0% baseline curve on x-axis for new users and develop day-wise on practice
+
+commit 4189c538190c130abad95bad75ce6555662a870f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 20:52:23 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 20:52:23 +0530
+
+    fix: initialize student telemetry metrics at zero and update dynamically
+
+commit 29a386307378c113d709d4fea9ec4ea3ed6f07b5
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 18:56:36 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 18:56:36 +0530
+
+    feat: add semester academic leaderboard with hybrid 70-30 scoring, subject-wise filter, and peer rankings
+
+commit 7ee92ac1f45c2519eefe66e133b89bd789c7ee27
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 18:46:36 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 18:46:36 +0530
+
+    feat: add full profile page with edit capability for all roles and secure password management
+
+commit 4f9558b0120d48c4779578b51aaf0beb57413e48
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-05 14:10:37 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-05 14:10:37 +0530
+
+    Email Integration Completed.
+
+commit ea77d11167e0b614fdd55366659d7856286ffe53
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-04 22:53:53 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-04 22:53:53 +0530
+
+    fix(admin): resolve super admin panel pages, add dashboard, institutes, settings and whitelist roster
+
+commit c9928eab462ecd8716c276a031426b3229c69c0a
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-04 22:44:14 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-04 22:44:14 +0530
+
+    fix: resolve navigation, panel routing, sidebar visibility, performance lag and UI metrics
+
+commit 397ff11d845793b36b34e4542472444bd9325bc5
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-10-02 01:28:52 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-10-02 01:28:52 +0530
+
+    feat(ui): implement comprehensive light and dark mode with high contrast and seamless toggling across all screens
+
+commit ba95def01be19a3ccd63a54babd20c310e66a195
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 22:09:00 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 22:09:00 +0530
+
+    fix(web): overhaul adaptive practice page and calibration banner with premium dark theme
+
+commit 29a4c454f9743b8a236cf72fd2f6aaead5cbd6bf
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 21:56:04 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 21:56:04 +0530
+
+    fix(coding): implement real sandboxed judge execution and dynamic sidebar layout
+
+commit 56bed72b2ee1100c7c31d78dddeef827b65e5ac9
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 21:08:09 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 21:08:09 +0530
+
+    feat(web): reveal sidebar and pin button on hover over short sidebar
+
+commit d97475e33ae76513c93c57f2a3e127be81e5f9ba
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 21:03:38 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 21:03:38 +0530
+
+    feat(web): add flexible collapsible sidebar with pin toggle and dynamic screen layout shift
+
+commit db7af76d633ed8004880b0dafb9c2ac846b39894
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:50:24 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:50:24 +0530
+
+    fix(web): add pl-64 offset to student learning path layout to fix sidebar overlap
+
+commit 587ff1bf5cf823a23a54599e9f114f39a931ab8f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:46:30 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:46:30 +0530
+
+    refactor(web): remove internal phase designations from UI for production polish
+
+commit f50589120ee55b15e8689ab584447828fd4cd6e6
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:38:01 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:38:01 +0530
+
+    fix(web): implement student cognitive learning path studio
+
+commit 273018b90f6d2032f40e695914f946c1061d35ff
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:23:54 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:23:54 +0530
+
+    docs: add environment templates and configuration references
+
+commit 6a16592cb25d031d072a008fa0b3ea720b6bd893
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:19:05 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:19:05 +0530
+
+    docs: finalize table of contents and project completion status
+
+commit bf755f0ae66debfd084900f14dd91073d289b790
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:08:19 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:08:19 +0530
+
+    feat(phase-12): build faculty plagiarism audit studio and diff inspector
+
+commit e93d237889a3a06bf06ac4852528199ad54cec3c
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 20:02:32 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 20:02:32 +0530
+
+    feat(phase-12): implement winnowing ast fingerprinting and plagiarism engine
+
+commit e81463fc0dc493249aaa913a3208c821b582f9d5
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-30 19:59:06 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-30 19:59:06 +0530
+
+    feat(phase-12): add code plagiarism scan and ast fingerprint schema
+
+commit 9a85541d46066e0ad765e664a82db5bae0018526
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:40:22 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:40:22 +0530
+
+    feat(phase-11): build interactive in-browser code editor and live judge UI
+
+commit 423f2b4f8103b403b54e38f992454b8222084e29
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:36:44 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:36:44 +0530
+
+    feat(phase-11): implement code execution sandbox and automated judge service
+
+commit b37ef416e2424a8eee5cc6ddc04eb9cfd33e7285
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:33:35 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:33:35 +0530
+
+    feat(phase-11): add coding problem test cases and code submission schema
+
+commit e9a1c8b79d6b851ed258fb1fe4f7680694fd4764
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:31:03 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:31:03 +0530
+
+    feat(phase-10): build student placement readiness portal and radar view
+
+commit e25126eeb8152eb1bf95d7721992be4c3a84659a
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:26:39 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:26:39 +0530
+
+    feat(phase-10): implement placement skill gap benchmarking engine
+
+commit cef621ae4bf2a09dec4fd0c9203a80c2555e6a37
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 23:01:24 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 23:01:24 +0530
+
+    feat(phase-10): add career role benchmarks and skill gap schema
+
+commit dbc606bf3c72e8f79ebc974fe6e7d3f62caf344d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 22:45:38 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 22:45:38 +0530
+
+    feat(phase-9): build student proctored test UI and invigilator audit console
+
+commit d2f648ec75457d08a15b81a0b851e483aaf27bd8
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 22:40:22 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 22:40:22 +0530
+
+    feat(phase-9): implement real-time anomaly detection and invigilation service
+
+commit 0ae4e7c2e3a9d0572638b6ff1f258bed2425832a
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 22:01:07 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 22:01:07 +0530
+
+    feat(phase-9): add proctoring session and integrity violation schema
+
+commit 84fa3e3b1e2e04d231ee5ce36d659e6e7c0b372f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:56:53 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:56:53 +0530
+
+    feat(phase-8): enhance multi-tier institutional analytics dashboards
+
+commit b5bba35a215b81017d42b01ba7b642ad621a6b6f
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:51:27 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:51:27 +0530
+
+    feat(phase-8): implement obe attainment and at-risk predictive service
+
+commit ce7d9c483768c78cd04c9bbc1d038c2c2d2096a1
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:47:03 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:47:03 +0530
+
+    feat(phase-8): add outcome based education and co po mapping schema
+
+commit a05aebc6164fd74c36b4a39c6e86d8f9f68b30c2
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:41:52 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:41:52 +0530
+
+    feat(phase-7): build faculty document rag management studio
+
+commit e457165ed78214f9e29efba8798a81d4acd0a65d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:38:36 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:38:36 +0530
+
+    feat(phase-7): implement document ingestion and rag retrieval engine
+
+commit da2fd17b4d993e922eadce2f22f56fc7d2347beb
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:28:34 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:28:34 +0530
+
+    feat(phase-7): add course document and rag chunking schema
+
+commit 2370aee38c082df03ecf199578de1cf4168c4c0e
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:21:25 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:21:25 +0530
+
+    feat(phase-6): build faculty ai assessment generator interface
+
+commit cd758d5a61fb9c8a6f844bfd850fdb08d1e7cd56
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:14:16 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:14:16 +0530
+
+    feat(phase-6): implement human-in-the-loop review and approval pipeline
+
+commit 6437670dd12313da1629903f9ccb82f3b2933bfb
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:10:01 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:10:01 +0530
+
+    feat(phase-6): add ai assessment generation schema and fastapi generator
+
+commit 08822635f9666c22bb2a474158216da3247a2a50
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:06:17 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:06:17 +0530
+
+    feat(phase-5): build faculty exam authoring and student assessment UI
+
+commit b6bc82566efb21aa36eda981aefb2ba3cac36673
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 21:01:24 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 21:01:24 +0530
+
+    feat(phase-5): implement assessment engine and grading service
+
+commit 31740fef6ed531a540c9e533d365c649df9cee41
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 20:58:38 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 20:58:38 +0530
+
+    feat(phase-5): add assessment and submission schema models
+
+commit cc7e7d70993e44b2233497921f772cefc49277b2
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 20:38:38 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 20:38:38 +0530
+
+    feat(phase-4): integrate misconception remediation and spaced repetition in student practice UI
+
+commit 4e582b3ccbdce8543dd3fba36a01e793c35768f8
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 20:12:59 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 20:12:59 +0530
+
+    feat(phase-4): implement dynamic difficulty calibration and spaced repetition engine
+
+commit 9958a78f9078eed24f5b084c0befd942a8e0c65d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-29 19:12:54 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-29 19:12:54 +0530
+
+    feat(phase-4): add misconception taxonomy and spaced repetition schema
+
+commit a7d63cc8407f133cd1263c710ffbbbe4e4306535
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-28 23:17:39 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-28 23:17:39 +0530
+
+    feat(phase-3): integrate interactive socratic ai tutor in practice UI and finalize phase 3
+
+commit a409a40b8e9c484fc3c2f45e948921ed5c00404a
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-28 23:08:05 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-28 23:08:05 +0530
+
+    feat(phase-3): implement fastapi socratic microservice and nestjs ai bridge
+
+commit 25234d08b2c00c87a1f7d057a2ad2ad901fa6d06
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-28 22:55:31 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-28 22:55:31 +0530
+
+    feat(phase-3): add learning resources schema and backend socratic tutor service
+
+commit 23f0e10afef86345c525e25c7bd5db8488ab6873
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-28 22:47:05 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-28 22:47:05 +0530
+
+    feat(phase-2): complete learning intelligence implementation with BKT, IRT, forgetting curves, knowledge DAGs, and cohort analytics
+
+commit 60a34b3b93eab4e62de462413500f5d6d27c5a8f
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-09-28 20:35:00 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-09-28 20:35:00 +0530
+
+    some changes in project
+
+commit 5609e97eb4a8224c7c1e90c81aa91ccc652930f5
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-13 12:44:53 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-13 12:44:53 +0530
+
+    Phase 14: fixed version (UI polish and refinements)
+
+commit e5b24d07557aabf66179f6426b4ec872f1f8c0fb
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-13 12:42:36 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-13 12:42:36 +0530
+
+    Phase 14: base version (warm ivory UI overhaul)
+
+commit 725a6bbe1d3768a3f403a0be0abdc0da9a28a275
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-13 12:25:18 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-13 12:25:18 +0530
+
+    Phase 12: Complete
+
+commit 72fe3e0f1cd9d90ae2c6bf48c7015d674e9b31cb
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-13 12:24:41 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-13 12:24:41 +0530
+
+    Phase 12: frontend security hardening
+
+commit 97b87ad55547613b42f42f3d02b6348c92c74010
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-13 12:23:22 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-13 12:23:22 +0530
+
+    Phase 12: backend security hardening
+
+commit c662152f4dacbae8177176b79bdf4fe7bc55850d
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-09-12 13:38:17 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-09-12 13:38:17 +0530
+
+    Phase 11: Complete
+
+commit fc813dcd26460fc230619b794090fa72d85aa37c
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-09-12 13:37:34 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-09-12 13:37:34 +0530
+
+    Phase 11: admin analytics polish
+
+commit 6be09fe25a549b938aaca099f6108323cc6d05d4
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-09-12 13:19:55 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-09-12 13:19:55 +0530
+
+    Phase 11: backend activity logs
+
+commit ee2cf20e811cfa13e5a1d8c1b1a2e37e6831c4b2
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-06 16:44:49 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-06 16:44:49 +0530
+
+    Phase 10 Complete
+
+commit 323637a03a995b3c718d5533c08ddc88c70dd6c7
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-09-05 00:02:29 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-09-05 00:02:29 +0530
+
+    Phase 10: recommendation engine and performance recalculation
+
+commit 121cd4dd51603f7af633d20a7b3e816af659c1a5
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-09-03 12:34:17 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-09-03 12:34:17 +0530
+
+    Phase 9: Complete
+
+commit 83bcdf95223a9048a456ed5cfa4ddcbf047b0093
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-09-02 08:27:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-09-02 08:27:18 +0530
+
+    Phase 9: Initial
+
+commit 0a6f5a17ec265b64de683c2832f8c6dfe6648dad
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-09-02 08:11:45 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-09-02 08:11:45 +0530
+
+    Phase 8: Updated
+
+commit 40eb236bd0680b45bd3c3eaa945e6d2c485bf813
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-19 23:26:18 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-19 23:26:18 +0530
+
+    Phase 8 + other fixes
+
+commit 434be57543b770aa6dbd03548e67626475a1a103
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-19 22:05:28 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-19 22:05:28 +0530
+
+    phase 8:base frontend
+
+commit 1d1513385c2c1ded70b37e8c7db4158f2dcf8d48
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-19 21:06:40 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-19 21:06:40 +0530
+
+    phase 8: base version(placement score backend)
+
+commit ca7adc5b23e790362f1ce33acfab2193aab7e154
+Merge: ac38f15 cdc54cb
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-18 20:48:57 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-18 20:48:57 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit cdc54cb4b1e7529a8923e21019f70529933cbab7
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-18 20:46:08 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-18 20:46:08 +0530
+
+    Phase 7 : Error solved
+
+commit ac38f155dd75da76dec57ce75651f50446be2969
+Merge: bed9b26 04b1d47
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-18 20:28:57 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-18 20:28:57 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit 04b1d478989930359f300ee321dc0a853b34d9f5
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-18 19:05:59 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-18 19:05:59 +0530
+
+    Phase 7 completed
+
+commit bed9b2608a3a535df904fd9ca966b636d0e04210
+Merge: a267af9 743bf71
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-18 11:59:53 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-18 11:59:53 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit 743bf71eaa8f4409441edb8a1e830a5a843dd8e0
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-18 10:43:44 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-18 10:43:44 +0530
+
+    phase-7/backend : implement adaptive testing and performance APIs
+
+commit a267af973202d51ef4403a0c6c4297db0223cb41
+Merge: e9529c7 f72e306
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-18 09:32:32 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-18 09:32:32 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit f72e306d3649d6b984515e0acfa32e301a09475f
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-17 22:45:51 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-17 22:45:51 +0530
+
+    phase-7/backend : implement adaptive engine models and services
+
+commit e9529c7a87ca3843b61fb3fa47c228c10ed1d66b
+Merge: 6ba7b61 c6da9c7
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-17 21:25:50 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-17 21:25:50 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit c6da9c741f75f1aea6464210bdfbc023453b208e
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-17 21:19:42 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-17 21:19:42 +0530
+
+    Phase 6 completed
+
+commit 6ba7b61bdfe34f4816c6753d4b6dc71b04d60d8e
+Merge: 8d8cb13 08c3828
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-16 18:39:47 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-16 18:39:47 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit 08c3828d77b209488d35c52e3231e1b187c81bcd
+Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+AuthorDate: 2026-08-16 18:16:52 +0530
+Commit:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
+CommitDate: 2026-08-16 18:16:52 +0530
+
+    phase-6/frontend : implement admin user management and analytics dashboard
+    
+    - Add UserManagement.jsx for viewing, searching, and toggling user access
+    - Add Analytics.jsx for platform overview and topic-difficulty charts
+    - Wire adminService.js to call new backend analytics/user endpoints
+    - Fix duplicate component body error in UserManagement.jsx
+
+commit 8d8cb13b38922a19d53756f7f29f8016a93ee119
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-16 14:39:41 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-16 14:39:41 +0530
+
+    Updated Frontend
+
+commit 03ca2535c1cd5f58ec443cb3987cf6e0dd20c8b0
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-16 12:54:47 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-16 12:54:47 +0530
+
+    Phase 5: Complete
+
+commit d68fc93471cdbd724c0fce257baede22369531fc
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-08-16 11:59:39 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-08-16 11:59:39 +0530
+
+    Complete Phase 4 (Profile, Password Change & Uploads) and Phase 5 (Question CRUD & CSV Import)
+
+commit 974f88675cd55b0cc5a75328a39fea914ef1769b
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-08-10 23:17:21 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-08-10 23:17:21 +0530
+
+    Update README with user stories and use cases
+
+commit 11f7b11219b6393e8d2f0b15fea3bf1067d8efcd
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-09 18:37:03 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-09 18:37:03 +0530
+
+    Upadated Phase-5
+
+commit 13c13f714eaed58c08019e9be0681be7400b704c
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-09 16:49:10 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-09 16:49:10 +0530
+
+    Phase 5: Base Version
+
+commit fd4bb3e15a5e422aeb6366181e6647dc54082197
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-08-09 09:33:34 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-08-09 09:33:34 +0530
+
+    Phase 4-Complete
+
+commit 4245ba9a0914ba9ba14ffe0d87668b4fc1fbeff0
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-07-20 13:21:08 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-07-20 13:21:08 +0530
+
+    restore: re-add profileGate, Profile.jsx, profileService, schema and seed deleted by remote revert
+
+commit eb43f3d3b714d199d9f6e4a37a67b1ba816a5f82
+Merge: 5292b0f 27045ba
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-07-20 13:20:28 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-07-20 13:20:28 +0530
+
+    merge: keep conflict-resolved code over remote revert
+
+commit 5292b0f49bde915d755ec964041a4e93d07adfea
+Author:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+AuthorDate: 2026-07-20 13:19:32 +0530
+Commit:     24cs106Himanshu <24cs106Himanshu@users.noreply.github.com>
+CommitDate: 2026-07-20 13:19:32 +0530
+
+    fix: resolve all merge conflicts across backend and frontend
+
+commit 27045baeced600d635ee23d49e2cd9cb89ece23d
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-07-20 13:16:51 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-07-20 13:16:51 +0530
+
+    Revert "Updated Phase 1 & 2"
+    
+    This reverts commit 8a7c33e5f6f000804d702d7b68607c33a547c328.
+
+commit 8a7c33e5f6f000804d702d7b68607c33a547c328
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-07-20 12:48:45 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-07-20 12:52:05 +0530
+
+    Updated Phase 1 & 2
+
+commit ae2479e53f0b7a677b8b93254390a5f5d7cc9a6d
+Merge: acca6f8 565fb5a
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-07-19 14:17:17 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-07-19 14:17:17 +0530
+
+    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+
+commit acca6f8de1c924734ed8027311c4d2baf66ce550
+Author:     24CS093-param <24cs093@charusat.edu.in>
+AuthorDate: 2026-07-19 14:15:08 +0530
+Commit:     24CS093-param <24cs093@charusat.edu.in>
+CommitDate: 2026-07-19 14:15:08 +0530
+
+    Phase 1 & 2: update schema, expand seed, fix health route
+
+commit 565fb5aa57c7df0385f39ac03308e84d86183b18
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-07-19 11:38:03 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-07-19 11:38:03 +0530
+
+    Updated Plan
+
+commit 4988893f8d3e6d703cb782789b79594764a6f020
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-07-18 20:46:07 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-07-18 20:46:07 +0530
+
+    Base Version
+
+commit 793f39d5273c904f3e0326c345a237b1cc8f4dd9
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-07-18 10:18:56 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-07-18 10:18:56 +0530
+
+    docs: add comprehensive README with full project details
+
+commit afd6863c710f680093be8f195f6e9fd1d191ac8d
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-07-18 10:15:21 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-07-18 10:15:21 +0530
+
+    Add all project files - backend, frontend, database, docs
+
+commit 6a53771d9349ad1b5744eb1c3ecdeb25d864183c
+Author:     Jigar-CS <jigarsakhia2020@gmail.com>
+AuthorDate: 2026-07-18 10:12:21 +0530
+Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
+CommitDate: 2026-07-18 10:12:21 +0530
+
+    first commit

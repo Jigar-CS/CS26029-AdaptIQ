@@ -47,9 +47,20 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
     endpoint.includes('/upload');
   const timeoutMs = (options as any)?.timeout || (isAiOrLongRunning ? 120000 : 35000);
 
-  // For long-running AI, RAG, and document extraction payloads, connect directly to NestJS API
-  // to avoid Next.js dev proxy socket resets and buffering timeouts.
-  const targetBase = isAiOrLongRunning ? BASE_URL : getBaseUrl();
+  let targetBase = getBaseUrl();
+  if (isAiOrLongRunning) {
+    if (typeof window === 'undefined') {
+      targetBase = BASE_URL;
+    } else {
+      const isCurrentLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const isBaseLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1');
+      if (isCurrentLocal && isBaseLocal && window.location.protocol === 'http:') {
+        targetBase = BASE_URL;
+      } else {
+        targetBase = '/api/v1';
+      }
+    }
+  }
   const url = `${targetBase}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const controller = new AbortController();

@@ -28,6 +28,8 @@
   "author": "CLIAS Engineering Team",
   "license": "UNLICENSED",
   "dependencies": {
+    "@types/ws": "^8.18.2",
+    "ws": "^8.22.0",
     "xlsx": "^0.18.5"
   }
 }

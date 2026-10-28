@@ -1225,6 +1225,7 @@ export class AssessmentService {
     const submission = await this.prisma.assessmentSubmission.findUnique({
       where: { id: submissionId },
       include: {
+        student: true,
         assessment: {
           include: {
             questions: {
@@ -1243,15 +1244,25 @@ export class AssessmentService {
       throw new NotFoundException('Submission not found.');
     }
 
-    if (submission.studentId !== studentProfileId) {
-      throw new ForbiddenException('Unauthorized submission access.');
+    const isOwner =
+      submission.studentId === studentProfileId ||
+      submission.student?.userId === studentProfileId ||
+      submission.student?.id === studentProfileId;
+
+    if (!isOwner) {
+      const profile = await this.prisma.studentProfile.findFirst({
+        where: { OR: [{ id: studentProfileId }, { userId: studentProfileId }] },
+      });
+      if (!profile || profile.id !== submission.studentId) {
+        throw new ForbiddenException('Unauthorized submission access.');
+      }
     }
 
     // Atomic Lock: Only proceed if this submission is currently IN_PROGRESS
     const lockResult = await this.prisma.assessmentSubmission.updateMany({
       where: {
         id: submissionId,
-        studentId: studentProfileId,
+        studentId: submission.studentId,
         status: SubmissionStatus.IN_PROGRESS,
       },
       data: {
@@ -1579,6 +1590,7 @@ export class AssessmentService {
     const submission = await this.prisma.assessmentSubmission.findUnique({
       where: { id: submissionId },
       include: {
+        student: true,
         assessment: {
           include: {
             course: true,
@@ -1599,8 +1611,18 @@ export class AssessmentService {
       throw new NotFoundException('Submission not found.');
     }
 
-    if (submission.studentId !== studentProfileId) {
-      throw new ForbiddenException('Access denied to this submission.');
+    const isOwner =
+      submission.studentId === studentProfileId ||
+      submission.student?.userId === studentProfileId ||
+      submission.student?.id === studentProfileId;
+
+    if (!isOwner) {
+      const profile = await this.prisma.studentProfile.findFirst({
+        where: { OR: [{ id: studentProfileId }, { userId: studentProfileId }] },
+      });
+      if (!profile || profile.id !== submission.studentId) {
+        throw new ForbiddenException('Access denied to this submission.');
+      }
     }
 
     const itemizedAnswers = submission.answers.map((a) => {

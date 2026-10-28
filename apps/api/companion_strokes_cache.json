@@ -124,61 +124,61 @@
       "sessionId": "9842",
       "questionId": "Q1",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049077
     },
     "9842:Q2": {
       "sessionId": "9842",
       "questionId": "Q2",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049077
     },
     "9842:Q3": {
       "sessionId": "9842",
       "questionId": "Q3",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049078
     },
     "9842:Q4": {
       "sessionId": "9842",
       "questionId": "Q4",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049078
     },
     "9842:Q5": {
       "sessionId": "9842",
       "questionId": "Q5",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049078
     },
     "9842:Q6": {
       "sessionId": "9842",
       "questionId": "Q6",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049078
     },
     "9842:Q7": {
       "sessionId": "9842",
       "questionId": "Q7",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049078
     },
     "9842:Q8": {
       "sessionId": "9842",
       "questionId": "Q8",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049079
     },
     "9842:Q9": {
       "sessionId": "9842",
       "questionId": "Q9",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049079
     },
     "9842:Q10": {
       "sessionId": "9842",
       "questionId": "Q10",
       "strokes": [],
-      "lastUpdated": 1793082089100
+      "lastUpdated": 1793167049079
     },
     "26CS001:Q1": {
       "sessionId": "26CS001",
@@ -66971,6 +66971,66 @@
         }
       ],
       "lastUpdated": 1793085081280
+    },
+    "24CS045:Q1": {
+      "sessionId": "24CS045",
+      "questionId": "Q1",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q2": {
+      "sessionId": "24CS045",
+      "questionId": "Q2",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q3": {
+      "sessionId": "24CS045",
+      "questionId": "Q3",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q4": {
+      "sessionId": "24CS045",
+      "questionId": "Q4",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q5": {
+      "sessionId": "24CS045",
+      "questionId": "Q5",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q6": {
+      "sessionId": "24CS045",
+      "questionId": "Q6",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q7": {
+      "sessionId": "24CS045",
+      "questionId": "Q7",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q8": {
+      "sessionId": "24CS045",
+      "questionId": "Q8",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q9": {
+      "sessionId": "24CS045",
+      "questionId": "Q9",
+      "strokes": [],
+      "lastUpdated": 1793167765697
+    },
+    "24CS045:Q10": {
+      "sessionId": "24CS045",
+      "questionId": "Q10",
+      "strokes": [],
+      "lastUpdated": 1793167765697
     }
   },
   "activeQuestions": {
@@ -66980,7 +67040,8 @@
     "26CS001": "Q1",
     "24CS001": "Q1",
     "24CS009": "Q4",
-    "24CS005": "Q1"
+    "24CS005": "Q1",
+    "24CS045": "Q1"
   },
   "exitPasses": {
     "26CS001": "823085",

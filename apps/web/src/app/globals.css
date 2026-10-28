@@ -198,54 +198,54 @@ html.dark [class*="bg-[#121b30]"] {
 }
 
 /* Eliminate old dark box backgrounds lingering in light mode */
-html:not(.dark) .bg-slate-900:not([data-keep-dark]),
-html:not(.dark) .bg-slate-950:not([data-keep-dark]),
-html:not(.dark) .bg-slate-850:not([data-keep-dark]),
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]),
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]),
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]),
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]),
-html:not(.dark) [class*="bg-[#121b30]" i]:not([data-keep-dark]),
-html:not(.dark) [class*="bg-[#141c2e]" i]:not([data-keep-dark]) {
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) .bg-slate-950:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) .bg-slate-850:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-[#121b30]" i]:not([data-keep-dark]):not([class*="dark:"]),
+html:not(.dark) [class~="bg-[#141c2e]" i]:not([data-keep-dark]):not([class*="dark:"]) {
   background-color: rgba(250, 247, 242, 0.95) !important;
   color: #1a2540 !important;
   border-color: rgba(74, 111, 165, 0.22) !important;
 }
 
-html:not(.dark) .bg-slate-900:not([data-keep-dark]) .text-white,
-html:not(.dark) .bg-slate-950:not([data-keep-dark]) .text-white,
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]) .text-white,
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]) .text-white,
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]) .text-white,
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]) .text-white {
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]) .text-white,
+html:not(.dark) .bg-slate-950:not([data-keep-dark]):not([class*="dark:"]) .text-white,
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]) .text-white,
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-white,
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-white,
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-white {
   color: #1a2540 !important;
 }
 
-html:not(.dark) .bg-slate-900:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) .bg-slate-900:not([data-keep-dark]) .text-slate-200,
-html:not(.dark) .bg-slate-950:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) .bg-slate-950:not([data-keep-dark]) .text-slate-200,
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]) .text-slate-200,
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]) .text-slate-200,
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]) .text-slate-200,
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]) .text-slate-100,
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]) .text-slate-200 {
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200,
+html:not(.dark) .bg-slate-950:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) .bg-slate-950:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200,
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200,
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200,
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200,
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-100,
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-200 {
   color: #1a2540 !important;
 }
 
-html:not(.dark) .bg-slate-900:not([data-keep-dark]) .text-slate-300,
-html:not(.dark) .bg-slate-900:not([data-keep-dark]) .text-slate-400,
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]) .text-slate-300,
-html:not(.dark) [class*="bg-slate-900"]:not([data-keep-dark]) .text-slate-400,
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]) .text-slate-300,
-html:not(.dark) [class*="bg-[#0f172a]" i]:not([data-keep-dark]) .text-slate-400,
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]) .text-slate-300,
-html:not(.dark) [class*="bg-[#111827]" i]:not([data-keep-dark]) .text-slate-400,
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]) .text-slate-300,
-html:not(.dark) [class*="bg-[#1e293b]" i]:not([data-keep-dark]) .text-slate-400 {
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]) .text-slate-300,
+html:not(.dark) .bg-slate-900:not([data-keep-dark]):not([class*="dark:"]) .text-slate-400,
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-300,
+html:not(.dark) [class~="bg-slate-900"]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-400,
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-300,
+html:not(.dark) [class~="bg-[#0f172a]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-400,
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-300,
+html:not(.dark) [class~="bg-[#111827]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-400,
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-300,
+html:not(.dark) [class~="bg-[#1e293b]" i]:not([data-keep-dark]):not([class*="dark:"]) .text-slate-400 {
   color: var(--muted-foreground) !important;
 }
 

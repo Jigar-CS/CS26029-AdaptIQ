@@ -1,6 +1,6 @@
-import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy, Logger } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws'; // Real-time digital ink companion synchronization
 import { URL } from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -32,7 +32,7 @@ export interface AnswerSheetBuffer {
 }
 
 @Injectable()
-export class CompanionSyncService implements OnApplicationBootstrap {
+export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('CompanionSyncService');
   private wss: WebSocketServer | null = null;
   private readonly storageFilePath = path.join(process.cwd(), 'companion_strokes_cache.json');
@@ -106,11 +106,24 @@ export class CompanionSyncService implements OnApplicationBootstrap {
       path: '/companion',
     });
 
+    this.wss.on('error', (err) => {
+      this.logger.warn(`Companion WebSocketServer error handled: ${err.message}`);
+    });
+
     this.wss.on('connection', (ws: WebSocket, req: any) => {
       this.handleConnection(ws, req);
     });
 
     this.logger.log('📡 CLIAS Multi-Room Digital Companion WebSocket Gateway attached to /companion');
+  }
+
+  onModuleDestroy() {
+    if (this.wss) {
+      try {
+        this.wss.close();
+      } catch (_) {}
+      this.wss = null;
+    }
   }
 
   private handleConnection(ws: WebSocket, req: any) {
