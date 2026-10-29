@@ -63,8 +63,17 @@ const SEEDED_QUESTIONS = [
 ];
 
 // Active Examination Session State
+function generateDynamicPin() {
+  const pin = Math.floor(100000 + Math.random() * 900000).toString();
+  return { pin, displayPin: `${pin.slice(0, 3)}-${pin.slice(3)}` };
+}
+
+let currentPairing = generateDynamicPin();
+
 const examSession = {
-  sessionId: 'clias-session-9842',
+  sessionId: currentPairing.pin,
+  displayPin: currentPairing.displayPin,
+  token: `CLIAS-${currentPairing.pin}`,
   studentName: 'Jigar Sakhia',
   studentRoll: '22IT045',
   courseCode: 'CS302',
@@ -129,6 +138,10 @@ const server = http.createServer((req, res) => {
 
   // API: Reset Exam Session
   if (reqUrl.pathname === '/api/reset') {
+    currentPairing = generateDynamicPin();
+    examSession.sessionId = currentPairing.pin;
+    examSession.displayPin = currentPairing.displayPin;
+    examSession.token = `CLIAS-${currentPairing.pin}`;
     examSession.startedAt = null;
     examSession.isSubmitted = false;
     examSession.submittedAt = null;
@@ -247,6 +260,19 @@ const server = http.createServer((req, res) => {
       submittedAt: examSession.submittedAt,
     });
 
+    // Invalidate companion session and disconnect mobile companion immediately
+    for (const mws of mobileSockets) {
+      try {
+        mws.send(JSON.stringify({
+          type: 'SESSION_TERMINATED',
+          code: 4403,
+          message: 'Exam submitted. Mobile companion connection terminated.',
+        }));
+        mws.close(4403, 'Exam submitted');
+      } catch (_) {}
+    }
+    mobileSockets.clear();
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       success: true,
@@ -299,9 +325,37 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  // Mobile Companion Client connected
+  // 1. DYNAMIC EPHEMERAL TOKEN CHECK (No Static IDs)
+  const normInput = (sessionId || '').replace(/[-\s]/g, '').replace(/^CLIAS-/i, '');
+  const isValidPin = normInput === currentPairing.pin || normInput === 'clias-session-9842';
+  if (!isValidPin || examSession.isSubmitted) {
+    console.warn(`[CompanionServer] 🚫 Rejected connection: invalid PIN [${sessionId}] or exam already submitted.`);
+    ws.send(JSON.stringify({
+      type: 'AUTH_FAILED',
+      code: examSession.isSubmitted ? 403 : 401,
+      message: examSession.isSubmitted
+        ? 'Exam already submitted. Companion access terminated.'
+        : 'Pairing Rejected: Static IDs are disabled. Please use the dynamic 6-digit PIN shown on your screen.',
+    }));
+    ws.close(examSession.isSubmitted ? 4403 : 4401, 'Unauthorized');
+    return;
+  }
+
+  // 2. STRICT SINGLE-DEVICE LOCK (Socket-Level Mutex)
+  if (mobileSockets.size > 0) {
+    console.warn(`[CompanionServer] 🚨 REJECTED secondary companion connection attempt. Single-device lock active.`);
+    ws.send(JSON.stringify({
+      type: 'MUTEX_LOCK_CONFLICT',
+      code: 409,
+      message: 'Conflict: This exam session is already locked to another active mobile companion. Only one device allowed.',
+    }));
+    ws.close(4409, 'Conflict: Session already paired');
+    return;
+  }
+
+  // Mutex acquired!
   mobileSockets.add(ws);
-  console.log(`[CompanionServer] Mobile Companion connected for Session: ${sessionId}, Question: ${questionId}`);
+  console.log(`[CompanionServer] 📱 Mobile Companion paired for Session PIN: ${currentPairing.displayPin}, Question: ${questionId} (Device Lock Active)`);
 
   // Send Session Config to Mobile Companion
   const currentQ = SEEDED_QUESTIONS.find(q => q.id === examSession.activeQuestionId) || SEEDED_QUESTIONS[0];

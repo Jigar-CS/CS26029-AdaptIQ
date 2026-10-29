@@ -13,7 +13,7 @@ class PairingScreen extends StatefulWidget {
 
 class _PairingScreenState extends State<PairingScreen> {
   final TextEditingController _laptopHostController =
-      TextEditingController(text: '10.194.8.196:4000');
+      TextEditingController(text: 'clias.onrender.com');
   final TextEditingController _sessionTokenController =
       TextEditingController();
   final TextEditingController _questionIdController =
@@ -38,6 +38,9 @@ class _PairingScreenState extends State<PairingScreen> {
     final rawHost = _laptopHostController.text.trim();
     final session = _sessionTokenController.text.trim();
     final question = _questionIdController.text.trim();
+
+    // Clean ephemeral PIN or token (strip spaces and dashes: e.g. '839-214' -> '839214')
+    final cleanSession = session.replaceAll(RegExp(r'[-\s]'), '');
 
     if (rawHost.isEmpty || session.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -66,7 +69,7 @@ class _PairingScreenState extends State<PairingScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ExamSheetScreen(
-          sessionId: session,
+          sessionId: cleanSession,
           questionId: question.toUpperCase(),
           questionTitle: 'Q1: ACID Properties',
           wsUrl: companionWsUrl,
@@ -197,23 +200,27 @@ class _PairingScreenState extends State<PairingScreen> {
                     spacing: 6,
                     children: [
                       ActionChip(
-                        label: const Text('Emulator (10.0.2.2:4000)', style: TextStyle(fontSize: 10)),
-                        onPressed: () => _laptopHostController.text = '10.0.2.2:4000',
+                        label: const Text('Render Cloud (clias.onrender.com)', style: TextStyle(fontSize: 10)),
+                        onPressed: () => _laptopHostController.text = 'clias.onrender.com',
                       ),
                       ActionChip(
-                        label: const Text('Localhost (4000)', style: TextStyle(fontSize: 10)),
+                        label: const Text('Localhost:4000', style: TextStyle(fontSize: 10)),
                         onPressed: () => _laptopHostController.text = 'localhost:4000',
+                      ),
+                      ActionChip(
+                        label: const Text('Emulator (10.0.2.2:4000)', style: TextStyle(fontSize: 10)),
+                        onPressed: () => _laptopHostController.text = '10.0.2.2:4000',
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
 
-                  // Session Token
+                  // Dynamic PIN / Session Token
                   TextField(
                     controller: _sessionTokenController,
                     decoration: InputDecoration(
-                      labelText: 'Exam Session Token',
-                      hintText: 'e.g. CLIAS-24CS024 (from laptop)',
+                      labelText: 'Dynamic 6-Digit PIN or Session Token',
+                      hintText: 'e.g. 839-214 (from desktop exam screen)',
                       prefixIcon: const Icon(Icons.vpn_key),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),

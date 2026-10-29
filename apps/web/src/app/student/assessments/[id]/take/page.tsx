@@ -49,9 +49,11 @@ import {
   Wifi,
   Fingerprint,
   Scan,
+  QrCode,
 } from 'lucide-react';
 import { AssessmentLeaderboardView } from '@/components/AssessmentLeaderboardModal';
 import { DescriptiveCompanionWorkspace } from '@/components/DescriptiveCompanionWorkspace';
+import { QRCodeSvg } from '@/components/QRCodeSvg';
 
 interface FaceFeatureProfile {
   descriptor?: number[]; // 128-d deep facial biometric descriptor vector (ResNet / ArcFace)
@@ -264,10 +266,17 @@ export default function TakeAssessmentPage() {
   );
 
   const companionSession =
+    examData?.companionPairingPinRaw ||
     examData?.companionSessionToken ||
-    (examData?.studentEnrollment ? `CLIAS-${examData.studentEnrollment.toUpperCase()}` : null) ||
-    (user?.studentDetails?.enrollmentNumber ? `CLIAS-${user.studentDetails.enrollmentNumber.toUpperCase()}` : null) ||
-    (user?.id ? `CLIAS-${user.id.slice(0, 6).toUpperCase()}` : 'clias-session-9842');
+    'clias-session-9842';
+
+  const companionPinDisplay =
+    examData?.companionPairingPin ||
+    (examData?.companionSessionToken && /^\d{6}$/.test(examData.companionSessionToken)
+      ? `${examData.companionSessionToken.slice(0, 3)}-${examData.companionSessionToken.slice(3)}`
+      : (examData?.companionPairingPinRaw && /^\d{6}$/.test(examData.companionPairingPinRaw)
+          ? `${examData.companionPairingPinRaw.slice(0, 3)}-${examData.companionPairingPinRaw.slice(3)}`
+          : companionSession));
 
   const checkMobileStatus = React.useCallback(async () => {
     setPreflightCheckingMobile(true);
@@ -2215,58 +2224,107 @@ export default function TakeAssessmentPage() {
               </div>
 
               {!preflightMobileConnected && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/95 dark:bg-slate-950/80 p-4 rounded-xl border border-amber-200 dark:border-slate-800">
-                  {/* Host */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
-                      <Wifi className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                      1. Companion Host
+                <div className="bg-white/95 dark:bg-slate-950/80 p-5 rounded-2xl border border-amber-300 dark:border-amber-500/30 space-y-4 shadow-sm">
+                  {/* Security Protocol Banner */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 text-xs">
+                    <span className="flex items-center gap-2 font-mono font-bold text-amber-950 dark:text-amber-300">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      Anti-Cheat Dynamic Ephemeral Protocol
                     </span>
-                    <div className="flex items-center justify-between gap-2 bg-amber-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-amber-200 dark:border-slate-700/80">
-                      <span className="font-mono text-xs font-bold text-amber-950 dark:text-amber-300 select-all break-all">
-                        {pairingHost || 'localhost:4000'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(pairingHost || 'localhost:4000', 'host')}
-                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-amber-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
-                        title="Copy Companion Host"
-                      >
-                        {copiedField === 'host' ? (
-                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                            <Check className="w-3.5 h-3.5" /> COPIED
-                          </span>
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </div>
+                    <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">
+                      Single-Device Lock Mutex
+                    </span>
                   </div>
 
-                  {/* Token */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
-                      <Fingerprint className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      2. Session Token
-                    </span>
-                    <div className="flex items-center justify-between gap-2 bg-emerald-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-500/30">
-                      <span className="font-mono text-xs font-black text-emerald-950 dark:text-emerald-400 tracking-wider select-all break-all">
-                        {companionSession}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                    {/* Dynamic QR Code Screen Pairing (Forces Physical Presence) */}
+                    <div className="md:col-span-5 flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-center">
+                      <span className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 mb-2.5 flex items-center gap-1.5 uppercase tracking-wider">
+                        <QrCode className="w-3.5 h-3.5 text-indigo-500" />
+                        Scan Monitor to Pair
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(companionSession, 'token')}
-                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-emerald-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
-                        title="Copy Session Token"
-                      >
-                        {copiedField === 'token' ? (
-                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                            <Check className="w-3.5 h-3.5" /> COPIED
+                      <QRCodeSvg
+                        value={JSON.stringify({
+                          host: pairingHost || 'clias.onrender.com',
+                          pin: companionPinDisplay,
+                          token: companionSession,
+                        })}
+                        size={155}
+                        className="shadow-sm"
+                      />
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 font-mono">
+                        Forces Physical Presence In Hall
+                      </span>
+                    </div>
+
+                    {/* Dynamic 6-Digit PIN & Endpoint Details */}
+                    <div className="md:col-span-7 space-y-3">
+                      {/* Host */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                          <Wifi className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                          1. Companion Endpoint Host
+                        </span>
+                        <div className="flex items-center justify-between gap-2 bg-slate-100 dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-amber-300 select-all break-all">
+                            {pairingHost || 'clias.onrender.com'}
                           </span>
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(pairingHost || 'clias.onrender.com', 'host')}
+                            className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                            title="Copy Companion Host"
+                          >
+                            {copiedField === 'host' ? (
+                              <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                <Check className="w-3.5 h-3.5" /> COPIED
+                              </span>
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 6-Digit Dynamic PIN */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                            <Fingerprint className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            2. Dynamic 6-Digit PIN (No Static IDs)
+                          </span>
+                          <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                            Valid strictly during this test
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2.5 rounded-lg border border-emerald-300 dark:border-emerald-500/40">
+                          <div className="flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <span className="font-mono text-base font-black text-emerald-950 dark:text-emerald-300 tracking-widest select-all">
+                              {companionPinDisplay}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(companionPinDisplay, 'token')}
+                            className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-emerald-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                            title="Copy Dynamic PIN"
+                          >
+                            {copiedField === 'token' ? (
+                              <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                <Check className="w-3.5 h-3.5" /> COPIED
+                              </span>
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 font-mono leading-relaxed space-y-1">
+                        <div>🔒 <b>Single-Device Lock:</b> Once paired, server locks this test to your device. Outside attempts are rejected with 409 Conflict.</div>
+                        <div>⚡ <b>One-Time Ephemeral PIN:</b> Automatically invalidates immediately upon exam submission.</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3609,6 +3667,7 @@ export default function TakeAssessmentPage() {
                   question={currentQ}
                   questionNumber={currentIdx + 1}
                   sessionId={companionSession}
+                  pairingPin={companionPinDisplay}
                   pairingHost={pairingHost}
                   onActiveQuestionChange={(qNum) => handleSwitchQuestion(qNum - 1)}
                   onStrokeCountChange={(qId, count) => {

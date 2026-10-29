@@ -16,7 +16,11 @@ import {
   ZoomIn,
   ZoomOut,
   Radio,
+  QrCode,
+  Lock,
+  Wifi,
 } from 'lucide-react';
+import { QRCodeSvg } from './QRCodeSvg';
 
 export interface StrokePoint {
   x: number;
@@ -46,6 +50,7 @@ interface DescriptiveWorkspaceProps {
   };
   questionNumber: number;
   sessionId: string;
+  pairingPin?: string;
   pairingHost?: string;
   onStrokeCountChange?: (questionId: string, count: number) => void;
   onActiveQuestionChange?: (questionNumber: number) => void;
@@ -55,10 +60,12 @@ export function DescriptiveCompanionWorkspace({
   question,
   questionNumber,
   sessionId,
+  pairingPin,
   pairingHost: propPairingHost,
   onStrokeCountChange,
   onActiveQuestionChange,
 }: DescriptiveWorkspaceProps) {
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<StrokeItem[]>([]);
   const [mobileConnected, setMobileConnected] = useState(false);
@@ -418,20 +425,90 @@ export function DescriptiveCompanionWorkspace({
             Your strokes are mirrored live onto this digital answer sheet.
           </p>
 
-          <div className="p-3 rounded-xl bg-black/50 border border-slate-800 space-y-1.5 font-mono text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Endpoint:</span>
-              <span className="text-cyan-300 font-bold">{pairingHost || 'localhost:4000'}</span>
+          {/* Ephemeral Pairing & Security Lock Badge */}
+          <div className="p-3 rounded-xl bg-black/60 border border-slate-800 space-y-2 font-mono text-[11px]">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Wifi className="w-3 h-3 text-cyan-400" /> Host:
+              </span>
+              <span className="text-cyan-300 font-bold select-all">{pairingHost || 'localhost:4000'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Session ID:</span>
-              <span className="text-indigo-300">{sessionId}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Lock className="w-3 h-3 text-emerald-400" /> Dynamic PIN:
+              </span>
+              <span className="text-emerald-300 font-black tracking-wider text-xs select-all">
+                {pairingPin || (sessionId.length === 6 ? `${sessionId.slice(0, 3)}-${sessionId.slice(3)}` : sessionId)}
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Single-Device Lock:</span>
+              <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${mobileConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}`}>
+                {mobileConnected ? 'LOCKED (1 DEVICE)' : 'AWAITING PAIR'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
               <span className="text-slate-400">Active Question:</span>
-              <span className="text-emerald-400 font-bold">{activeQId}</span>
+              <span className="text-indigo-300 font-bold">{activeQId}</span>
             </div>
+
+            {/* QR Code trigger */}
+            <button
+              type="button"
+              onClick={() => setShowQrModal(true)}
+              className="w-full mt-2 py-1.5 px-2 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-sans font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Show Phone Pairing QR Code</span>
+            </button>
           </div>
+
+          {/* QR Code Modal */}
+          {showQrModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-indigo-400" />
+                    Scan to Pair Companion
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex justify-center p-3 bg-white rounded-xl shadow-inner">
+                  <QRCodeSvg
+                    value={JSON.stringify({
+                      host: pairingHost || 'localhost:4000',
+                      pin: pairingPin || sessionId,
+                      token: sessionId,
+                    })}
+                    size={180}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[11px] text-slate-400 font-mono">Dynamic One-Time PIN</span>
+                  <div className="font-mono text-xl font-black text-emerald-400 tracking-widest">
+                    {pairingPin || (sessionId.length === 6 ? `${sessionId.slice(0, 3)}-${sessionId.slice(3)}` : sessionId)}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  Scan this QR code with your phone camera or enter the 6-digit PIN in the companion app.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CodingService, CreateCodingProblemDto } from '../coding/coding.service';
 import { CodeRunnerService } from '../coding/code-runner.service';
 import { LearningAnalyticsService } from '../analytics/learning-analytics.service';
+import { CompanionSyncService } from './companion-sync.service';
 import { shuffleQuestionOptions, seededShuffle } from '../common/shuffle.util';
 import {
   AssessmentStatus,
@@ -171,6 +172,7 @@ export class AssessmentService {
     private readonly codingService: CodingService,
     private readonly codeRunner: CodeRunnerService,
     private readonly analyticsService: LearningAnalyticsService,
+    private readonly companionSync: CompanionSyncService,
   ) {}
 
   /**
@@ -989,7 +991,14 @@ export class AssessmentService {
     const active = studentSubmissions.find((s) => s.status === SubmissionStatus.IN_PROGRESS);
     if (active) {
       const proc = await this.ensureProctoringSession(active.id, effectiveProfileId);
-      return await this.formatAttemptPayload(assessment, active, proc, student?.authorizedStudent?.enrollmentNumber);
+      const pairing = this.companionSync.generateEphemeralPairing(
+        active.id,
+        assessment.durationMinutes,
+        effectiveProfileId,
+        student?.authorizedStudent?.enrollmentNumber,
+        assessment.id,
+      );
+      return await this.formatAttemptPayload(assessment, active, proc, student?.authorizedStudent?.enrollmentNumber, pairing);
     }
 
     if (studentSubmissions.length >= assessment.allowedAttempts) {
@@ -1045,7 +1054,14 @@ export class AssessmentService {
     });
 
     const proc = await this.ensureProctoringSession(newSubmission.id, effectiveProfileId);
-    return await this.formatAttemptPayload(assessment, newSubmission, proc, student?.authorizedStudent?.enrollmentNumber);
+    const pairing = this.companionSync.generateEphemeralPairing(
+      newSubmission.id,
+      assessment.durationMinutes,
+      effectiveProfileId,
+      student?.authorizedStudent?.enrollmentNumber,
+      assessment.id,
+    );
+    return await this.formatAttemptPayload(assessment, newSubmission, proc, student?.authorizedStudent?.enrollmentNumber, pairing);
   }
 
   private async ensureProctoringSession(submissionId: string, studentId: string) {
@@ -1062,7 +1078,7 @@ export class AssessmentService {
     });
   }
 
-  private async formatAttemptPayload(assessment: any, submission: any, proctoring?: any, studentEnrollment?: string) {
+  private async formatAttemptPayload(assessment: any, submission: any, proctoring?: any, studentEnrollment?: string, pairing?: any) {
     // High-performance batch prefetch for any coding problems
     const codingQuestions = assessment.questions.filter((aq: any) => aq.question.type === QuestionType.CODING);
     const problemMap = new Map<string, any>();
@@ -1189,9 +1205,18 @@ export class AssessmentService {
     const remainingSeconds = Math.max(0, Math.floor((totalDurationMs - elapsedMs) / 1000));
 
     const enrollment = studentEnrollment || submission.student?.authorizedStudent?.enrollmentNumber;
-    const companionSessionToken = enrollment
-      ? `CLIAS-${enrollment.toUpperCase()}`
-      : `CLIAS-${submission.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+    // Dynamic Ephemeral Pairing PIN & Token: Valid strictly during active exam session
+    const activePairing = pairing || this.companionSync.getPairingInfo(submission.id) || this.companionSync.generateEphemeralPairing(
+      submission.id,
+      assessment.durationMinutes,
+      submission.studentId,
+      enrollment,
+      assessment.id,
+    );
+
+    const companionPairingPin = activePairing?.displayPin || null;
+    const companionPairingPinRaw = activePairing?.pin || null;
+    const companionSessionToken = activePairing?.pin || submission.id;
 
     return {
       submissionId: submission.id,
@@ -1206,6 +1231,8 @@ export class AssessmentService {
       },
       remainingSeconds,
       companionSessionToken,
+      companionPairingPin,
+      companionPairingPinRaw,
       studentEnrollment: enrollment || null,
       proctoringSessionId: proctoring?.id || null,
       trustScore: proctoring?.trustScore ?? 100,
@@ -1270,6 +1297,11 @@ export class AssessmentService {
         submittedAt: new Date(),
       },
     });
+
+    // Invalidate dynamic ephemeral pairing token immediately and disconnect mobile companion
+    try {
+      this.companionSync.invalidateEphemeralPairing(submissionId);
+    } catch (_) {}
 
     if (lockResult.count === 0) {
       const existing = await this.prisma.assessmentSubmission.findUnique({

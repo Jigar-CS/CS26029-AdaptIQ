@@ -7,13 +7,24 @@ export class CompanionController {
 
   @Get('status')
   getStatus(@Query('sessionId') sessionId = 'clias-session-default') {
+    const pairing = this.companionSync.getPairingInfo(sessionId);
     return {
       mobileConnected: this.companionSync.isMobileConnected(sessionId),
-      isSubmitted: this.companionSync.isSessionSubmitted(sessionId),
+      isSubmitted: pairing ? pairing.isSubmitted : this.companionSync.isSessionSubmitted(sessionId),
       activeQuestionId: this.companionSync.getActiveQuestion(sessionId),
       localIp: this.companionSync.getLocalIp(),
       publicHost: process.env.RENDER_EXTERNAL_HOSTNAME || process.env.PUBLIC_API_HOST || null,
       port: 4000,
+      pairing: pairing || null,
+    };
+  }
+
+  @Get('pairing/verify')
+  verifyPairing(@Query('pin') pin: string) {
+    const pairing = this.companionSync.getPairingInfo(pin);
+    return {
+      valid: Boolean(pairing && !pairing.isSubmitted),
+      pairing: pairing || null,
     };
   }
 
