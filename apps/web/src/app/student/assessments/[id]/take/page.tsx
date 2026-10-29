@@ -433,6 +433,7 @@ export default function TakeAssessmentPage() {
   const isAutoSubmittingRef = useRef<boolean>(false);
   const visionModelRef = useRef<any>(null);
   const isDetectingRef = useRef<boolean>(false);
+  const detectionCycleRef = useRef<number>(0);
 
   // Advanced Acoustic & Mobile Heuristic Telemetry Refs
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -645,57 +646,58 @@ export default function TakeAssessmentPage() {
 
     setEnrollingFace(true);
     try {
-      // 1. Capture unmirrored frame to offscreen canvas
+      // 1. Instantly capture frame to canvas with zero delay
       const canvas = document.createElement('canvas');
       canvas.width = 320;
       canvas.height = 240;
       const ctx = canvas.getContext('2d');
-      let snapshotUrl = '';
+      if (!ctx) return;
 
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, 320, 240);
-        snapshotUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setBaselineSnapshot(snapshotUrl);
+      ctx.drawImage(video, 0, 0, 320, 240);
+      const snapshotUrl = canvas.toDataURL('image/jpeg', 0.85);
 
-        // 2. Extract baseline candidate facial feature profile & deep biometric descriptor
-        const sx = Math.floor(canvas.width * 0.15);
-        const sy = Math.floor(canvas.height * 0.10);
-        const sw = Math.floor(canvas.width * 0.70);
-        const sh = Math.floor(canvas.height * 0.80);
-        const profile = extractFaceProfileFromCanvas(canvas, sx, sy, sw, sh);
+      // 2. Immediately update UI state so button gives instant confirmation
+      setBaselineSnapshot(snapshotUrl);
+      setFaceEnrolled(true);
 
-        // Extract deep 128-d biometric descriptor if faceapi is ready
-        const faceapi = (window as any).faceapi;
-        if (faceapi && faceApiModelLoadedRef.current) {
-          try {
+      // 3. Fast structural gradient profile (takes < 2ms)
+      const sx = Math.floor(canvas.width * 0.15);
+      const sy = Math.floor(canvas.height * 0.10);
+      const sw = Math.floor(canvas.width * 0.70);
+      const sh = Math.floor(canvas.height * 0.80);
+      const profile = extractFaceProfileFromCanvas(canvas, sx, sy, sw, sh);
+      if (profile) {
+        baselineFaceProfileRef.current = profile;
+      }
+
+      // 4. Non-blocking background worker for deep descriptor extraction & server enrollment
+      setTimeout(async () => {
+        try {
+          const faceapi = (window as any).faceapi;
+          if (faceapi && faceApiModelLoadedRef.current) {
             const det = await faceapi
-              .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }))
+              .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.3 }))
               .withFaceLandmarks(true)
               .withFaceDescriptor();
             if (det?.descriptor) {
               baselineFaceDescriptorRef.current = det.descriptor;
-              if (profile) {
-                profile.descriptor = Array.from(det.descriptor);
+              if (baselineFaceProfileRef.current) {
+                baselineFaceProfileRef.current.descriptor = Array.from(det.descriptor);
               }
-              console.log('Enrolled candidate 128-d biometric descriptor captured successfully.');
+              console.log('Background 128-d biometric descriptor captured successfully.');
             }
-          } catch (detErr) {
-            console.warn('Pre-flight face-api descriptor extraction error:', detErr);
           }
+        } catch (detErr) {
+          console.warn('Deferred biometric descriptor extraction error:', detErr);
         }
 
-        if (profile) {
-          baselineFaceProfileRef.current = profile;
-        }
-      }
+        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
+          snapshot: snapshotUrl,
+        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
+      }, 50);
 
-      // 3. Post to proctoring enrollment endpoint with snapshot
-      await api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
-        snapshot: snapshotUrl,
-      });
-      setFaceEnrolled(true);
     } catch (err) {
-      console.error('Face enrollment API call completed with local baseline fallback', err);
+      console.error('Face capture completed with local baseline fallback', err);
       setFaceEnrolled(true);
     } finally {
       setEnrollingFace(false);
@@ -835,6 +837,9 @@ export default function TakeAssessmentPage() {
           }
         }
 
+        // Yield execution to let browser render UI smoothly
+        await new Promise((r) => setTimeout(r, 150));
+
         // Load Face-API for high-precision biometrics, 68 landmarks & liveness
         if (!(window as any).faceapi) {
           await loadScriptWithFallback([
@@ -846,16 +851,19 @@ export default function TakeAssessmentPage() {
         const faceapi = (window as any).faceapi;
         if (active && faceapi && !faceApiModelLoadedRef.current) {
           const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
-          await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-            faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-          ]);
+          // Load lightweight detector and landmarks first
+          await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+          await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+
+          // Yield execution before loading heavier recognition network
+          await new Promise((r) => setTimeout(r, 150));
+          await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
           if (active) {
             faceApiModelLoadedRef.current = true;
             console.log('AI Face Biometric Models (TinyFace + Landmarks68 + ResNet Recognition) loaded successfully.');
 
-            // If baseline snapshot was captured while model was loading, extract descriptor now
+            // If baseline snapshot was captured while model was loading, extract descriptor in background
             if (baselineSnapshot && !baselineFaceDescriptorRef.current) {
               const img = new Image();
               img.crossOrigin = 'anonymous';
@@ -863,7 +871,7 @@ export default function TakeAssessmentPage() {
               img.onload = async () => {
                 try {
                   const det = await faceapi
-                    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 }))
+                    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.3 }))
                     .withFaceLandmarks(true)
                     .withFaceDescriptor();
                   if (det?.descriptor) {
@@ -1239,52 +1247,34 @@ export default function TakeAssessmentPage() {
         let mobileConfidence = 0;
         let detectionDetails = '';
 
+        detectionCycleRef.current += 1;
+        const cycle = detectionCycleRef.current;
+
         // -------------------------------------------------------------
-        // A. Primary Object & Phone Detection via COCO-SSD
+        // A. Primary Object & Phone Detection via COCO-SSD (Every cycle)
         // -------------------------------------------------------------
         if (visionModelRef.current) {
           try {
             const predictions = await visionModelRef.current.detect(video);
 
-            // 1. Precise Mobile Phone Detection (High Confidence + Sanity Check)
+            // 1. Precise Mobile Phone Detection across ALL assessment modes
             const phone = predictions.find((p: any) => {
               const c = (p.class || '').toLowerCase();
-              if (c !== 'cell phone' && c !== 'mobile phone') return false;
-              if (p.score < 0.60) return false;
-
-              // Bounding box validation to filter out spurious detections
-              if (Array.isArray(p.bbox) && p.bbox.length === 4) {
-                const [bx, by, bw, bh] = p.bbox;
-                const vWidth = video.videoWidth || 640;
-                const vHeight = video.videoHeight || 480;
-
-                // A handheld phone shouldn't occupy > 45% of width or > 55% of height
-                if (bw > vWidth * 0.45 || bh > vHeight * 0.55) return false;
-                // Minimum noise threshold
-                if (bw < 18 || bh < 18) return false;
-                // Aspect ratio check (rectangular handheld device)
-                const ratio = Math.max(bw, bh) / Math.max(1, Math.min(bw, bh));
-                if (ratio < 1.1 || ratio > 3.2) return false;
-              }
-              return true;
+              if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone') return false;
+              // Reliable confidence threshold for webcam video
+              return p.score >= 0.45;
             });
 
-            const isDescriptiveExam = examData?.questions?.some(
-              (q: any) => q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE',
-            );
-
-            if (phone && !isDescriptiveExam) {
+            if (phone) {
               consecutiveMobileDetectionRef.current += 1;
-              // Require 2 consecutive cycles of confirmed detection to eliminate sensor glitches
-              if (consecutiveMobileDetectionRef.current >= 2) {
+              if (consecutiveMobileDetectionRef.current >= 1) {
                 isMobileDetected = true;
                 mobileConfidence = Math.round(phone.score * 100);
-                detectionDetails = `AI Vision: Handheld mobile phone detected (${mobileConfidence}% confidence).`;
+                detectionDetails = `AI Vision: Handheld mobile device detected in examination workstation (${mobileConfidence}% confidence).`;
               }
             } else {
               consecutiveMobileDetectionRef.current = 0;
             }
-
           } catch (modelErr) {
             console.warn('Vision detection cycle error:', modelErr);
           }
@@ -1299,11 +1289,12 @@ export default function TakeAssessmentPage() {
         if (faceapi && faceApiModelLoadedRef.current) {
           try {
             faceApiCycleExecuted = true;
-            const tinyOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.38 });
+            // Lightweight face detection every cycle (ultra-fast: ~6ms)
+            const tinyOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 });
             const allFaces = await faceapi.detectAllFaces(video, tinyOpts);
 
             if (allFaces.length === 0) {
-              // 0 faces detected in camera frame
+              // 0 faces detected in camera frame -> Candidate is absent
               isPersonFound = false;
               consecutiveUnauthorizedRef.current = 0;
               consecutiveMismatchRef.current = 0;
@@ -1321,88 +1312,92 @@ export default function TakeAssessmentPage() {
                 `Multiple individuals (${allFaces.length}) detected within primary examination workspace.`
               );
             } else if (allFaces.length === 1) {
-              // Exactly 1 face. Verify landmarks, liveness, and deep descriptor!
-              const singleFace = await faceapi
-                .detectSingleFace(video, tinyOpts)
-                .withFaceLandmarks(true)
-                .withFaceDescriptor();
+              // Exactly 1 face in view
+              isPersonFound = true;
 
-              if (singleFace) {
-                const landmarks = singleFace.landmarks;
-                const leftEye = landmarks.getLeftEye();
-                const rightEye = landmarks.getRightEye();
+              // Run heavy deep descriptor verification every 2nd cycle (every ~3s) to prevent any UI lag
+              const shouldVerifyDeepIdentity = (cycle % 2 === 0) || !baselineFaceDescriptorRef.current;
 
-                // 1. Passive Liveness (Eye Aspect Ratio - EAR)
-                if (leftEye.length >= 6 && rightEye.length >= 6) {
-                  const earL =
-                    (Math.hypot(leftEye[1].x - leftEye[5].x, leftEye[1].y - leftEye[5].y) +
-                      Math.hypot(leftEye[2].x - leftEye[4].x, leftEye[2].y - leftEye[4].y)) /
-                    (2.0 * Math.hypot(leftEye[0].x - leftEye[3].x, leftEye[0].y - leftEye[3].y));
-                  const earR =
-                    (Math.hypot(rightEye[1].x - rightEye[5].x, rightEye[1].y - rightEye[5].y) +
-                      Math.hypot(rightEye[2].x - rightEye[4].x, rightEye[2].y - rightEye[4].y)) /
-                    (2.0 * Math.hypot(rightEye[0].x - rightEye[3].x, rightEye[0].y - rightEye[3].y));
-                  const ear = (earL + earR) / 2.0;
+              if (shouldVerifyDeepIdentity) {
+                const singleFace = await faceapi
+                  .detectSingleFace(video, tinyOpts)
+                  .withFaceLandmarks(true)
+                  .withFaceDescriptor();
 
-                  if (ear < 0.20) {
-                    isEyeClosedRef.current = true;
-                  } else if (isEyeClosedRef.current && ear >= 0.24) {
-                    isEyeClosedRef.current = false;
-                    lastBlinkTimeRef.current = Date.now();
-                    eyeBlinkCounterRef.current += 1;
-                  }
+                if (singleFace) {
+                  const landmarks = singleFace.landmarks;
+                  const leftEye = landmarks.getLeftEye();
+                  const rightEye = landmarks.getRightEye();
 
-                  const timeSinceBlink = Date.now() - lastBlinkTimeRef.current;
-                  if (timeSinceBlink > 40000 && !isDescriptiveTest) {
-                    reportViolation(
-                      'IDENTITY_MISMATCH',
-                      'MEDIUM',
-                      'Liveness anomaly: Natural eye blinking absent for > 40 seconds (static portrait/photo suspected).'
-                    );
-                    lastBlinkTimeRef.current = Date.now() - 25000;
-                  }
-                }
+                  // 1. Passive Liveness (Eye Aspect Ratio - EAR)
+                  if (leftEye.length >= 6 && rightEye.length >= 6) {
+                    const earL =
+                      (Math.hypot(leftEye[1].x - leftEye[5].x, leftEye[1].y - leftEye[5].y) +
+                        Math.hypot(leftEye[2].x - leftEye[4].x, leftEye[2].y - leftEye[4].y)) /
+                      (2.0 * Math.hypot(leftEye[0].x - leftEye[3].x, leftEye[0].y - leftEye[3].y));
+                    const earR =
+                      (Math.hypot(rightEye[1].x - rightEye[5].x, rightEye[1].y - rightEye[5].y) +
+                        Math.hypot(rightEye[2].x - rightEye[4].x, rightEye[2].y - rightEye[4].y)) /
+                      (2.0 * Math.hypot(rightEye[0].x - rightEye[3].x, rightEye[0].y - rightEye[3].y));
+                    const ear = (earL + earR) / 2.0;
 
-                // 2. Head Pose & Gaze Direction
-                const nose = landmarks.getNose();
-                if (nose.length >= 4 && leftEye.length > 0 && rightEye.length > 0) {
-                  const noseTip = nose[3];
-                  const dLeft = Math.hypot(noseTip.x - leftEye[0].x, noseTip.y - leftEye[0].y);
-                  const dRight = Math.hypot(noseTip.x - rightEye[3].x, noseTip.y - rightEye[3].y);
-                  const yawRatio = dLeft / Math.max(1, dRight);
+                    if (ear < 0.20) {
+                      isEyeClosedRef.current = true;
+                    } else if (isEyeClosedRef.current && ear >= 0.24) {
+                      isEyeClosedRef.current = false;
+                      lastBlinkTimeRef.current = Date.now();
+                      eyeBlinkCounterRef.current += 1;
+                    }
 
-                  if ((yawRatio < 0.38 || yawRatio > 2.6) && !isDescriptiveTest) {
-                    const now = Date.now();
-                    if (now - lastHeadPoseViolationTimeRef.current > 7000) {
-                      lastHeadPoseViolationTimeRef.current = now;
+                    const timeSinceBlink = Date.now() - lastBlinkTimeRef.current;
+                    if (timeSinceBlink > 40000 && !isDescriptiveTest) {
                       reportViolation(
-                        'WINDOW_BLUR',
-                        'LOW',
-                        'Gaze anomaly: Candidate head pose turned away from assessment monitor.'
+                        'IDENTITY_MISMATCH',
+                        'MEDIUM',
+                        'Liveness anomaly: Natural eye blinking absent for > 40 seconds (static portrait/photo suspected).'
                       );
+                      lastBlinkTimeRef.current = Date.now() - 25000;
                     }
                   }
-                }
 
-                // 3. Deep Biometric Descriptor Identity Verification
-                if (baselineFaceDescriptorRef.current && singleFace.descriptor) {
-                  const distance = faceapi.euclideanDistance(
-                    baselineFaceDescriptorRef.current,
-                    singleFace.descriptor
-                  );
+                  // 2. Head Pose & Gaze Direction
+                  const nose = landmarks.getNose();
+                  if (nose.length >= 4 && leftEye.length > 0 && rightEye.length > 0) {
+                    const noseTip = nose[3];
+                    const dLeft = Math.hypot(noseTip.x - leftEye[0].x, noseTip.y - leftEye[0].y);
+                    const dRight = Math.hypot(noseTip.x - rightEye[3].x, noseTip.y - rightEye[3].y);
+                    const yawRatio = dLeft / Math.max(1, dRight);
 
-                  // Distance < 0.58 = Enrolled Candidate Verified!
-                  // Distance >= 0.58 = IMPOSTER / DIFFERENT PERSON!
-                  if (distance < 0.58) {
-                    isPersonFound = true;
-                    consecutiveMismatchRef.current = 0;
-                    consecutiveUnauthorizedRef.current = 0;
-                    if (unauthorizedPersonRef.current !== null) {
-                      updateUnauthorizedPerson(null);
+                    if ((yawRatio < 0.38 || yawRatio > 2.6) && !isDescriptiveTest) {
+                      const now = Date.now();
+                      if (now - lastHeadPoseViolationTimeRef.current > 7000) {
+                        lastHeadPoseViolationTimeRef.current = now;
+                        reportViolation(
+                          'WINDOW_BLUR',
+                          'LOW',
+                          'Gaze anomaly: Candidate head pose turned away from assessment monitor.'
+                        );
+                      }
                     }
-                  } else {
-                    // Different person detected!
-                    if (!isDescriptiveTest) {
+                  }
+
+                  // 3. Deep Biometric Descriptor Identity Verification
+                  if (baselineFaceDescriptorRef.current && singleFace.descriptor) {
+                    const distance = faceapi.euclideanDistance(
+                      baselineFaceDescriptorRef.current,
+                      singleFace.descriptor
+                    );
+
+                    if (distance < 0.58) {
+                      // Registered enrolled candidate confirmed
+                      isPersonFound = true;
+                      consecutiveMismatchRef.current = 0;
+                      consecutiveUnauthorizedRef.current = 0;
+                      if (unauthorizedPersonRef.current !== null) {
+                        updateUnauthorizedPerson(null);
+                      }
+                    } else {
+                      // Imposter / Another person took over
                       isPersonFound = false;
                       consecutiveMismatchRef.current += 1;
                       if (consecutiveMismatchRef.current >= 2) {
@@ -1426,18 +1421,17 @@ export default function TakeAssessmentPage() {
                           imposterSnap
                         );
                       }
-                    } else {
-                      isPersonFound = true;
                     }
-                  }
-                } else {
-                  isPersonFound = true;
-                  if (unauthorizedPersonRef.current !== null) {
-                    updateUnauthorizedPerson(null);
+                  } else {
+                    isPersonFound = true;
+                    if (unauthorizedPersonRef.current !== null) {
+                      updateUnauthorizedPerson(null);
+                    }
                   }
                 }
               } else {
-                isPersonFound = false;
+                // Non-descriptor cycle: Face is present and confirmed by tinyFaceDetector
+                isPersonFound = true;
               }
             }
           } catch (fErr) {
@@ -1573,20 +1567,18 @@ export default function TakeAssessmentPage() {
         // E. Face Absence 3-Strike Policy Enforcement
         // -------------------------------------------------------------
         if (!isPersonFound) {
-          if (isDescriptiveTest) {
-            // When candidate is in descriptive exam with mobile companion, looking down at writing pad is normal
-            setFacePresent(true);
-            consecutiveFaceAbsentRef.current = 0;
-          } else {
-            consecutiveFaceAbsentRef.current += 1;
-            if (consecutiveFaceAbsentRef.current >= 2) {
-              setFacePresent(false);
+          consecutiveFaceAbsentRef.current += 1;
+          // In descriptive exams, allow 4 cycles (~6s) grace for writing, but catch total absence reliably!
+          const absenceThreshold = isDescriptiveTest ? 4 : 2;
 
-              if (!faceModalActiveRef.current && !isAutoSubmittingRef.current) {
-                faceModalActiveRef.current = true;
-                const nextStrike = faceStrikeCountRef.current + 1;
-                faceStrikeCountRef.current = nextStrike;
-                setFaceStrikeCount(nextStrike);
+          if (consecutiveFaceAbsentRef.current >= absenceThreshold) {
+            setFacePresent(false);
+
+            if (!faceModalActiveRef.current && !isAutoSubmittingRef.current) {
+              faceModalActiveRef.current = true;
+              const nextStrike = faceStrikeCountRef.current + 1;
+              faceStrikeCountRef.current = nextStrike;
+              setFaceStrikeCount(nextStrike);
 
               if (nextStrike === 1) {
                 reportViolation('NO_FACE', 'LOW', 'Face not visible in camera frame (Warning 1/3).');
@@ -1605,17 +1597,16 @@ export default function TakeAssessmentPage() {
               }
             }
           }
+        } else {
+          consecutiveFaceAbsentRef.current = 0;
+          setFacePresent(true);
         }
-      } else {
-        consecutiveFaceAbsentRef.current = 0;
-        setFacePresent(true);
-      }
       } catch (err) {
         // catch canvas / detection safety
       } finally {
         isDetectingRef.current = false;
       }
-    }, 1000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [examData, result, showPreFlight, mediaStream]);
