@@ -396,7 +396,7 @@ export function AssessmentLeaderboardView({
                       <span className="text-[10px] text-slate-400 font-mono">{top2.enrollmentNumber}</span>
                       <div className="w-full mt-2 pt-3 pb-2 px-2 bg-gradient-to-t from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700/60 rounded-t-2xl border-t border-x border-slate-300 dark:border-slate-700 text-center shadow-xs">
                         <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white block">
-                          {top2.score} pts
+                          {top2.score} / {data.totalMarks}
                         </span>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                           {top2.percentage}%
@@ -420,7 +420,7 @@ export function AssessmentLeaderboardView({
                       <span className="text-[10px] text-slate-400 font-mono">{top1.enrollmentNumber}</span>
                       <div className="w-full mt-2 pt-5 pb-3 px-2 bg-gradient-to-t from-amber-200/80 to-amber-100 dark:from-amber-950/70 dark:to-amber-900/40 rounded-t-2xl border-t-2 border-x-2 border-amber-400/60 text-center shadow-md">
                         <span className="text-sm sm:text-base font-black text-amber-700 dark:text-amber-300 block">
-                          {top1.score} pts
+                          {top1.score} / {data.totalMarks}
                         </span>
                         <span className="text-[10px] font-bold text-amber-800/80 dark:text-amber-400/80 block">
                           {top1.percentage}% (1st)
@@ -441,7 +441,7 @@ export function AssessmentLeaderboardView({
                       <span className="text-[10px] text-slate-400 font-mono">{top3.enrollmentNumber}</span>
                       <div className="w-full mt-2 pt-2 pb-2 px-2 bg-gradient-to-t from-amber-900/20 to-amber-900/10 dark:from-slate-850 dark:to-slate-800/50 rounded-t-2xl border-t border-x border-slate-200 dark:border-slate-700 text-center shadow-xs">
                         <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white block">
-                          {top3.score} pts
+                          {top3.score} / {data.totalMarks}
                         </span>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                           {top3.percentage}%

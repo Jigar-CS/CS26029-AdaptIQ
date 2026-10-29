@@ -44,7 +44,10 @@ interface StandingData {
   totalStudents: number;
   percentile: number;
   score: number;
+  rawScore?: number;
+  totalMarks?: number;
   assessmentScore: number;
+  assessmentPercentage?: number;
   practiceScore: number;
   assessmentsCount: number;
   questionsCount: number;
@@ -65,7 +68,10 @@ interface RankingEntry {
   division: string;
   avatarSeed: string;
   score: number;
+  rawScore?: number;
+  totalMarks?: number;
   assessmentScore: number;
+  assessmentPercentage?: number;
   practiceScore: number;
   assessmentsCount: number;
   questionsCount: number;
@@ -265,9 +271,15 @@ export default function StudentLeaderboardPage() {
                   </div>
 
                   <h3 className="text-3xl font-display font-black tracking-tight text-slate-900 dark:text-white flex items-baseline gap-3">
-                    <span>{standing.score}</span>
+                    <span>
+                      {calculationType === 'assessments' && standing.totalMarks
+                        ? `${standing.rawScore ?? standing.score} / ${standing.totalMarks}`
+                        : standing.score}
+                    </span>
                     <span className="text-sm font-mono font-semibold text-[#4a6fa5] dark:text-[#6a90c5]">
-                      / 100 {calculationType === 'composite' ? 'Hybrid Score' : calculationType === 'assessments' ? 'Exam Marks %' : 'Practice Points'}
+                      {calculationType === 'assessments' && standing.totalMarks
+                        ? `Exam Marks (${standing.assessmentPercentage ?? standing.assessmentScore}%)`
+                        : `/ 100 ${calculationType === 'composite' ? 'Hybrid Score' : calculationType === 'assessments' ? 'Exam Marks' : 'Practice Points'}`}
                     </span>
                   </h3>
 
@@ -288,8 +300,14 @@ export default function StudentLeaderboardPage() {
                     <p className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       Assessment Marks
                     </p>
-                    <p className="text-xl font-mono font-black text-amber-600 dark:text-amber-400 mt-1">{standing.assessmentScore}%</p>
-                    <span className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400">70% Weight</span>
+                    <p className="text-xl font-mono font-black text-amber-600 dark:text-amber-400 mt-1">
+                      {standing.rawScore !== undefined && standing.totalMarks
+                        ? `${standing.rawScore} / ${standing.totalMarks}`
+                        : `${standing.score}`}
+                    </p>
+                    <span className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400">
+                      {standing.assessmentPercentage !== undefined ? `${standing.assessmentPercentage}% • 70% Weight` : '70% Weight'}
+                    </span>
                   </div>
 
                   <div className="text-center p-2 border-l border-slate-200 dark:border-white/10">
@@ -454,10 +472,12 @@ export default function StudentLeaderboardPage() {
                     </p>
                   </div>
                   <div className="inline-block px-3 py-1 bg-slate-100 dark:bg-slate-800 text-xs font-black text-slate-700 dark:text-slate-300">
-                    {podium[1].score} pts
+                    {calculationType === 'assessments' && podium[1].totalMarks
+                      ? `${podium[1].rawScore ?? podium[1].score} / ${podium[1].totalMarks}`
+                      : `${podium[1].score} pts`}
                   </div>
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex justify-center gap-3 pt-1">
-                    <span>Exam: {podium[1].assessmentScore}%</span>
+                    <span>Exam: {podium[1].rawScore !== undefined && podium[1].totalMarks ? `${podium[1].rawScore}/${podium[1].totalMarks} (${podium[1].assessmentPercentage ?? podium[1].assessmentScore}%)` : `${podium[1].assessmentScore}%`}</span>
                     <span>Practice: {podium[1].practiceScore}%</span>
                   </div>
                 </div>
@@ -484,10 +504,12 @@ export default function StudentLeaderboardPage() {
                     </p>
                   </div>
                   <div className="inline-block px-4 py-1.5 bg-amber-500 text-white text-xs font-black shadow-md">
-                    {podium[0].score} pts
+                    {calculationType === 'assessments' && podium[0].totalMarks
+                      ? `${podium[0].rawScore ?? podium[0].score} / ${podium[0].totalMarks} (${podium[0].assessmentPercentage ?? podium[0].assessmentScore}%)`
+                      : `${podium[0].score} pts`}
                   </div>
                   <div className="text-xs text-slate-700 dark:text-slate-300 font-bold flex justify-center gap-3 pt-1">
-                    <span>Exam: {podium[0].assessmentScore}%</span>
+                    <span>Exam: {podium[0].rawScore !== undefined && podium[0].totalMarks ? `${podium[0].rawScore}/${podium[0].totalMarks} (${podium[0].assessmentPercentage ?? podium[0].assessmentScore}%)` : `${podium[0].assessmentScore}%`}</span>
                     <span>Practice: {podium[0].practiceScore}%</span>
                   </div>
                 </div>
@@ -511,10 +533,12 @@ export default function StudentLeaderboardPage() {
                     </p>
                   </div>
                   <div className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-950/60 text-xs font-black text-amber-900 dark:text-amber-300">
-                    {podium[2].score} pts
+                    {calculationType === 'assessments' && podium[2].totalMarks
+                      ? `${podium[2].rawScore ?? podium[2].score} / ${podium[2].totalMarks}`
+                      : `${podium[2].score} pts`}
                   </div>
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex justify-center gap-3 pt-1">
-                    <span>Exam: {podium[2].assessmentScore}%</span>
+                    <span>Exam: {podium[2].rawScore !== undefined && podium[2].totalMarks ? `${podium[2].rawScore}/${podium[2].totalMarks} (${podium[2].assessmentPercentage ?? podium[2].assessmentScore}%)` : `${podium[2].assessmentScore}%`}</span>
                     <span>Practice: {podium[2].practiceScore}%</span>
                   </div>
                 </div>
@@ -609,12 +633,22 @@ export default function StudentLeaderboardPage() {
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <span className="font-mono font-black text-base text-[#4a6fa5] dark:text-blue-400">
-                            {student.score}
+                            {calculationType === 'assessments' && student.totalMarks
+                              ? `${student.rawScore ?? student.score} / ${student.totalMarks}`
+                              : student.score}
                           </span>
+                          {calculationType === 'assessments' && student.assessmentPercentage !== undefined && (
+                            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 block">
+                              {student.assessmentPercentage}%
+                            </span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <span className="font-mono font-bold text-sm text-slate-800 dark:text-slate-200">
-                            {student.assessmentScore}%
+                            {student.rawScore !== undefined && student.totalMarks
+                              ? `${student.rawScore} / ${student.totalMarks}`
+                              : `${student.assessmentScore}`}
+                            {student.assessmentPercentage !== undefined ? ` (${student.assessmentPercentage}%)` : ''}
                           </span>
                           <span className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 block">
                             {student.assessmentsCount} tests

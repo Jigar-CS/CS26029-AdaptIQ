@@ -12,7 +12,10 @@ export interface LeaderboardEntry {
   division: string;
   avatarSeed: string;
   score: number;
+  rawScore: number;
+  totalMarks: number;
   assessmentScore: number;
+  assessmentPercentage: number;
   practiceScore: number;
   assessmentsCount: number;
   questionsCount: number;
@@ -72,9 +75,15 @@ export class LeaderboardService {
                 ...(targetCourseId ? { assessment: { courseId: targetCourseId } } : {}),
               },
               select: {
+                assessmentId: true,
                 percentage: true,
                 totalScore: true,
                 passed: true,
+                assessment: {
+                  select: {
+                    totalMarks: true,
+                  },
+                },
               },
             },
             skillMasteries: {
@@ -120,13 +129,33 @@ export class LeaderboardService {
       const enroll = auth.enrollmentNumber;
       processedEnrollments.add(enroll);
 
-      // 1. Calculate actual assessment score
-      let assessmentScore = 0;
-      const subCount = st?.assessmentSubmissions.length || 0;
-      if (st && subCount > 0) {
-        const sumPct = st.assessmentSubmissions.reduce((acc, s) => acc + s.percentage, 0);
-        assessmentScore = Math.round((sumPct / subCount) * 10) / 10;
+      // 1. Calculate actual assessment score and percentage
+      // Deduplicate multiple attempts on the same assessment to the best attempt
+      const bestSubsByAssessment = new Map<string, NonNullable<typeof st>['assessmentSubmissions'][0]>();
+      if (st && st.assessmentSubmissions.length > 0) {
+        for (const sub of st.assessmentSubmissions) {
+          const existing = bestSubsByAssessment.get(sub.assessmentId);
+          if (!existing || (sub.totalScore || 0) > (existing.totalScore || 0)) {
+            bestSubsByAssessment.set(sub.assessmentId, sub);
+          }
+        }
       }
+      const uniqueSubmissions = Array.from(bestSubsByAssessment.values());
+      const subCount = uniqueSubmissions.length;
+      let rawScore = 0;
+      let totalPossibleMarks = 0;
+      let assessmentPercentage = 0;
+      if (subCount > 0) {
+        rawScore = uniqueSubmissions.reduce((acc, s) => acc + (s.totalScore || 0), 0);
+        totalPossibleMarks = uniqueSubmissions.reduce(
+          (acc, s) => acc + (s.assessment?.totalMarks || 100),
+          0,
+        );
+        const sumPct = uniqueSubmissions.reduce((acc, s) => acc + (s.percentage || 0), 0);
+        assessmentPercentage = Math.round((sumPct / subCount) * 10) / 10;
+        rawScore = Math.round(rawScore * 10) / 10;
+      }
+      const assessmentScore = rawScore;
 
       // 2. Calculate practice score and accuracy
       let practiceScore = 0;
@@ -161,19 +190,19 @@ export class LeaderboardService {
       // 3. Score determination based on type
       let score = 0;
       if (targetType === 'assessments') {
-        score = assessmentScore;
+        score = rawScore;
       } else if (targetType === 'practice') {
         score = practiceScore;
       } else {
-        // Hybrid: 70% Assessments + 30% Adaptive Practice
+        // Hybrid: 70% Assessments + 30% Adaptive Practice (using normalized percentage)
         if (subCount === 0 && (!st || st.skillMasteries.length === 0)) {
           score = 0;
         } else if (subCount === 0) {
           score = practiceScore;
         } else if (!st || st.skillMasteries.length === 0) {
-          score = assessmentScore;
+          score = assessmentPercentage;
         } else {
-          score = Math.round((assessmentScore * 0.7 + practiceScore * 0.3) * 10) / 10;
+          score = Math.round((assessmentPercentage * 0.7 + practiceScore * 0.3) * 10) / 10;
         }
       }
 
@@ -192,7 +221,10 @@ export class LeaderboardService {
         division: auth.division || 'CE-A',
         avatarSeed: enroll,
         score,
+        rawScore,
+        totalMarks: totalPossibleMarks || 100,
         assessmentScore,
+        assessmentPercentage,
         practiceScore,
         assessmentsCount: subCount,
         questionsCount: totalQuestions,
@@ -215,7 +247,10 @@ export class LeaderboardService {
         division: studentRecord?.division || 'CE-A',
         avatarSeed: studentRecord?.enrollmentNumber || '24CS093',
         score: 0,
+        rawScore: 0,
+        totalMarks: 100,
         assessmentScore: 0,
+        assessmentPercentage: 0,
         practiceScore: 0,
         assessmentsCount: 0,
         questionsCount: 0,
@@ -257,7 +292,10 @@ export class LeaderboardService {
       division: studentRecord?.division || 'CE-A',
       avatarSeed: studentRecord?.enrollmentNumber || '24CS093',
       score: 0,
+      rawScore: 0,
+      totalMarks: 100,
       assessmentScore: 0,
+      assessmentPercentage: 0,
       practiceScore: 0,
       assessmentsCount: 0,
       questionsCount: 0,
@@ -294,7 +332,10 @@ export class LeaderboardService {
         totalStudents,
         percentile,
         score: myEntry.score,
+        rawScore: myEntry.rawScore,
+        totalMarks: myEntry.totalMarks,
         assessmentScore: myEntry.assessmentScore,
+        assessmentPercentage: myEntry.assessmentPercentage,
         practiceScore: myEntry.practiceScore,
         assessmentsCount: myEntry.assessmentsCount,
         questionsCount: myEntry.questionsCount,
@@ -320,7 +361,7 @@ export class LeaderboardService {
           targetType === 'composite'
             ? 'Hybrid Score = (70% × Faculty Assessments Average) + (30% × Adaptive Practice Mastery)'
             : targetType === 'assessments'
-            ? 'Faculty Assessment Score = Marks & Percentile Average from Conducted Exams & Quizzes'
+            ? 'Faculty Assessment Score = Raw Marks Scored from Conducted Exams & Quizzes'
             : 'Adaptive Practice Score = Problem-Solving Mastery, Consistency & Accuracy Points',
       },
     };
