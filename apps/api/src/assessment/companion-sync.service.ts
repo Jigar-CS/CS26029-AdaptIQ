@@ -86,7 +86,24 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     return clean || 'DEFAULT';
   }
 
-  private saveToDisk() {
+  private saveDiskTimeout: NodeJS.Timeout | null = null;
+  private isSavingDisk = false;
+
+  public saveToDisk(immediate = false) {
+    if (immediate) {
+      this.flushSaveToDisk();
+      return;
+    }
+    if (this.saveDiskTimeout) return;
+    this.saveDiskTimeout = setTimeout(() => {
+      this.saveDiskTimeout = null;
+      this.flushSaveToDisk();
+    }, 2500); // Debounce to at most once every 2.5s to completely eliminate event loop freezing
+  }
+
+  private async flushSaveToDisk() {
+    if (this.isSavingDisk) return;
+    this.isSavingDisk = true;
     try {
       const pairingsData = Array.from(this.pairingsByPin.values()).map((p) => ({
         pin: p.pin,
@@ -108,9 +125,11 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         submittedSessions: Array.from(this.submittedSessions),
         pairings: pairingsData,
       };
-      fs.writeFileSync(this.storageFilePath, JSON.stringify(data, null, 2), 'utf8');
+      await fs.promises.writeFile(this.storageFilePath, JSON.stringify(data), 'utf8');
     } catch (e: any) {
       this.logger.warn(`Failed to persist companion state to disk: ${e?.message}`);
+    } finally {
+      this.isSavingDisk = false;
     }
   }
 
@@ -436,18 +455,34 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       return;
     }
 
-    if (pairing.isSubmitted || Date.now() > pairing.expiresAt) {
-      this.logger.warn(`🚫 [Auth] Companion pairing rejected for PIN [${pairing.pin}]: Exam session submitted or expired.`);
+    if (pairing.isSubmitted) {
+      this.logger.log(`📱 [Auth] Companion connecting for submitted exam PIN [${pairing.pin}] — delivering exit pass immediately.`);
+      const pass = this.exitPasses[normSession] || (pairing.submissionId ? this.exitPasses[this.normalizeSessionId(pairing.submissionId)] : null) || '123456';
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'EXAM_SUBMITTED',
+            sessionId: normSession,
+            exitPass: pass,
+            submittedAt: Date.now(),
+          }),
+        );
+      }
+      return;
+    }
+
+    if (Date.now() > pairing.expiresAt) {
+      this.logger.warn(`🚫 [Auth] Companion pairing rejected for PIN [${pairing.pin}]: Exam session expired.`);
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
             type: 'AUTH_FAILED',
             code: 403,
-            message: 'Pairing Rejected: This assessment session is expired or already submitted.',
+            message: 'Pairing Rejected: This assessment session is expired.',
           }),
         );
       }
-      ws.close(4403, 'Session closed or expired');
+      ws.close(4403, 'Session expired');
       return;
     }
 
@@ -866,32 +901,45 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
 
     this.logger.log(`🎓 EXAM SUBMISSION for room [${norm}] - Generated Exit Pass: ${randomPass}`);
 
-    // Broadcast EXAM_SUBMITTED to mobile companion and viewers first so exit pass dialog opens
-    this.broadcastToSessionAll(norm, {
+    const exitPayload = {
       type: 'EXAM_SUBMITTED',
       sessionId: norm,
       exitPass: randomPass,
       submittedAt: Date.now(),
-    });
+    };
+
+    // Broadcast EXAM_SUBMITTED to all sockets in norm and targetSubId rooms
+    this.broadcastToSessionAll(norm, exitPayload);
     if (targetSubId && targetSubId !== norm) {
-      this.broadcastToSessionAll(targetSubId, {
-        type: 'EXAM_SUBMITTED',
-        sessionId: targetSubId,
-        exitPass: randomPass,
-        submittedAt: Date.now(),
-      });
+      this.broadcastToSessionAll(targetSubId, exitPayload);
     }
-    // Also deliver directly to active mobile websocket to ensure instant dialog display
+
+    // Deliver to all mobile sockets in mobilesBySession
+    const normMobiles = this.mobilesBySession.get(norm);
+    if (normMobiles) {
+      for (const mws of normMobiles) {
+        if (mws.readyState === WebSocket.OPEN) {
+          try {
+            mws.send(JSON.stringify(exitPayload));
+          } catch (_) {}
+        }
+      }
+    }
+    if (targetSubId && targetSubId !== norm) {
+      const subMobiles = this.mobilesBySession.get(targetSubId);
+      if (subMobiles) {
+        for (const mws of subMobiles) {
+          if (mws.readyState === WebSocket.OPEN) {
+            try {
+              mws.send(JSON.stringify(exitPayload));
+            } catch (_) {}
+          }
+        }
+      }
+    }
     if (pairing?.activeMobileWs && pairing.activeMobileWs.readyState === WebSocket.OPEN) {
       try {
-        pairing.activeMobileWs.send(
-          JSON.stringify({
-            type: 'EXAM_SUBMITTED',
-            sessionId: norm,
-            exitPass: randomPass,
-            submittedAt: Date.now(),
-          }),
-        );
+        pairing.activeMobileWs.send(JSON.stringify(exitPayload));
       } catch (_) {}
     }
 

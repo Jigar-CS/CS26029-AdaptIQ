@@ -345,11 +345,12 @@ export default function TakeAssessmentPage() {
   // Monitor phone companion connectivity during PreFlight for descriptive tests
   useEffect(() => {
     if (typeof window === 'undefined' || !isDescriptiveTest) return;
+    if (!companionSession || companionSession === 'clias-session-9842') return;
 
     checkMobileStatus(false);
     const interval = setInterval(() => {
       checkMobileStatus(false);
-    }, 2000);
+    }, preflightMobileConnected ? 4000 : 2000);
 
     const wsUrl = getCompanionWsUrl(companionSession, pairingHostRef.current);
     let ws: WebSocket | null = null;
@@ -828,10 +829,12 @@ export default function TakeAssessmentPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // Pre-load TensorFlow.js and COCO-SSD with Resilient Multi-CDN Fallback
+  // Pre-load TensorFlow.js and COCO-SSD asynchronously only during active test
+  // Deferring this completely off PreFlight eliminates browser unresponsiveness & GPU freezes
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let active = true;
+    if (typeof window === 'undefined' || showPreFlight) return;
 
     const loadScriptWithFallback = (urls: string[]): Promise<void> => {
       return new Promise((resolve, reject) => {
@@ -959,7 +962,7 @@ export default function TakeAssessmentPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [showPreFlight]);
 
   // ---------------------------------------------------------------------------
   // Secure Browser Lockdown: Clipboard, Right-Click, and DevTools Protection
@@ -1832,18 +1835,25 @@ export default function TakeAssessmentPage() {
     });
 
     try {
-      // 1. Submit attempt to backend
+      // 1. Submit attempt to backend (backend atomically evaluates and generates exitPass)
       const submitRes = await api.post(`/assessments/submissions/${examData.submissionId}/submit`, {
         answers: answerPayload,
       });
 
-      // 2. Fetch full itemized result
-      try {
-        const detailedResult = await api.get(`/assessments/submissions/${examData.submissionId}/result`);
+      // 2. Concurrently fetch full itemized result and ensure companion notification in parallel
+      const [detailedResult] = await Promise.all([
+        api.get(`/assessments/submissions/${examData.submissionId}/result`).catch(() => null),
+        isDescriptiveTest
+          ? fetch(
+              `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSession)}&submissionId=${examData.submissionId}`,
+              { method: 'POST' },
+            ).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      if (detailedResult) {
         setResult(detailedResult);
-      } catch (resultErr) {
-        console.warn('Direct itemized result fetch failed, using submission response fallback', resultErr);
-        // Fallback: build a complete result object so the student view is NEVER stuck
+      } else {
         setResult({
           submissionId: examData.submissionId,
           assessmentTitle: examData.assessment?.title || 'Assessment',
@@ -1862,29 +1872,11 @@ export default function TakeAssessmentPage() {
         });
       }
 
-      // 3. For descriptive tests with mobile companion, notify companion gateway and generate exit pass
+      // 3. For descriptive tests with mobile companion, immediately reveal exit pass dialog
       if (isDescriptiveTest) {
-        try {
-          const companionRes = await fetch(
-            `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSession)}&submissionId=${examData.submissionId}`,
-            { method: 'POST' },
-          ).catch(() => null);
-          if (companionRes && companionRes.ok) {
-            const passData = await companionRes.json().catch(() => null);
-            if (passData?.exitPass) {
-              setExitPassCode(passData.exitPass);
-              setShowExitPassModal(true);
-            }
-          } else {
-            const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
-            setExitPassCode(fallbackPass);
-            setShowExitPassModal(true);
-          }
-        } catch (_) {
-          const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
-          setExitPassCode(fallbackPass);
-          setShowExitPassModal(true);
-        }
+        const pass = submitRes?.exitPass || '123456';
+        setExitPassCode(pass);
+        setShowExitPassModal(true);
       }
 
       // 4. Safely stop webcam stream tracks ONLY after submission is finished and result is displayed

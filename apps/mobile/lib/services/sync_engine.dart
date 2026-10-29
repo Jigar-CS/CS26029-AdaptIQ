@@ -32,8 +32,10 @@ class SyncEngine {
   Timer? _syncTimer;
   Timer? _debouncedSyncTimer;
   Timer? _heartbeatTimer;
+  Timer? _reconnectTimer;
 
   bool _isConnected = false;
+  bool _isConnecting = false;
   bool get isConnected => _isConnected;
 
   int _sequenceNumber = 0;
@@ -63,7 +65,10 @@ class SyncEngine {
   }
 
   void _connectWebSocket() {
-    if (_isDisposed) return;
+    if (_isDisposed || _isConnecting || _isConnected) return;
+    _isConnecting = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     statusNotifier.value = SyncStatus.connecting;
 
     try {
@@ -77,6 +82,7 @@ class SyncEngine {
       );
 
       _channel!.ready.then((_) {
+        _isConnecting = false;
         if (!_isDisposed && _channel != null) {
           _isConnected = true;
           statusNotifier.value = SyncStatus.connected;
@@ -88,10 +94,12 @@ class SyncEngine {
           }
         }
       }).catchError((err) {
+        _isConnecting = false;
         debugPrint('[SyncEngine] Connection handshake error: $err');
         _handleDisconnect(err);
       });
     } catch (e) {
+      _isConnecting = false;
       debugPrint('[SyncEngine] Connection error: $e');
       _handleDisconnect(e);
     }
@@ -194,6 +202,7 @@ class SyncEngine {
   void _handleDisconnect([dynamic error]) {
     debugPrint('[SyncEngine] Disconnected: $error');
     _isConnected = false;
+    _isConnecting = false;
     statusNotifier.value = _pendingDelta.isNotEmpty
         ? SyncStatus.offlineBufferActive
         : SyncStatus.disconnected;
@@ -203,10 +212,11 @@ class SyncEngine {
     _channel = null;
 
     if (!_isDisposed) {
-      // Auto-reconnect after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!_isDisposed && !_isConnected) {
-          debugPrint('[SyncEngine] Attempting reconnect...');
+      _reconnectTimer?.cancel();
+      // Auto-reconnect after 2.5 seconds with single active timer
+      _reconnectTimer = Timer(const Duration(milliseconds: 2500), () {
+        if (!_isDisposed && !_isConnected && !_isConnecting) {
+          debugPrint('[SyncEngine] Attempting controlled reconnect...');
           _connectWebSocket();
         }
       });
@@ -216,9 +226,9 @@ class SyncEngine {
   /// Appends a new or modified stroke to the pending sync delta buffer.
   void recordStroke(Stroke stroke) {
     _pendingDelta.add(stroke);
-    // Fast debounced sync 150ms after user finishes stroke for real-time responsiveness
+    // Ultra-low latency debounced sync (30ms) for sub-50ms live ink reflection
     _debouncedSyncTimer?.cancel();
-    _debouncedSyncTimer = Timer(const Duration(milliseconds: 150), () {
+    _debouncedSyncTimer = Timer(const Duration(milliseconds: 30), () {
       performSync();
     });
   }
@@ -227,7 +237,7 @@ class SyncEngine {
   void recordStrokeDeletion(String strokeId) {
     _deletedDelta.add(strokeId);
     _debouncedSyncTimer?.cancel();
-    _debouncedSyncTimer = Timer(const Duration(milliseconds: 150), () {
+    _debouncedSyncTimer = Timer(const Duration(milliseconds: 30), () {
       performSync();
     });
   }
@@ -293,7 +303,7 @@ class SyncEngine {
     } else {
       statusNotifier.value = SyncStatus.offlineBufferActive;
       debugPrint('[SyncEngine] Offline: Buffered ${strokesToSend.length} strokes locally.');
-      if (!_isDisposed) {
+      if (!_isDisposed && !_isConnected && !_isConnecting && _reconnectTimer == null) {
         _connectWebSocket();
       }
     }
@@ -364,6 +374,8 @@ class SyncEngine {
   void dispose() {
     _isDisposed = true;
     _isConnected = false;
+    _isConnecting = false;
+    _reconnectTimer?.cancel();
     _debouncedSyncTimer?.cancel();
     _syncTimer?.cancel();
     _heartbeatTimer?.cancel();

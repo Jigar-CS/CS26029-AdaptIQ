@@ -1023,21 +1023,26 @@ export class AssessmentService {
         ),
       );
 
-      for (const tId of topicIds) {
-        const check = await this.analyticsService.validateTopicPrerequisites(
-          effectiveProfileId,
-          tId,
+      if (topicIds.length > 0) {
+        const prereqResults = await Promise.all(
+          topicIds.map(async (tId) => ({
+            tId,
+            check: await this.analyticsService.validateTopicPrerequisites(effectiveProfileId, tId),
+          })),
         );
-        if (!check.isReady) {
-          throw new ForbiddenException({
-            statusCode: 403,
-            error: 'PREREQUISITE_INCOMPLETE',
-            message: `Cannot start assessment "${assessment.title}". Prerequisite incomplete: ${check.recommendation}`,
-            topicId: tId,
-            topicSlug: check.topicSlug,
-            readinessScore: check.readinessScore,
-            missingPrerequisites: check.missingPrerequisites,
-          });
+
+        for (const { tId, check } of prereqResults) {
+          if (!check.isReady) {
+            throw new ForbiddenException({
+              statusCode: 403,
+              error: 'PREREQUISITE_INCOMPLETE',
+              message: `Cannot start assessment "${assessment.title}". Prerequisite incomplete: ${check.recommendation}`,
+              topicId: tId,
+              topicSlug: check.topicSlug,
+              readinessScore: check.readinessScore,
+              missingPrerequisites: check.missingPrerequisites,
+            });
+          }
         }
       }
     }
@@ -1299,8 +1304,10 @@ export class AssessmentService {
     });
 
     // Notify companion gateway, lock drawing canvas, and generate/broadcast exit pass to mobile
+    let exitPassCode: string | undefined = undefined;
     try {
-      this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
+      const exitRes = this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
+      exitPassCode = exitRes?.exitPass;
     } catch (_) {}
 
     if (lockResult.count === 0) {
@@ -1637,6 +1644,7 @@ export class AssessmentService {
       status: finalStatus,
       isPendingFacultyGrading: hasDescriptiveQuestions,
       submittedAt: evaluatedSubmission.submittedAt,
+      exitPass: exitPassCode,
     };
   }
 

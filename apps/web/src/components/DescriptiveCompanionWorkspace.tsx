@@ -94,6 +94,7 @@ export function DescriptiveCompanionWorkspace({
 
   // Dynamically expand canvas bounds with generous padding so text on the far right/bottom is NEVER cut off
   useEffect(() => {
+    if (strokes.length === 0) return;
     let maxX = 900;
     let maxY = 2400;
     for (const stroke of strokes) {
@@ -103,16 +104,12 @@ export function DescriptiveCompanionWorkspace({
         if (p.y > maxY) maxY = Math.ceil(p.y);
       }
     }
-    // Generous right safety margin (+120px) and bottom safety margin (+200px)
     const targetW = Math.max(1050, maxX + 120);
     const targetH = Math.max(2600, maxY + 200);
-    setDocDimensions((prev) => {
-      if (prev.width !== targetW || prev.height !== targetH) {
-        return { width: targetW, height: targetH };
-      }
-      return prev;
-    });
-  }, [strokes]);
+    if (targetW > docDimensions.width || targetH > docDimensions.height) {
+      setDocDimensions({ width: targetW, height: targetH });
+    }
+  }, [strokes, docDimensions.width, docDimensions.height]);
 
   // 1. Determine local host for pairing via backend status
   useEffect(() => {
@@ -146,7 +143,12 @@ export function DescriptiveCompanionWorkspace({
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.strokes)) {
-          setStrokes(data.strokes);
+          setStrokes((prev) => {
+            if (prev.length === data.strokes.length && prev.length > 0) {
+              return prev;
+            }
+            return data.strokes;
+          });
           onStrokeCountChange?.(question.id, data.strokes.length);
         } else {
           setStrokes([]);
@@ -162,13 +164,14 @@ export function DescriptiveCompanionWorkspace({
     fetchStrokes();
   }, [fetchStrokes]);
 
-  // Fast background polling every 2.0s as resilient fallback for instant stroke synchronization
+  // Background polling fallback only when WebSocket is disconnected
   useEffect(() => {
+    if (mobileConnected) return; // Live WebSocket is actively streaming strokes!
     const timer = setInterval(() => {
       fetchStrokes();
-    }, 2000);
+    }, 3500);
     return () => clearInterval(timer);
-  }, [fetchStrokes]);
+  }, [mobileConnected, fetchStrokes]);
 
   // 3. Connect to Companion WebSocket as a Viewer to receive live strokes from phone
   useEffect(() => {
