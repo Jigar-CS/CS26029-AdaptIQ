@@ -2223,93 +2223,59 @@ export default function TakeAssessmentPage() {
               </div>
 
               {!preflightMobileConnected && (
-                <div className="bg-white/95 dark:bg-slate-950/80 p-5 rounded-2xl border border-amber-300 dark:border-amber-500/30 space-y-4 shadow-sm">
-                  {/* Security Protocol Banner */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 text-xs">
-                    <span className="flex items-center gap-2 font-mono font-bold text-amber-950 dark:text-amber-300">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                      Anti-Cheat Dynamic Ephemeral Protocol
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/95 dark:bg-slate-950/80 p-4 rounded-xl border border-amber-200 dark:border-slate-800">
+                  {/* Host */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                      <Wifi className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      1. Companion Host
                     </span>
-                    <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">
-                      Single-Device Lock Mutex
-                    </span>
-                  </div>
-
-                  {/* 2 Clean Side-by-Side Pairing Fields */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* 1. Host */}
-                    <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
-                        <Wifi className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                        1. Companion Endpoint Host
+                    <div className="flex items-center justify-between gap-2 bg-amber-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-amber-200 dark:border-slate-700/80">
+                      <span className="font-mono text-xs font-bold text-amber-950 dark:text-amber-300 select-all break-all">
+                        {pairingHost || 'clias.onrender.com'}
                       </span>
-                      <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-950 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
-                        <span className="font-mono text-sm font-bold text-slate-900 dark:text-amber-300 select-all break-all">
-                          {pairingHost || 'clias.onrender.com'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(pairingHost || 'clias.onrender.com', 'host')}
-                          className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
-                          title="Copy Companion Host"
-                        >
-                          {copiedField === 'host' ? (
-                            <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                              <Check className="w-3.5 h-3.5" /> COPIED
-                            </span>
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block">
-                        Enter into the top "Host" box on phone
-                      </span>
-                    </div>
-
-                    {/* 2. Dynamic 6-Digit PIN */}
-                    <div className="space-y-1.5 p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-emerald-900 dark:text-emerald-300 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
-                          <Fingerprint className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          2. Dynamic 6-Digit PIN
-                        </span>
-                        <span className="text-[9px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
-                          NO STATIC IDS
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-950 px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-500/40">
-                        <div className="flex items-center gap-2">
-                          <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                          <span className="font-mono text-lg font-black text-emerald-950 dark:text-emerald-300 tracking-widest select-all">
-                            {companionPinDisplay}
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(pairingHost || 'clias.onrender.com', 'host')}
+                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-amber-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                        title="Copy Companion Host"
+                      >
+                        {copiedField === 'host' ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                            <Check className="w-3.5 h-3.5" /> COPIED
                           </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(companionPinDisplay, 'token')}
-                          className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-emerald-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
-                          title="Copy Dynamic PIN"
-                        >
-                          {copiedField === 'token' ? (
-                            <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                              <Check className="w-3.5 h-3.5" /> COPIED
-                            </span>
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block">
-                        Enter into "Session Token / PIN" box on phone
-                      </span>
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
                   </div>
 
-                  {/* Security Explanations */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
-                    <div>🔒 <b>Single-Device Mutex:</b> Server locks to your phone once connected. Outside attempts rejected (409 Conflict).</div>
-                    <div>⚡ <b>One-Time Ephemeral PIN:</b> Unique to this test. Instantly invalidates upon exam submission.</div>
+                  {/* 6-Digit PIN */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-mono font-bold tracking-wider flex items-center gap-1.5">
+                      <Fingerprint className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      2. Dynamic 6-Digit PIN
+                    </span>
+                    <div className="flex items-center justify-between gap-2 bg-emerald-50/80 dark:bg-slate-900/90 px-3 py-2 rounded-lg border border-emerald-300 dark:border-emerald-500/30">
+                      <span className="font-mono text-xs font-black text-emerald-950 dark:text-emerald-400 tracking-wider select-all break-all">
+                        {companionPinDisplay}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(companionPinDisplay, 'token')}
+                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1 rounded-md hover:bg-emerald-200/50 dark:hover:bg-slate-800 transition shrink-0 cursor-pointer"
+                        title="Copy Dynamic PIN"
+                      >
+                        {copiedField === 'token' ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                            <Check className="w-3.5 h-3.5" /> COPIED
+                          </span>
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
