@@ -244,7 +244,19 @@ export default function TakeAssessmentPage() {
   const [showExitPassModal, setShowExitPassModal] = useState<boolean>(false);
   const [preflightMobileConnected, setPreflightMobileConnected] = useState<boolean>(false);
   const [preflightCheckingMobile, setPreflightCheckingMobile] = useState<boolean>(false);
-  const [pairingHost, setPairingHost] = useState<string>('');
+  // Helper to determine clean default host without unwanted ports on cloud deployments
+  const getDefaultPairingHost = (): string => {
+    if (typeof window === 'undefined') return 'localhost:4000';
+    const { hostname, host, protocol } = window.location;
+    if (protocol === 'https:' || hostname.includes('onrender.com') || hostname.includes('vercel.app')) {
+      return host;
+    }
+    return `${hostname}:4000`;
+  };
+
+  const [pairingHost, setPairingHost] = useState<string>(getDefaultPairingHost);
+  const pairingHostRef = useRef<string>(getDefaultPairingHost());
+  pairingHostRef.current = pairingHost;
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, field: string) => {
@@ -277,85 +289,93 @@ export default function TakeAssessmentPage() {
           ? `${examData.companionPairingPinRaw.slice(0, 3)}-${examData.companionPairingPinRaw.slice(3)}`
           : companionSession));
 
-  const checkMobileStatus = React.useCallback(async () => {
-    setPreflightCheckingMobile(true);
-    try {
-      const res = await fetch(`/api/v1/companion/status?sessionId=${encodeURIComponent(companionSession)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPreflightMobileConnected(Boolean(data.mobileConnected));
-        if (data?.publicHost) {
-          setPairingHost(data.publicHost);
+  // Smart WebSocket URL builder that guarantees secure wss: on HTTPS and strips invalid port 4000
+  const getCompanionWsUrl = (sessionId: string, hostOverride?: string): string => {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    let host = hostOverride || (typeof window !== 'undefined' ? window.location.host : 'localhost:4000');
+    host = host.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const isCloud = isHttps || host.includes('onrender.com') || host.includes('vercel.app');
+    if (isCloud && host.includes(':4000')) {
+      host = host.replace(':4000', '');
+    }
+    const wsProto = isCloud ? 'wss:' : 'ws:';
+    return `${wsProto}//${host}/companion?role=viewer&sessionId=${encodeURIComponent(sessionId)}`;
+  };
+
+  const isPollingCompanionRef = useRef(false);
+
+  const checkMobileStatus = React.useCallback(
+    async (showManualSpinner = false) => {
+      if (isPollingCompanionRef.current) return;
+      isPollingCompanionRef.current = true;
+      if (showManualSpinner) {
+        setPreflightCheckingMobile(true);
+      }
+      try {
+        const res = await fetch(
+          `/api/v1/companion/status?sessionId=${encodeURIComponent(companionSession)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const connected = Boolean(data.mobileConnected);
+          setPreflightMobileConnected((prev) => (prev !== connected ? connected : prev));
+          const pubHost = data?.publicHost;
+          if (pubHost) {
+            setPairingHost((prev) => (prev !== pubHost ? pubHost : prev));
+          } else if (data?.localIp) {
+            const localHost = `${data.localIp}:4000`;
+            setPairingHost((prev) => (prev !== localHost ? localHost : prev));
+          }
+        }
+      } catch {
+        // ignore network errors during preflight
+      } finally {
+        isPollingCompanionRef.current = false;
+        if (showManualSpinner) {
+          setPreflightCheckingMobile(false);
         }
       }
-    } catch {
-      // ignore network errors during preflight
-    } finally {
-      setPreflightCheckingMobile(false);
-    }
-  }, [companionSession]);
-
-  // Dynamic pairing host from backend
-  useEffect(() => {
-    fetch(`/api/v1/companion/status?sessionId=${encodeURIComponent(companionSession)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.publicHost) {
-          setPairingHost(data.publicHost);
-        } else if (data?.localIp) {
-          setPairingHost(`${data.localIp}:4000`);
-        } else if (typeof window !== 'undefined') {
-          setPairingHost(`${window.location.hostname}:4000`);
-        }
-      })
-      .catch(() => {
-        if (typeof window !== 'undefined') {
-          setPairingHost(`${window.location.hostname}:4000`);
-        }
-      });
-  }, [companionSession]);
+    },
+    [companionSession]
+  );
 
   // Monitor phone companion connectivity during PreFlight for descriptive tests
   useEffect(() => {
     if (typeof window === 'undefined' || !isDescriptiveTest) return;
 
-    checkMobileStatus();
-    const interval = setInterval(checkMobileStatus, 3000);
+    checkMobileStatus(false);
+    const interval = setInterval(() => {
+      checkMobileStatus(false);
+    }, 4000);
 
-    const hostToUse = pairingHost || `${window.location.hostname}:4000`;
-    const cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const isSecure =
-      window.location.protocol === 'https:' ||
-      cleanHost.includes('onrender.com') ||
-      cleanHost.includes('vercel.app') ||
-      !cleanHost.includes(':');
-    const wsProto = isSecure ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
-      companionSession,
-    )}`;
-
-    let ws: WebSocket;
+    const wsUrl = getCompanionWsUrl(companionSession, pairingHostRef.current);
+    let ws: WebSocket | null = null;
     try {
       ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'INITIAL_STATE') {
-            setPreflightMobileConnected(msg.mobileStatus === 'connected');
+            const isConn = msg.mobileStatus === 'connected';
+            setPreflightMobileConnected((prev) => (prev !== isConn ? isConn : prev));
           } else if (msg.type === 'MOBILE_STATUS') {
-            setPreflightMobileConnected(msg.status === 'connected');
+            const isConn = msg.status === 'connected';
+            setPreflightMobileConnected((prev) => (prev !== isConn ? isConn : prev));
           }
         } catch {}
       };
+      ws.onerror = () => {};
     } catch {}
 
     return () => {
       clearInterval(interval);
       try {
-        ws?.close();
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close();
+        }
       } catch {}
     };
-  }, [isDescriptiveTest, checkMobileStatus, pairingHost, companionSession]);
+  }, [isDescriptiveTest, companionSession, checkMobileStatus]);
 
   // ---------------------------------------------------------------------------
   // Phase 9: AI Proctoring & Multi-Modal Telemetry State
@@ -456,17 +476,16 @@ export default function TakeAssessmentPage() {
     }
   }, [assessmentId]);
 
-  // Listen for question switches initiated remotely from paired mobile companion
+  // Listen for question switches initiated remotely from paired mobile companion (during active exam)
   useEffect(() => {
-    if (typeof window === 'undefined' || !examData) return;
+    if (typeof window === 'undefined' || !examData || showPreFlight) return;
     const sId = examData.submissionId || examData.assessment?.id;
     if (!sId) return;
 
-    let ws: WebSocket;
+    const wsUrl = getCompanionWsUrl(sId, pairingHostRef.current);
+    let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(
-        `ws://${window.location.hostname}:4000/companion?role=viewer&sessionId=${encodeURIComponent(sId)}`,
-      );
+      ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -478,14 +497,17 @@ export default function TakeAssessmentPage() {
           }
         } catch {}
       };
+      ws.onerror = () => {};
     } catch {}
 
     return () => {
       try {
-        ws?.close();
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close();
+        }
       } catch {}
     };
-  }, [examData]);
+  }, [examData, showPreFlight]);
 
   // Clean up media streams and audio context on unmount
   useEffect(() => {
@@ -702,7 +724,7 @@ export default function TakeAssessmentPage() {
         api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
           snapshot: snapshotUrl,
         }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
-      }, 50);
+      }, 350);
 
     } catch (err) {
       console.error('Face capture completed with local baseline fallback', err);
@@ -811,7 +833,7 @@ export default function TakeAssessmentPage() {
           timer = setTimeout(() => {
             s.remove();
             tryNext();
-          }, 3500);
+          }, 7000);
           document.head.appendChild(s);
         };
         tryNext();
@@ -829,6 +851,8 @@ export default function TakeAssessmentPage() {
             'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
           ]);
         }
+        if (!active) return;
+        await new Promise((r) => setTimeout(r, 200));
 
         if (!(window as any).cocoSsd) {
           await loadScriptWithFallback([
@@ -836,6 +860,8 @@ export default function TakeAssessmentPage() {
             'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
           ]);
         }
+        if (!active) return;
+        await new Promise((r) => setTimeout(r, 200));
 
         if (active && (window as any).cocoSsd && !visionModelRef.current) {
           const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
@@ -844,9 +870,10 @@ export default function TakeAssessmentPage() {
             console.log('AI Proctoring Vision Model (COCO-SSD) loaded successfully.');
           }
         }
+        if (!active) return;
 
         // Yield execution to let browser render UI smoothly
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 250));
 
         // Load Face-API for high-precision biometrics, 68 landmarks & liveness
         if (!(window as any).faceapi) {
@@ -855,16 +882,20 @@ export default function TakeAssessmentPage() {
             'https://unpkg.com/@vladmandic/face-api@1.7.12/dist/face-api.js',
           ]);
         }
+        if (!active) return;
 
         const faceapi = (window as any).faceapi;
         if (active && faceapi && !faceApiModelLoadedRef.current) {
           const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
           // Load lightweight detector and landmarks first
           await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+          if (!active) return;
+          await new Promise((r) => setTimeout(r, 200));
           await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+          if (!active) return;
 
           // Yield execution before loading heavier recognition network
-          await new Promise((r) => setTimeout(r, 150));
+          await new Promise((r) => setTimeout(r, 350));
           await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
           if (active) {
@@ -2205,7 +2236,7 @@ export default function TakeAssessmentPage() {
 
                 <button
                   type="button"
-                  onClick={checkMobileStatus}
+                  onClick={() => checkMobileStatus(true)}
                   disabled={preflightCheckingMobile}
                   className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-md ${
                     preflightMobileConnected
