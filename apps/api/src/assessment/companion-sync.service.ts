@@ -283,9 +283,9 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
 
   /**
    * Invalidates pairing when exam is submitted or terminated.
-   * Closes any connected mobile companion socket immediately.
+   * By default or upon exam termination, closes any connected mobile companion socket.
    */
-  public invalidateEphemeralPairing(identifier: string) {
+  public invalidateEphemeralPairing(identifier: string, forceCloseSockets = true) {
     const normSub = this.normalizeSessionId(identifier);
     const pairing =
       this.resolvePairing(identifier) ||
@@ -298,37 +298,39 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     this.submittedSessions.add(pairing.pin);
     this.submittedSessions.add(this.normalizeSessionId(pairing.submissionId));
 
-    // Force disconnect paired mobile companion socket immediately
-    if (pairing.activeMobileWs && pairing.activeMobileWs.readyState === WebSocket.OPEN) {
-      try {
-        pairing.activeMobileWs.send(
-          JSON.stringify({
-            type: 'SESSION_TERMINATED',
-            code: 4403,
-            reason: 'EXAM_SUBMITTED',
-            message: 'Your exam attempt has been submitted. The mobile companion sheet has been locked and closed.',
-          }),
-        );
-        pairing.activeMobileWs.close(4403, 'Exam submitted');
-      } catch (_) {}
-    }
-    pairing.activeMobileWs = null;
-
-    // Disconnect any mobile sockets in mobilesBySession for this room
-    const mobiles = this.mobilesBySession.get(pairing.pin);
-    if (mobiles) {
-      for (const mws of mobiles) {
-        if (mws.readyState === WebSocket.OPEN) {
-          try {
-            mws.close(4403, 'Exam submitted');
-          } catch (_) {}
-        }
+    if (forceCloseSockets) {
+      // Force disconnect paired mobile companion socket
+      if (pairing.activeMobileWs && pairing.activeMobileWs.readyState === WebSocket.OPEN) {
+        try {
+          pairing.activeMobileWs.send(
+            JSON.stringify({
+              type: 'SESSION_TERMINATED',
+              code: 4403,
+              reason: 'EXAM_SUBMITTED',
+              message: 'Your exam attempt has been submitted. The mobile companion sheet has been locked and closed.',
+            }),
+          );
+          pairing.activeMobileWs.close(4403, 'Exam submitted');
+        } catch (_) {}
       }
-      this.mobilesBySession.delete(pairing.pin);
+      pairing.activeMobileWs = null;
+
+      // Disconnect any mobile sockets in mobilesBySession for this room
+      const mobiles = this.mobilesBySession.get(pairing.pin);
+      if (mobiles) {
+        for (const mws of mobiles) {
+          if (mws.readyState === WebSocket.OPEN) {
+            try {
+              mws.close(4403, 'Exam submitted');
+            } catch (_) {}
+          }
+        }
+        this.mobilesBySession.delete(pairing.pin);
+      }
     }
 
     this.saveToDisk();
-    this.logger.log(`🔒 Invalidate Ephemeral Pairing PIN [${pairing.pin}] — Mobile companion disconnected and locked.`);
+    this.logger.log(`🔒 Invalidate Ephemeral Pairing PIN [${pairing.pin}] — Status set to isSubmitted.`);
   }
 
   public getPairingInfo(sessionId: string) {
@@ -449,24 +451,17 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       return;
     }
 
-    // 2. STRICT SINGLE-DEVICE LOCK (Socket-Level Mutex)
+    // 2. STRICT SINGLE-DEVICE MUTEX & SEAMLESS RECONNECTION RECOVERY
+    // If a stale connection exists for this pairing (e.g. mobile screen wake, network handover),
+    // evict the old socket and adopt the fresh connection without throwing 409 conflict loops.
     const existingMobileWs = pairing.activeMobileWs;
-    if (existingMobileWs && existingMobileWs !== ws && existingMobileWs.readyState === WebSocket.OPEN) {
-      this.logger.warn(
-        `🚨 [SingleDeviceLock] REJECTED secondary companion connection attempt for PIN [${pairing.pin}]. Session is already locked to another active device.`,
+    if (existingMobileWs && existingMobileWs !== ws) {
+      this.logger.log(
+        `🔄 [SingleDeviceLock] Refreshing companion socket for PIN [${pairing.pin}] (evicting stale socket)`,
       );
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: 'MUTEX_LOCK_CONFLICT',
-            code: 409,
-            message:
-              'Conflict: This exam session is already locked to another active companion device. Multiple devices are strictly prohibited.',
-          }),
-        );
-      }
-      ws.close(4409, 'Conflict: Session already paired to an active companion');
-      return;
+      try {
+        existingMobileWs.close(4408, 'Superseded by fresh mobile reconnection');
+      } catch (_) {}
     }
 
     // Mutex acquired: Bind this socket as the single authorized mobile device
@@ -475,6 +470,17 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       this.mobilesBySession.set(normSession, new Set());
     }
     this.mobilesBySession.get(normSession)!.add(ws);
+
+    // Also register under submissionId room so notifications reach mobile regardless of lookup key
+    if (pairing.submissionId) {
+      const subRoom = this.normalizeSessionId(pairing.submissionId);
+      if (subRoom !== normSession) {
+        if (!this.mobilesBySession.has(subRoom)) {
+          this.mobilesBySession.set(subRoom, new Set());
+        }
+        this.mobilesBySession.get(subRoom)!.add(ws);
+      }
+    }
 
     this.logger.log(
       `📱 Mobile Companion paired for Room: [${normSession}], PIN: ${pairing.displayPin}, Question: ${questionId} (Device Mutex Acquired)`,
@@ -530,6 +536,13 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       this.mobilesBySession.get(normSession)?.delete(ws);
       if (this.mobilesBySession.get(normSession)?.size === 0) {
         this.mobilesBySession.delete(normSession);
+      }
+      if (pairing.submissionId) {
+        const subRoom = this.normalizeSessionId(pairing.submissionId);
+        this.mobilesBySession.get(subRoom)?.delete(ws);
+        if (this.mobilesBySession.get(subRoom)?.size === 0) {
+          this.mobilesBySession.delete(subRoom);
+        }
       }
       this.logger.log(`Mobile Companion disconnected for Room: [${normSession}] (Device Mutex Released)`);
 
@@ -851,10 +864,42 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       }
     }
 
-    // Invalidate the ephemeral pairing token and immediately disconnect companion device
-    this.invalidateEphemeralPairing(sessionId);
+    this.logger.log(`🎓 EXAM SUBMISSION for room [${norm}] - Generated Exit Pass: ${randomPass}`);
+
+    // Broadcast EXAM_SUBMITTED to mobile companion and viewers first so exit pass dialog opens
+    this.broadcastToSessionAll(norm, {
+      type: 'EXAM_SUBMITTED',
+      sessionId: norm,
+      exitPass: randomPass,
+      submittedAt: Date.now(),
+    });
+    if (targetSubId && targetSubId !== norm) {
+      this.broadcastToSessionAll(targetSubId, {
+        type: 'EXAM_SUBMITTED',
+        sessionId: targetSubId,
+        exitPass: randomPass,
+        submittedAt: Date.now(),
+      });
+    }
+    // Also deliver directly to active mobile websocket to ensure instant dialog display
+    if (pairing?.activeMobileWs && pairing.activeMobileWs.readyState === WebSocket.OPEN) {
+      try {
+        pairing.activeMobileWs.send(
+          JSON.stringify({
+            type: 'EXAM_SUBMITTED',
+            sessionId: norm,
+            exitPass: randomPass,
+            submittedAt: Date.now(),
+          }),
+        );
+      } catch (_) {}
+    }
+
+    // Mark pairing as submitted without abruptly severing the mobile socket,
+    // allowing the candidate to display the 6-digit Exit Pass dialog to invigilators.
+    this.invalidateEphemeralPairing(sessionId, false);
     if (targetSubId) {
-      this.invalidateEphemeralPairing(targetSubId);
+      this.invalidateEphemeralPairing(targetSubId, false);
     }
 
     // Reset this room's live buffer after submission so subsequent attempts start fresh
@@ -868,15 +913,6 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       };
     }
     this.saveToDisk();
-
-    this.logger.log(`🎓 EXAM SUBMISSION for room [${norm}] - Generated Exit Pass: ${randomPass}`);
-
-    this.broadcastToSessionAll(norm, {
-      type: 'EXAM_SUBMITTED',
-      sessionId: norm,
-      exitPass: randomPass,
-      submittedAt: Date.now(),
-    });
 
     return {
       success: true,

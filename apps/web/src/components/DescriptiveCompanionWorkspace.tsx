@@ -66,7 +66,17 @@ export function DescriptiveCompanionWorkspace({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<StrokeItem[]>([]);
   const [mobileConnected, setMobileConnected] = useState(false);
-  const [pairingHost, setPairingHost] = useState(propPairingHost || '');
+  // Helper to determine clean default host without unwanted ports on cloud deployments
+  const getDefaultPairingHost = (): string => {
+    if (typeof window === 'undefined') return 'localhost:4000';
+    const { hostname, host, protocol } = window.location;
+    if (protocol === 'https:' || hostname.includes('onrender.com') || hostname.includes('vercel.app')) {
+      return host;
+    }
+    return `${hostname}:4000`;
+  };
+
+  const [pairingHost, setPairingHost] = useState(propPairingHost || getDefaultPairingHost());
   const [isClearing, setIsClearing] = useState(false);
   const [viewMode, setViewMode] = useState<'fit' | 'actual'>('fit');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -114,15 +124,15 @@ export function DescriptiveCompanionWorkspace({
         } else if (data?.localIp) {
           setPairingHost(`${data.localIp}:4000`);
         } else if (typeof window !== 'undefined') {
-          setPairingHost(`${window.location.hostname}:4000`);
+          setPairingHost(getDefaultPairingHost());
         }
         if (data?.mobileConnected) {
           setMobileConnected(true);
         }
       })
       .catch(() => {
-        if (!pairingHost && typeof window !== 'undefined') {
-          setPairingHost(`${window.location.hostname}:4000`);
+        if (typeof window !== 'undefined') {
+          setPairingHost(getDefaultPairingHost());
         }
       });
   }, [sessionId]);
@@ -152,18 +162,28 @@ export function DescriptiveCompanionWorkspace({
     fetchStrokes();
   }, [fetchStrokes]);
 
+  // Fast background polling every 2.0s as resilient fallback for instant stroke synchronization
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchStrokes();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [fetchStrokes]);
+
   // 3. Connect to Companion WebSocket as a Viewer to receive live strokes from phone
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const hostToUse = pairingHost || `${window.location.hostname}:4000`;
-    const cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const isSecure =
+    const hostToUse = pairingHost || getDefaultPairingHost();
+    let cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const isCloud =
       window.location.protocol === 'https:' ||
       cleanHost.includes('onrender.com') ||
-      cleanHost.includes('vercel.app') ||
-      !cleanHost.includes(':');
-    const wsProto = isSecure ? 'wss:' : 'ws:';
+      cleanHost.includes('vercel.app');
+    if (isCloud && cleanHost.includes(':4000')) {
+      cleanHost = cleanHost.replace(':4000', '');
+    }
+    const wsProto = isCloud ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
       sessionId,
     )}&questionId=${activeQId}`;
@@ -211,9 +231,8 @@ export function DescriptiveCompanionWorkspace({
         }
       };
 
-      ws.onclose = () => {
-        // Handle viewer close
-      };
+      ws.onerror = () => {};
+      ws.onclose = () => {};
     } catch (e) {
       console.warn('[DescriptiveWorkspace] WebSocket initialization error:', e);
     }
@@ -224,7 +243,7 @@ export function DescriptiveCompanionWorkspace({
         socketRef.current = null;
       }
     };
-  }, [sessionId, activeQId, question.id, questionNumber, onStrokeCountChange, onActiveQuestionChange]);
+  }, [sessionId, activeQId, question.id, questionNumber, pairingHost, onStrokeCountChange, onActiveQuestionChange]);
 
   // 4. Render digital ruled paper canvas with live strokes received from phone
   useEffect(() => {

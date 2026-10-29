@@ -1298,9 +1298,9 @@ export class AssessmentService {
       },
     });
 
-    // Invalidate dynamic ephemeral pairing token immediately and disconnect mobile companion
+    // Notify companion gateway, lock drawing canvas, and generate/broadcast exit pass to mobile
     try {
-      this.companionSync.invalidateEphemeralPairing(submissionId);
+      this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
     } catch (_) {}
 
     if (lockResult.count === 0) {
@@ -1436,11 +1436,36 @@ export class AssessmentService {
 
       if (isDescriptive) {
         hasDescriptiveQuestions = true;
+        let finalAnswerText =
+          ans.answerText ||
+          ans.sourceCode ||
+          (ans.selectedOptionId && !String(ans.selectedOptionId).startsWith('opt-')
+            ? String(ans.selectedOptionId)
+            : null);
+
+        // If no text was packaged by client, check if companion sync service holds buffered strokes
+        if (!finalAnswerText) {
+          const qIdx = submission.assessment.questions.findIndex((aq) => aq.questionId === ans.questionId);
+          const qKey = qIdx >= 0 ? `Q${qIdx + 1}` : null;
+          if (qKey) {
+            const sheet = this.companionSync.getStrokes(submissionId, qKey);
+            if (sheet && sheet.strokes && sheet.strokes.length > 0) {
+              finalAnswerText = JSON.stringify({
+                type: 'DIGITAL_INK',
+                questionId: qKey,
+                strokesCount: sheet.strokes.length,
+                strokes: sheet.strokes,
+                lastUpdated: sheet.lastUpdated,
+              });
+            }
+          }
+        }
+
         answerRecords.push({
           submissionId: submission.id,
           questionId: ans.questionId,
           selectedOptionId: null,
-          answerText: ans.answerText || ans.sourceCode || (ans.selectedOptionId && !String(ans.selectedOptionId).startsWith('opt-') ? String(ans.selectedOptionId) : null),
+          answerText: finalAnswerText,
           isCorrect: false,
           pointsAwarded: 0.0,
           timeSpentSeconds: ans.timeSpentSeconds || 0,

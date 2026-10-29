@@ -242,6 +242,8 @@ export default function TakeAssessmentPage() {
   const [descriptiveStrokeCounts, setDescriptiveStrokeCounts] = useState<Record<string, number>>({});
   const [exitPassCode, setExitPassCode] = useState<string | null>(null);
   const [showExitPassModal, setShowExitPassModal] = useState<boolean>(false);
+  const [showConfirmSubmitModal, setShowConfirmSubmitModal] = useState<boolean>(false);
+  const isSubmittingExamRef = useRef<boolean>(false);
   const [preflightMobileConnected, setPreflightMobileConnected] = useState<boolean>(false);
   const [preflightCheckingMobile, setPreflightCheckingMobile] = useState<boolean>(false);
   // Helper to determine clean default host without unwanted ports on cloud deployments
@@ -307,6 +309,7 @@ export default function TakeAssessmentPage() {
   const checkMobileStatus = React.useCallback(
     async (showManualSpinner = false) => {
       if (isPollingCompanionRef.current) return;
+      if (!companionSession || companionSession === 'clias-session-9842') return;
       isPollingCompanionRef.current = true;
       if (showManualSpinner) {
         setPreflightCheckingMobile(true);
@@ -346,29 +349,44 @@ export default function TakeAssessmentPage() {
     checkMobileStatus(false);
     const interval = setInterval(() => {
       checkMobileStatus(false);
-    }, 4000);
+    }, 2000);
 
     const wsUrl = getCompanionWsUrl(companionSession, pairingHostRef.current);
     let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'INITIAL_STATE') {
-            const isConn = msg.mobileStatus === 'connected';
-            setPreflightMobileConnected((prev) => (prev !== isConn ? isConn : prev));
-          } else if (msg.type === 'MOBILE_STATUS') {
-            const isConn = msg.status === 'connected';
-            setPreflightMobileConnected((prev) => (prev !== isConn ? isConn : prev));
+    let reconnectTimer: any = null;
+    let isDisposed = false;
+
+    const connectWs = () => {
+      if (isDisposed) return;
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'INITIAL_STATE') {
+              const isConn = msg.mobileStatus === 'connected';
+              setPreflightMobileConnected(isConn);
+            } else if (msg.type === 'MOBILE_STATUS') {
+              const isConn = msg.status === 'connected';
+              setPreflightMobileConnected(isConn);
+            }
+          } catch {}
+        };
+        ws.onclose = () => {
+          if (!isDisposed) {
+            reconnectTimer = setTimeout(connectWs, 2500);
           }
-        } catch {}
-      };
-      ws.onerror = () => {};
-    } catch {}
+        };
+        ws.onerror = () => {};
+      } catch {}
+    };
+
+    connectWs();
 
     return () => {
+      isDisposed = true;
       clearInterval(interval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       try {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
           ws.close();
@@ -700,31 +718,39 @@ export default function TakeAssessmentPage() {
         baselineFaceProfileRef.current = profile;
       }
 
-      // 4. Non-blocking background worker for deep descriptor extraction & server enrollment
-      setTimeout(async () => {
+      // 4. Dispatch face enrollment snapshot to backend immediately
+      api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
+        snapshot: snapshotUrl,
+      }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
+
+      // 5. Defer deep biometric descriptor extraction so UI thread remains 100% fluid
+      const deferExtract = () => {
         try {
           const faceapi = (window as any).faceapi;
           if (faceapi && faceApiModelLoadedRef.current) {
-            const det = await faceapi
+            faceapi
               .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.3 }))
               .withFaceLandmarks(true)
-              .withFaceDescriptor();
-            if (det?.descriptor) {
-              baselineFaceDescriptorRef.current = det.descriptor;
-              if (baselineFaceProfileRef.current) {
-                baselineFaceProfileRef.current.descriptor = Array.from(det.descriptor);
-              }
-              console.log('Background 128-d biometric descriptor captured successfully.');
-            }
+              .withFaceDescriptor()
+              .then((det: any) => {
+                if (det?.descriptor) {
+                  baselineFaceDescriptorRef.current = det.descriptor;
+                  if (baselineFaceProfileRef.current) {
+                    baselineFaceProfileRef.current.descriptor = Array.from(det.descriptor);
+                  }
+                  console.log('Background 128-d biometric descriptor captured successfully.');
+                }
+              })
+              .catch(() => {});
           }
-        } catch (detErr) {
-          console.warn('Deferred biometric descriptor extraction error:', detErr);
-        }
+        } catch (_) {}
+      };
 
-        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
-          snapshot: snapshotUrl,
-        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
-      }, 350);
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(deferExtract, { timeout: 3000 });
+      } else {
+        setTimeout(deferExtract, 1500);
+      }
 
     } catch (err) {
       console.error('Face capture completed with local baseline fallback', err);
@@ -768,7 +794,7 @@ export default function TakeAssessmentPage() {
     details: string,
     snapshot?: string
   ) => {
-    if (!examData || result || showPreFlight) return;
+    if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current) return;
 
     // Rate-limit identical violation reports to once per 5 seconds
     const now = Date.now();
@@ -1001,7 +1027,7 @@ export default function TakeAssessmentPage() {
   };
 
   const handleTabOrWindowSwitch = (trigger: 'TAB_SWITCH' | 'WINDOW_BLUR') => {
-    if (isAutoSubmittingRef.current || result || showPreFlight) return;
+    if (isAutoSubmittingRef.current || result || showPreFlight || submitting || isSubmittingExamRef.current) return;
 
     // Debounce to prevent dual strikes from a single Alt+Tab action (blur + visibilitychange)
     const now = Date.now();
@@ -1058,6 +1084,7 @@ export default function TakeAssessmentPage() {
 
     // 1. Tab Switching Detection (Alt+Tab or Tab Switch)
     const handleVisibilityChange = () => {
+      if (submitting || isSubmittingExamRef.current || result) return;
       if (document.hidden) {
         setIsWindowBlurred(true);
         handleTabOrWindowSwitch('TAB_SWITCH');
@@ -1068,6 +1095,7 @@ export default function TakeAssessmentPage() {
 
     // 2. Window Blur (Switching Apps, Alt+Tab, or Opening Screen Capture tools)
     const handleWindowBlur = () => {
+      if (submitting || isSubmittingExamRef.current || result) return;
       setIsWindowBlurred(true);
       handleTabOrWindowSwitch('WINDOW_BLUR');
     };
@@ -1078,6 +1106,7 @@ export default function TakeAssessmentPage() {
 
     // 3. Fullscreen Exit Enforcement
     const handleFullscreenChange = () => {
+      if (submitting || isSubmittingExamRef.current || result) return;
       if (!document.fullscreenElement) {
         setIsFullscreenExited(true);
         reportViolation('FULLSCREEN_EXIT', 'LOW', 'Student exited mandatory fullscreen examination mode.');
@@ -1271,10 +1300,10 @@ export default function TakeAssessmentPage() {
   // Periodic Visual & Multi-Parameter Proctoring Telemetry (Every 1.0s)
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!examData || result || showPreFlight || !mediaStream) return;
+    if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
 
     const interval = setInterval(async () => {
-      if (isDetectingRef.current || isAutoSubmittingRef.current) return;
+      if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) return;
       const video = livePipVideoRef.current;
       const canvas = offscreenCanvasRef.current;
       if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
@@ -1769,83 +1798,38 @@ export default function TakeAssessmentPage() {
   };
 
   const handleManualSubmitClick = () => {
-    if (submitting || !examData) return;
-    const answeredCount = Object.keys(answers).length + Object.keys(codingAnswers).length;
-    const totalCount = examData.questions?.length || 0;
-    const promptMsg =
-      answeredCount < totalCount
-        ? `You have answered ${answeredCount} of ${totalCount} questions. Are you sure you want to finish and submit your exam?`
-        : 'Are you sure you want to finish and submit your exam? Once submitted, answers cannot be edited.';
-    if (confirm(promptMsg)) {
-      submitExam();
-    }
+    if (submitting || isSubmittingExamRef.current || !examData) return;
+    setShowConfirmSubmitModal(true);
   };
 
   const submitExam = async () => {
-    if (!examData || submitting) return;
+    if (!examData || submitting || isSubmittingExamRef.current) return;
+    isSubmittingExamRef.current = true;
     setSubmitting(true);
+    setShowConfirmSubmitModal(false);
 
-    // Stop webcam stream tracks upon exam submission
-    if (mediaStream) {
-      try {
-        mediaStream.getTracks().forEach((track) => track.stop());
-      } catch (_) {}
-    }
+    // Fast memory assembly of answers without slow HTTP fetches (backend automatically merges strokes)
+    const answerPayload = examData.questions.map((q: any) => {
+      const candidateTyped = answers[q.id];
+      let answerText: string | undefined = undefined;
+      if (
+        typeof candidateTyped === 'string' &&
+        candidateTyped.trim().length > 0 &&
+        !candidateTyped.startsWith('opt-')
+      ) {
+        answerText = candidateTyped.trim();
+      }
 
-    // Assemble answers including digital ink strokes ONLY for descriptive exams
-    const answerPayload = await Promise.all(
-      examData.questions.map(async (q: any, idx: number) => {
-        const qKey = `Q${idx + 1}`;
-        let answerText: string | undefined = undefined;
-
-        // Digital ink companion strokes ONLY queried for descriptive questions in descriptive mode
-        if (isDescriptiveTest && (q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE')) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 3500);
-            const sRes = await fetch(
-              `/api/v1/companion/strokes?sessionId=${encodeURIComponent(companionSession)}&questionId=${qKey}`,
-              { signal: controller.signal },
-            ).catch(() => null);
-            clearTimeout(timeout);
-
-            let strokesData: any[] = [];
-            if (sRes && sRes.ok) {
-              const sData = await sRes.json().catch(() => null);
-              if (sData?.strokes && sData.strokes.length > 0) {
-                strokesData = sData.strokes;
-              }
-            }
-            if (strokesData.length > 0) {
-              answerText = JSON.stringify({
-                type: 'DIGITAL_INK',
-                questionId: qKey,
-                strokesCount: strokesData.length,
-                strokes: strokesData,
-                lastUpdated: Date.now(),
-              });
-            }
-          } catch (e) {
-            console.warn('Could not package descriptive answer for', qKey, e);
-          }
-        }
-
-        const candidateTyped = answers[q.id];
-        if (!answerText && typeof candidateTyped === 'string' && candidateTyped.trim().length > 0 && !candidateTyped.startsWith('opt-')) {
-          answerText = candidateTyped.trim();
-        }
-
-        return {
-          questionId: q.id,
-          selectedOptionId: answers[q.id] || null,
-          answerText,
-          sourceCode: codingAnswers[q.id]?.sourceCode || undefined,
-          code: codingAnswers[q.id]?.sourceCode || undefined,
-          language: codingAnswers[q.id]?.language || 'PYTHON',
-          timeSpentSeconds: 30,
-        };
-      }),
-    );
+      return {
+        questionId: q.id,
+        selectedOptionId: answers[q.id] || null,
+        answerText,
+        sourceCode: codingAnswers[q.id]?.sourceCode || undefined,
+        code: codingAnswers[q.id]?.sourceCode || undefined,
+        language: codingAnswers[q.id]?.language || 'PYTHON',
+        timeSpentSeconds: 30,
+      };
+    });
 
     try {
       // 1. Submit attempt to backend
@@ -1889,18 +1873,29 @@ export default function TakeAssessmentPage() {
             const passData = await companionRes.json().catch(() => null);
             if (passData?.exitPass) {
               setExitPassCode(passData.exitPass);
+              setShowExitPassModal(true);
             }
           } else {
             const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
             setExitPassCode(fallbackPass);
+            setShowExitPassModal(true);
           }
         } catch (_) {
           const fallbackPass = Math.floor(100000 + Math.random() * 900000).toString();
           setExitPassCode(fallbackPass);
+          setShowExitPassModal(true);
         }
+      }
+
+      // 4. Safely stop webcam stream tracks ONLY after submission is finished and result is displayed
+      if (mediaStream) {
+        try {
+          mediaStream.getTracks().forEach((track) => track.stop());
+        } catch (_) {}
       }
     } catch (err: any) {
       console.error('Failed to submit exam:', err);
+      isSubmittingExamRef.current = false;
       const errMsg = err?.message || 'Failed to submit exam. Please try again.';
       alert(`Submission notice: ${errMsg}\n\nPlease click Submit Exam again.`);
     } finally {
@@ -3769,6 +3764,69 @@ export default function TakeAssessmentPage() {
           </div>
         </div>
       </div>
+
+      {/* Non-Disruptive In-DOM Submission Confirmation Modal */}
+      {showConfirmSubmitModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="w-14 h-14 rounded-2xl bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto">
+              <Send className="w-7 h-7" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-700 dark:text-cyan-400 font-extrabold block">
+                SUBMISSION CONFIRMATION
+              </span>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                Finalize & Submit Exam?
+              </h3>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-left space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span>Questions Answered:</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  {Object.keys(answers).length + Object.keys(codingAnswers).length} / {examData?.questions?.length || 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span>Trust Score:</span>
+                <span className={`font-mono font-bold ${trustScore >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {trustScore}%
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700 leading-relaxed">
+                Once submitted, your responses and digital companion strokes will be locked. Fullscreen proctoring will conclude automatically.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmSubmitModal(false)}
+                className="py-3 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Return to Exam
+              </button>
+              <button
+                type="button"
+                onClick={() => submitExam()}
+                disabled={submitting}
+                className="py-3 px-4 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Submit Exam</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Proctor Exit Pass Modal */}
       {showExitPassModal && exitPassCode && (
