@@ -244,6 +244,7 @@ export default function TakeAssessmentPage() {
   const [showExitPassModal, setShowExitPassModal] = useState<boolean>(false);
   const [showConfirmSubmitModal, setShowConfirmSubmitModal] = useState<boolean>(false);
   const isSubmittingExamRef = useRef<boolean>(false);
+  const examEnterTimeRef = useRef<number>(Date.now());
   const [preflightMobileConnected, setPreflightMobileConnected] = useState<boolean>(false);
   const [preflightCheckingMobile, setPreflightCheckingMobile] = useState<boolean>(false);
   // Helper to determine clean default host without unwanted ports on cloud deployments
@@ -873,6 +874,7 @@ export default function TakeAssessmentPage() {
     } catch (e) {
       console.warn('Fullscreen request bypassed or blocked:', e);
     }
+    examEnterTimeRef.current = Date.now();
     setShowPreFlight(false);
   };
 
@@ -1098,14 +1100,28 @@ export default function TakeAssessmentPage() {
   // ---------------------------------------------------------------------------
   // Real-Time Browser Integrity Monitoring Listeners
   // ---------------------------------------------------------------------------
-  const handleSwitchQuestion = (idx: number) => {
+  const handleSwitchQuestion = useCallback((idx: number) => {
     setCurrentIdx(idx);
     setRunOutput(null);
     const qLabel = `Q${idx + 1}`;
     fetch(`/api/v1/companion/switch-question?sessionId=${encodeURIComponent(companionSession)}&questionId=${qLabel}`, {
       method: 'POST',
     }).catch(() => {});
-  };
+  }, [companionSession]);
+
+  const handleCompanionActiveQuestionChange = useCallback((qNum: number) => {
+    handleSwitchQuestion(qNum - 1);
+  }, [handleSwitchQuestion]);
+
+  const handleStrokeCountChange = useCallback((qId: string, count: number) => {
+    setDescriptiveStrokeCounts((prev) => {
+      if (prev[qId] === count) return prev;
+      return {
+        ...prev,
+        [qId]: count,
+      };
+    });
+  }, []);
 
   const handleDismissTabSwitchModal = () => {
     if (tabSwitchAlertModal?.isTerminated) return;
@@ -1189,6 +1205,8 @@ export default function TakeAssessmentPage() {
     // 2. Window Blur (Switching Apps, Alt+Tab, or Opening Screen Capture tools)
     const handleWindowBlur = () => {
       if (submitting || isSubmittingExamRef.current || result) return;
+      if (Date.now() - examEnterTimeRef.current < 4000) return;
+      if (document.hasFocus()) return;
       setIsWindowBlurred(true);
       handleTabOrWindowSwitch('WINDOW_BLUR');
     };
@@ -1200,6 +1218,7 @@ export default function TakeAssessmentPage() {
     // 3. Fullscreen Exit Enforcement
     const handleFullscreenChange = () => {
       if (submitting || isSubmittingExamRef.current || result) return;
+      if (Date.now() - examEnterTimeRef.current < 4000) return;
       if (!document.fullscreenElement) {
         setIsFullscreenExited(true);
         reportViolation('FULLSCREEN_EXIT', 'LOW', 'Student exited mandatory fullscreen examination mode.');
@@ -1361,12 +1380,7 @@ export default function TakeAssessmentPage() {
     window.addEventListener('copy', handleCopy, true);
     window.addEventListener('cut', handleCut, true);
     window.addEventListener('paste', handlePaste, true);
-    window.addEventListener('beforecopy', (e) => e.preventDefault(), true);
-    window.addEventListener('beforecut', (e) => e.preventDefault(), true);
-    window.addEventListener('beforepaste', (e) => e.preventDefault(), true);
     window.addEventListener('contextmenu', handleContextMenu, true);
-    window.addEventListener('selectstart', handleSelectStart, true);
-    window.addEventListener('dragstart', handleDragStart, true);
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp, true);
 
@@ -1378,31 +1392,38 @@ export default function TakeAssessmentPage() {
       window.removeEventListener('copy', handleCopy, true);
       window.removeEventListener('cut', handleCut, true);
       window.removeEventListener('paste', handlePaste, true);
-      window.removeEventListener('beforecopy', (e) => e.preventDefault(), true);
-      window.removeEventListener('beforecut', (e) => e.preventDefault(), true);
-      window.removeEventListener('beforepaste', (e) => e.preventDefault(), true);
       window.removeEventListener('contextmenu', handleContextMenu, true);
-      window.removeEventListener('selectstart', handleSelectStart, true);
-      window.removeEventListener('dragstart', handleDragStart, true);
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
     };
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Every 1.0s)
+  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Smooth 4.0s Cadence)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
 
-    const interval = setInterval(async () => {
-      if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) return;
+    let timer: any = null;
+    let isDisposed = false;
+
+    const runTelemetryCycle = async () => {
+      if (isDisposed) return;
+      if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 4000);
+        return;
+      }
       const video = livePipVideoRef.current;
       const canvas = offscreenCanvasRef.current;
-      if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
+      if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 3000);
+        return;
+      }
 
       isDetectingRef.current = true;
       try {
+        // Yield execution to browser event loop before heavy inference so clicks & ink packets never stall
+        await new Promise((r) => setTimeout(r, 0));
         let isPersonFound = false;
         let isMobileDetected = false;
         let mobileConfidence = 0;
@@ -1766,11 +1787,20 @@ export default function TakeAssessmentPage() {
         // catch canvas / detection safety
       } finally {
         isDetectingRef.current = false;
+        if (!isDisposed) {
+          timer = setTimeout(runTelemetryCycle, 4000);
+        }
       }
-    }, 1500);
+    };
 
-    return () => clearInterval(interval);
-  }, [examData, result, showPreFlight, mediaStream]);
+    // Stagger initial check 3.5s after starting exam to allow complete initial page render
+    timer = setTimeout(runTelemetryCycle, 3500);
+
+    return () => {
+      isDisposed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [examData, result, showPreFlight, mediaStream, isDescriptiveTest]);
 
   const acknowledgeFaceStrike = () => {
     faceModalActiveRef.current = false;
@@ -2837,15 +2867,34 @@ export default function TakeAssessmentPage() {
 
       {/* 1. Window Blur Anti-Screenshot Privacy Shield */}
       {isWindowBlurred && !tabSwitchAlertModal?.show && !tabSwitchTerminated && (
-        <div className="fixed inset-0 z-40 bg-slate-950/98 backdrop-blur-2xl flex items-center justify-center p-6 text-center select-none animate-in fade-in duration-100">
+        <div
+          onClick={() => {
+            window.focus();
+            if (document.hasFocus()) {
+              setIsWindowBlurred(false);
+            }
+          }}
+          className="fixed inset-0 z-40 bg-slate-950/98 backdrop-blur-2xl flex items-center justify-center p-6 text-center select-none animate-in fade-in duration-100 cursor-pointer"
+        >
           <div className="space-y-4 max-w-md">
             <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto">
               <Lock className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-extrabold text-white">Exam Screen Protected</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Exam content is hidden while window focus is lost. Screen capture & external tools are strictly blocked. Return focus to the exam window.
+              Exam content is hidden while window focus is lost. Click anywhere to return focus and resume your exam.
             </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.focus();
+                setIsWindowBlurred(false);
+              }}
+              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition inline-flex items-center gap-1.5 shadow-lg"
+            >
+              Resume Exam
+            </button>
           </div>
         </div>
       )}
@@ -3145,6 +3194,20 @@ export default function TakeAssessmentPage() {
                 </div>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setUnauthorizedPerson(null);
+                unauthorizedPersonRef.current = null;
+                consecutiveMismatchRef.current = 0;
+                consecutiveUnauthorizedRef.current = 0;
+              }}
+              className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>I Am the Enrolled Candidate (Return to Exam)</span>
+            </button>
           </div>
         </div>
       )}
@@ -3733,14 +3796,8 @@ export default function TakeAssessmentPage() {
                   sessionId={companionSession}
                   pairingPin={companionPinDisplay}
                   pairingHost={pairingHost}
-                  onActiveQuestionChange={(qNum) => handleSwitchQuestion(qNum - 1)}
-                  onStrokeCountChange={(qId, count) => {
-                    setDescriptiveStrokeCounts((prev) => ({
-                      ...prev,
-                      [qId]: count,
-                      [`Q${currentIdx + 1}`]: count,
-                    }));
-                  }}
+                  onActiveQuestionChange={handleCompanionActiveQuestionChange}
+                  onStrokeCountChange={handleStrokeCountChange}
                 />
               ) : (
                 /* MCQ Question Options */

@@ -85,6 +85,22 @@ export function DescriptiveCompanionWorkspace({
 
   const activeQId = `Q${questionNumber}`;
 
+  // Keep latest callback references in refs to completely avoid re-creating WebSocket or re-triggering effects
+  const onStrokeCountChangeRef = useRef(onStrokeCountChange);
+  useEffect(() => {
+    onStrokeCountChangeRef.current = onStrokeCountChange;
+  }, [onStrokeCountChange]);
+
+  const onActiveQuestionChangeRef = useRef(onActiveQuestionChange);
+  useEffect(() => {
+    onActiveQuestionChangeRef.current = onActiveQuestionChange;
+  }, [onActiveQuestionChange]);
+
+  const strokesRef = useRef<StrokeItem[]>(strokes);
+  useEffect(() => {
+    strokesRef.current = strokes;
+  }, [strokes]);
+
   // Keep pairingHost updated if passed from parent
   useEffect(() => {
     if (propPairingHost) {
@@ -250,7 +266,7 @@ export function DescriptiveCompanionWorkspace({
 
   // Initial full canvas render and re-render on dimension/question switch
   useEffect(() => {
-    renderCanvasFull(strokes);
+    renderCanvasFull(strokesRef.current);
   }, [activeQId, docDimensions, renderCanvasFull]);
 
   // 2. Fetch existing strokes for this question upon question change
@@ -264,17 +280,17 @@ export function DescriptiveCompanionWorkspace({
         if (data && Array.isArray(data.strokes)) {
           setStrokes(data.strokes);
           renderCanvasFull(data.strokes);
-          onStrokeCountChange?.(question.id, data.strokes.length);
+          onStrokeCountChangeRef.current?.(question.id, data.strokes.length);
         } else {
           setStrokes([]);
           renderCanvasFull([]);
-          onStrokeCountChange?.(question.id, 0);
+          onStrokeCountChangeRef.current?.(question.id, 0);
         }
       }
     } catch (err) {
       console.warn('[DescriptiveWorkspace] Could not fetch cached strokes:', err);
     }
-  }, [sessionId, activeQId, question.id, onStrokeCountChange, renderCanvasFull]);
+  }, [sessionId, activeQId, question.id, renderCanvasFull]);
 
   useEffect(() => {
     fetchStrokes();
@@ -320,7 +336,7 @@ export function DescriptiveCompanionWorkspace({
             if (msg.data && Array.isArray(msg.data.strokes)) {
               setStrokes(msg.data.strokes);
               renderCanvasFull(msg.data.strokes);
-              onStrokeCountChange?.(question.id, msg.data.strokes.length);
+              onStrokeCountChangeRef.current?.(question.id, msg.data.strokes.length);
             }
           } else if (msg.type === 'MOBILE_STATUS') {
             setMobileConnected(msg.status === 'connected');
@@ -348,12 +364,12 @@ export function DescriptiveCompanionWorkspace({
                   }
                   return next;
                 });
-                onStrokeCountChange?.(question.id, msg.totalStrokes ?? (strokes.length + deltaStrokes.length));
+                onStrokeCountChangeRef.current?.(question.id, msg.totalStrokes ?? (strokes.length + deltaStrokes.length));
               } else if (Array.isArray(msg.allStrokes)) {
                 // Full redraw path if strokes were erased or on bulk update
                 setStrokes(msg.allStrokes);
                 renderCanvasFull(msg.allStrokes);
-                onStrokeCountChange?.(question.id, msg.allStrokes.length);
+                onStrokeCountChangeRef.current?.(question.id, msg.allStrokes.length);
               }
             }
           } else if (msg.type === 'ACTIVE_QUESTION_CHANGED') {
@@ -361,14 +377,14 @@ export function DescriptiveCompanionWorkspace({
             if (match) {
               const qNum = parseInt(match[1], 10);
               if (qNum && qNum !== questionNumber) {
-                onActiveQuestionChange?.(qNum);
+                onActiveQuestionChangeRef.current?.(qNum);
               }
             }
           } else if (msg.type === 'CANVAS_CLEAR') {
             if (msg.questionId === activeQId) {
               setStrokes([]);
               renderCanvasFull([]);
-              onStrokeCountChange?.(question.id, 0);
+              onStrokeCountChangeRef.current?.(question.id, 0);
             }
           }
         } catch (e) {
@@ -394,8 +410,6 @@ export function DescriptiveCompanionWorkspace({
     question.id,
     questionNumber,
     pairingHost,
-    onStrokeCountChange,
-    onActiveQuestionChange,
     drawSingleStroke,
     renderCanvasFull,
   ]);
