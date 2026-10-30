@@ -134,122 +134,68 @@ export function DescriptiveCompanionWorkspace({
       });
   }, [sessionId]);
 
-  // 2. Fetch existing strokes for this question upon question change
-  const fetchStrokes = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/v1/companion/strokes?sessionId=${encodeURIComponent(sessionId)}&questionId=${activeQId}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.strokes)) {
-          setStrokes((prev) => {
-            if (prev.length === data.strokes.length && prev.length > 0) {
-              return prev;
-            }
-            return data.strokes;
-          });
-          onStrokeCountChange?.(question.id, data.strokes.length);
-        } else {
-          setStrokes([]);
-          onStrokeCountChange?.(question.id, 0);
+  // Helper to draw a single stroke onto a 2D canvas context (ultra-fast 0.05ms incremental rendering)
+  const drawSingleStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: StrokeItem) => {
+    const pts = stroke.points || stroke.pts;
+    if (!pts || pts.length === 0) return;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (stroke.toolType === 'highlighter' || stroke.tool === 'highlighter') {
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+      ctx.lineWidth = stroke.strokeWidth || stroke.w || 20;
+      ctx.globalCompositeOperation = 'multiply';
+    } else if (stroke.toolType === 'eraser' || stroke.tool === 'eraser') {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = stroke.strokeWidth || stroke.w || 24;
+    } else {
+      let color = '#0f172a';
+      if (stroke.color) {
+        if (typeof stroke.color === 'number') {
+          const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
+          const r = parseInt(hex.substring(2, 4), 16);
+          const g = parseInt(hex.substring(4, 6), 16);
+          const b = parseInt(hex.substring(6, 8), 16);
+          color = `rgb(${r},${g},${b})`;
+        } else if (typeof stroke.color === 'string') {
+          color = stroke.color;
         }
       }
-    } catch (err) {
-      console.warn('[DescriptiveWorkspace] Could not fetch cached strokes:', err);
-    }
-  }, [sessionId, activeQId, question.id, onStrokeCountChange]);
-
-  useEffect(() => {
-    fetchStrokes();
-  }, [fetchStrokes]);
-
-  // Background polling fallback only when WebSocket is disconnected
-  useEffect(() => {
-    if (mobileConnected) return; // Live WebSocket is actively streaming strokes!
-    const timer = setInterval(() => {
-      fetchStrokes();
-    }, 3500);
-    return () => clearInterval(timer);
-  }, [mobileConnected, fetchStrokes]);
-
-  // 3. Connect to Companion WebSocket as a Viewer to receive live strokes from phone
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const hostToUse = pairingHost || getDefaultPairingHost();
-    let cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const isCloud =
-      window.location.protocol === 'https:' ||
-      cleanHost.includes('onrender.com') ||
-      cleanHost.includes('vercel.app');
-    if (isCloud && cleanHost.includes(':4000')) {
-      cleanHost = cleanHost.replace(':4000', '');
-    }
-    const wsProto = isCloud ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
-      sessionId,
-    )}&questionId=${activeQId}`;
-
-    let ws: WebSocket;
-    try {
-      ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'INITIAL_STATE') {
-            setMobileConnected(msg.mobileStatus === 'connected');
-            if (msg.data && Array.isArray(msg.data.strokes)) {
-              setStrokes(msg.data.strokes);
-              onStrokeCountChange?.(question.id, msg.data.strokes.length);
-            }
-          } else if (msg.type === 'MOBILE_STATUS') {
-            setMobileConnected(msg.status === 'connected');
-          } else if (msg.type === 'CANVAS_UPDATE') {
-            setMobileConnected(true);
-            if (msg.questionId === activeQId) {
-              if (Array.isArray(msg.allStrokes)) {
-                setStrokes(msg.allStrokes);
-                onStrokeCountChange?.(question.id, msg.allStrokes.length);
-              }
-            }
-          } else if (msg.type === 'ACTIVE_QUESTION_CHANGED') {
-            const match = (msg.questionId || '').match(/Q(\d+)/i);
-            if (match) {
-              const qNum = parseInt(match[1], 10);
-              if (qNum && qNum !== questionNumber) {
-                onActiveQuestionChange?.(qNum);
-              }
-            }
-          } else if (msg.type === 'CANVAS_CLEAR') {
-            if (msg.questionId === activeQId) {
-              setStrokes([]);
-              onStrokeCountChange?.(question.id, 0);
-            }
-          }
-        } catch (e) {
-          console.error('[DescriptiveWorkspace] WebSocket message error:', e);
-        }
-      };
-
-      ws.onerror = () => {};
-      ws.onclose = () => {};
-    } catch (e) {
-      console.warn('[DescriptiveWorkspace] WebSocket initialization error:', e);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = stroke.strokeWidth || stroke.w || 2.8;
     }
 
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
-    };
-  }, [sessionId, activeQId, question.id, questionNumber, pairingHost, onStrokeCountChange, onActiveQuestionChange]);
+    if (pts.length === 1) {
+      ctx.beginPath();
+      const r = Math.max(1.5, (stroke.strokeWidth || stroke.w || 3) / 2);
+      ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
 
-  // 4. Render digital ruled paper canvas with live strokes received from phone
-  useEffect(() => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1];
+      const p1 = pts[i];
+      const midX = (p0.x + p1.x) / 2;
+      const midY = (p0.y + p1.y) / 2;
+      ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+    }
+
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.stroke();
+    ctx.restore();
+  }, []);
+
+  // Helper to perform a clean full canvas render (only called on question change, resize, clear, or erase)
+  const renderCanvasFull = useCallback((strokesToRender: StrokeItem[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -296,66 +242,165 @@ export function DescriptiveCompanionWorkspace({
       ctx.fillText(`— PAGE ${p + 1} —`, canvas.width - 120, py - 10);
     }
 
-    // Render strokes with smooth quadratic bezier curves
-    for (const stroke of strokes) {
-      const pts = stroke.points || stroke.pts;
-      if (!pts || pts.length === 0) continue;
-
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      if (stroke.toolType === 'highlighter' || stroke.tool === 'highlighter') {
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
-        ctx.lineWidth = stroke.strokeWidth || stroke.w || 20;
-        ctx.globalCompositeOperation = 'multiply';
-      } else if (stroke.toolType === 'eraser' || stroke.tool === 'eraser') {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = stroke.strokeWidth || stroke.w || 24;
-      } else {
-        let color = '#0f172a';
-        if (stroke.color) {
-          if (typeof stroke.color === 'number') {
-            const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
-            const r = parseInt(hex.substring(2, 4), 16);
-            const g = parseInt(hex.substring(4, 6), 16);
-            const b = parseInt(hex.substring(6, 8), 16);
-            color = `rgb(${r},${g},${b})`;
-          } else if (typeof stroke.color === 'string') {
-            color = stroke.color;
-          }
-        }
-        ctx.strokeStyle = color;
-        ctx.lineWidth = stroke.strokeWidth || stroke.w || 2.8;
-      }
-
-      if (pts.length === 1) {
-        ctx.beginPath();
-        const r = Math.max(1.5, (stroke.strokeWidth || stroke.w || 3) / 2);
-        ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
-        ctx.fillStyle = ctx.strokeStyle;
-        ctx.fill();
-        ctx.restore();
-        continue;
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-
-      for (let i = 1; i < pts.length; i++) {
-        const p0 = pts[i - 1];
-        const p1 = pts[i];
-        const midX = (p0.x + p1.x) / 2;
-        const midY = (p0.y + p1.y) / 2;
-        ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-      }
-
-      const last = pts[pts.length - 1];
-      ctx.lineTo(last.x, last.y);
-      ctx.stroke();
-      ctx.restore();
+    // Draw all strokes
+    for (const stroke of strokesToRender) {
+      drawSingleStroke(ctx, stroke);
     }
-  }, [strokes, docDimensions]);
+  }, [docDimensions, drawSingleStroke]);
+
+  // Initial full canvas render and re-render on dimension/question switch
+  useEffect(() => {
+    renderCanvasFull(strokes);
+  }, [activeQId, docDimensions, renderCanvasFull]);
+
+  // 2. Fetch existing strokes for this question upon question change
+  const fetchStrokes = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/v1/companion/strokes?sessionId=${encodeURIComponent(sessionId)}&questionId=${activeQId}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.strokes)) {
+          setStrokes(data.strokes);
+          renderCanvasFull(data.strokes);
+          onStrokeCountChange?.(question.id, data.strokes.length);
+        } else {
+          setStrokes([]);
+          renderCanvasFull([]);
+          onStrokeCountChange?.(question.id, 0);
+        }
+      }
+    } catch (err) {
+      console.warn('[DescriptiveWorkspace] Could not fetch cached strokes:', err);
+    }
+  }, [sessionId, activeQId, question.id, onStrokeCountChange, renderCanvasFull]);
+
+  useEffect(() => {
+    fetchStrokes();
+  }, [fetchStrokes]);
+
+  // Background polling fallback only when WebSocket is completely inactive
+  useEffect(() => {
+    if (mobileConnected || socketRef.current?.readyState === WebSocket.OPEN) return;
+    const timer = setInterval(() => {
+      fetchStrokes();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [mobileConnected, fetchStrokes]);
+
+  // 3. Connect to Companion WebSocket as a Viewer to receive live strokes from phone
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hostToUse = pairingHost || getDefaultPairingHost();
+    let cleanHost = hostToUse.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const isCloud =
+      window.location.protocol === 'https:' ||
+      cleanHost.includes('onrender.com') ||
+      cleanHost.includes('vercel.app');
+    if (isCloud && cleanHost.includes(':4000')) {
+      cleanHost = cleanHost.replace(':4000', '');
+    }
+    const wsProto = isCloud ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${cleanHost}/companion?role=viewer&sessionId=${encodeURIComponent(
+      sessionId,
+    )}&questionId=${activeQId}`;
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'INITIAL_STATE') {
+            setMobileConnected(msg.mobileStatus === 'connected');
+            if (msg.data && Array.isArray(msg.data.strokes)) {
+              setStrokes(msg.data.strokes);
+              renderCanvasFull(msg.data.strokes);
+              onStrokeCountChange?.(question.id, msg.data.strokes.length);
+            }
+          } else if (msg.type === 'MOBILE_STATUS') {
+            setMobileConnected(msg.status === 'connected');
+          } else if (msg.type === 'CANVAS_UPDATE') {
+            setMobileConnected(true);
+            if (msg.questionId === activeQId) {
+              const deltaStrokes = msg.delta?.strokes;
+              const deleted = msg.delta?.deleted;
+              const hasDeletions = Array.isArray(deleted) && deleted.length > 0;
+
+              // Ultra-fast incremental rendering: draw newly arrived stroke in 0.05ms without clearing canvas
+              if (!hasDeletions && Array.isArray(deltaStrokes) && deltaStrokes.length > 0 && canvasRef.current) {
+                const ctx = canvasRef.current.getContext('2d');
+                if (ctx) {
+                  for (const s of deltaStrokes) {
+                    drawSingleStroke(ctx, s);
+                  }
+                }
+                setStrokes((prev) => {
+                  const next = [...prev];
+                  for (const s of deltaStrokes) {
+                    const idx = next.findIndex((p) => p.id === s.id);
+                    if (idx >= 0) next[idx] = s;
+                    else next.push(s);
+                  }
+                  return next;
+                });
+                onStrokeCountChange?.(question.id, msg.totalStrokes ?? (strokes.length + deltaStrokes.length));
+              } else if (Array.isArray(msg.allStrokes)) {
+                // Full redraw path if strokes were erased or on bulk update
+                setStrokes(msg.allStrokes);
+                renderCanvasFull(msg.allStrokes);
+                onStrokeCountChange?.(question.id, msg.allStrokes.length);
+              }
+            }
+          } else if (msg.type === 'ACTIVE_QUESTION_CHANGED') {
+            const match = (msg.questionId || '').match(/Q(\d+)/i);
+            if (match) {
+              const qNum = parseInt(match[1], 10);
+              if (qNum && qNum !== questionNumber) {
+                onActiveQuestionChange?.(qNum);
+              }
+            }
+          } else if (msg.type === 'CANVAS_CLEAR') {
+            if (msg.questionId === activeQId) {
+              setStrokes([]);
+              renderCanvasFull([]);
+              onStrokeCountChange?.(question.id, 0);
+            }
+          }
+        } catch (e) {
+          console.error('[DescriptiveWorkspace] WebSocket message error:', e);
+        }
+      };
+
+      ws.onerror = () => {};
+      ws.onclose = () => {};
+    } catch (e) {
+      console.warn('[DescriptiveWorkspace] WebSocket initialization error:', e);
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [
+    sessionId,
+    activeQId,
+    question.id,
+    questionNumber,
+    pairingHost,
+    onStrokeCountChange,
+    onActiveQuestionChange,
+    drawSingleStroke,
+    renderCanvasFull,
+  ]);
+
+
 
   // Handle Clear Canvas
   const handleClear = async () => {

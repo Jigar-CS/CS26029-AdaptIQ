@@ -342,9 +342,12 @@ export default function TakeAssessmentPage() {
     [companionSession]
   );
 
+  // Phase 9: AI Proctoring & Multi-Modal Telemetry State
+  const [showPreFlight, setShowPreFlight] = useState(true);
+
   // Monitor phone companion connectivity during PreFlight for descriptive tests
   useEffect(() => {
-    if (typeof window === 'undefined' || !isDescriptiveTest) return;
+    if (typeof window === 'undefined' || !isDescriptiveTest || !showPreFlight) return;
     if (!companionSession || companionSession === 'clias-session-9842') return;
 
     checkMobileStatus(false);
@@ -394,12 +397,11 @@ export default function TakeAssessmentPage() {
         }
       } catch {}
     };
-  }, [isDescriptiveTest, companionSession, checkMobileStatus]);
+  }, [isDescriptiveTest, showPreFlight, companionSession, checkMobileStatus]);
 
   // ---------------------------------------------------------------------------
   // Phase 9: AI Proctoring & Multi-Modal Telemetry State
   // ---------------------------------------------------------------------------
-  const [showPreFlight, setShowPreFlight] = useState(true);
   const [cameraPermission, setCameraPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);

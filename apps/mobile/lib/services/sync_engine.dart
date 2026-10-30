@@ -226,20 +226,16 @@ class SyncEngine {
   /// Appends a new or modified stroke to the pending sync delta buffer.
   void recordStroke(Stroke stroke) {
     _pendingDelta.add(stroke);
-    // Ultra-low latency debounced sync (30ms) for sub-50ms live ink reflection
+    // Ultra-low latency immediate sync for real-time stroke reflection
     _debouncedSyncTimer?.cancel();
-    _debouncedSyncTimer = Timer(const Duration(milliseconds: 30), () {
-      performSync();
-    });
+    performSync();
   }
 
   /// Records a deleted stroke ID for incremental eraser delta sync.
   void recordStrokeDeletion(String strokeId) {
     _deletedDelta.add(strokeId);
     _debouncedSyncTimer?.cancel();
-    _debouncedSyncTimer = Timer(const Duration(milliseconds: 30), () {
-      performSync();
-    });
+    performSync();
   }
 
   /// Periodic sync loop (safety sync every 5 seconds)
@@ -282,8 +278,10 @@ class SyncEngine {
       deletedStrokeIds: deletedToSend,
     );
 
-    // Save to local offline cache first (Write-Ahead Log)
-    await _savePendingToCache(packet);
+    // Asynchronously save to offline cache (WAL) without blocking WebSocket transmission
+    _savePendingToCache(packet).catchError((e) {
+      debugPrint('[SyncEngine] Cache write note: $e');
+    });
 
     if (_isConnected && _channel != null) {
       statusNotifier.value = SyncStatus.syncing;
@@ -310,13 +308,14 @@ class SyncEngine {
   }
 
   void _onDeltaAcknowledged() async {
-    _pendingDelta.clear();
-    _deletedDelta.clear();
+    // CRITICAL: DO NOT call _pendingDelta.clear() or _deletedDelta.clear() here!
+    // performSync() already removed the specific strokes sent in the packet.
+    // Any strokes drawn while the packet was in-flight must be preserved in _pendingDelta.
     statusNotifier.value = SyncStatus.synced;
     lastSyncedNotifier.value = DateTime.now();
 
-    // Clear disk cache for this sequence
-    await KioskService().clearCache('cached_strokes_${sessionId}_$questionId');
+    // Clear disk cache for this question asynchronously in background
+    KioskService().clearCache('cached_strokes_${sessionId}_$questionId').catchError((_) {});
   }
 
   /// Sends a clear command to the laptop server and clears all local caches for this question

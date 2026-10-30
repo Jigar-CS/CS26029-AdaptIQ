@@ -291,7 +291,7 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     }
 
     if (pairing) {
-      if (pairing.isSubmitted || Date.now() > pairing.expiresAt) {
+      if (Date.now() > pairing.expiresAt) {
         return null;
       }
       return pairing;
@@ -536,24 +536,18 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     );
 
     // Notify viewers on desktop monitor that companion has paired & locked
-    this.broadcastToSessionViewers(normSession, {
-      type: 'MOBILE_STATUS',
-      sessionId: normSession,
-      status: 'connected',
-      pin: pairing.displayPin,
-      deviceLocked: true,
-      time: Date.now(),
-    });
-    if (pairing.submissionId) {
-      this.broadcastToSessionViewers(this.normalizeSessionId(pairing.submissionId), {
+    this.broadcastToSessionViewers(
+      normSession,
+      {
         type: 'MOBILE_STATUS',
         sessionId: normSession,
         status: 'connected',
         pin: pairing.displayPin,
         deviceLocked: true,
         time: Date.now(),
-      });
-    }
+      },
+      pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+    );
 
     ws.on('message', (raw) => {
       try {
@@ -581,22 +575,17 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       }
       this.logger.log(`Mobile Companion disconnected for Room: [${normSession}] (Device Mutex Released)`);
 
-      this.broadcastToSessionViewers(normSession, {
-        type: 'MOBILE_STATUS',
-        sessionId: normSession,
-        status: this.isMobileConnected(normSession) ? 'connected' : 'disconnected',
-        deviceLocked: false,
-        time: Date.now(),
-      });
-      if (pairing.submissionId) {
-        this.broadcastToSessionViewers(this.normalizeSessionId(pairing.submissionId), {
+      this.broadcastToSessionViewers(
+        normSession,
+        {
           type: 'MOBILE_STATUS',
           sessionId: normSession,
           status: this.isMobileConnected(normSession) ? 'connected' : 'disconnected',
           deviceLocked: false,
           time: Date.now(),
-        });
-      }
+        },
+        pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+      );
     });
   }
 
@@ -653,7 +642,7 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         );
       }
 
-      // Broadcast live update strictly to this student's laptop viewer
+      // Broadcast live update strictly to this student's laptop viewer without duplicates
       const updatePayload = {
         type: 'CANVAS_UPDATE',
         sessionId: normSession,
@@ -664,10 +653,11 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         lastUpdated: sheet.lastUpdated,
       };
 
-      this.broadcastToSessionViewers(normSession, updatePayload);
-      if (pairing && pairing.submissionId) {
-        this.broadcastToSessionViewers(this.normalizeSessionId(pairing.submissionId), updatePayload);
-      }
+      this.broadcastToSessionViewers(
+        normSession,
+        updatePayload,
+        pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+      );
     } else if (type === 'SWITCH_QUESTION') {
       const qId = (data.questionId || 'Q1').toUpperCase();
       this.activeQuestions[normSession] = qId;
@@ -679,10 +669,11 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         questionId: qId,
       };
 
-      this.broadcastToSessionAll(normSession, switchPayload);
-      if (pairing && pairing.submissionId) {
-        this.broadcastToSessionAll(this.normalizeSessionId(pairing.submissionId), switchPayload);
-      }
+      this.broadcastToSessionAll(
+        normSession,
+        switchPayload,
+        pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+      );
       this.logger.log(`Active question switched to ${qId} in room [${normSession}]`);
     } else if (type === 'CLEAR_CANVAS') {
       const qId = (data.questionId || this.activeQuestions[normSession] || defaultQuestionId).toUpperCase();
@@ -703,10 +694,11 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         lastUpdated: Date.now(),
       };
 
-      this.broadcastToSessionAll(normSession, clearPayload);
-      if (pairing && pairing.submissionId) {
-        this.broadcastToSessionAll(this.normalizeSessionId(pairing.submissionId), clearPayload);
-      }
+      this.broadcastToSessionAll(
+        normSession,
+        clearPayload,
+        pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+      );
     } else if (type === 'HEARTBEAT') {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'HEARTBEAT_ACK', timestamp: Date.now() }));
@@ -908,35 +900,10 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       submittedAt: Date.now(),
     };
 
-    // Broadcast EXAM_SUBMITTED to all sockets in norm and targetSubId rooms
-    this.broadcastToSessionAll(norm, exitPayload);
-    if (targetSubId && targetSubId !== norm) {
-      this.broadcastToSessionAll(targetSubId, exitPayload);
-    }
+    // Broadcast EXAM_SUBMITTED to all sockets in norm and targetSubId rooms without duplicates
+    this.broadcastToSessionAll(norm, exitPayload, targetSubId || undefined);
 
-    // Deliver to all mobile sockets in mobilesBySession
-    const normMobiles = this.mobilesBySession.get(norm);
-    if (normMobiles) {
-      for (const mws of normMobiles) {
-        if (mws.readyState === WebSocket.OPEN) {
-          try {
-            mws.send(JSON.stringify(exitPayload));
-          } catch (_) {}
-        }
-      }
-    }
-    if (targetSubId && targetSubId !== norm) {
-      const subMobiles = this.mobilesBySession.get(targetSubId);
-      if (subMobiles) {
-        for (const mws of subMobiles) {
-          if (mws.readyState === WebSocket.OPEN) {
-            try {
-              mws.send(JSON.stringify(exitPayload));
-            } catch (_) {}
-          }
-        }
-      }
-    }
+    // Direct deliver to pairing activeMobileWs if open
     if (pairing?.activeMobileWs && pairing.activeMobileWs.readyState === WebSocket.OPEN) {
       try {
         pairing.activeMobileWs.send(JSON.stringify(exitPayload));
@@ -976,32 +943,57 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     return pass === validPass || pass === '998877' || pass === '123456';
   }
 
-  private broadcastToSessionViewers(sessionId: string, payload: any) {
-    const norm = this.normalizeSessionId(sessionId);
-    const viewers = this.viewersBySession.get(norm);
-    if (!viewers || viewers.size === 0) return;
-    const json = JSON.stringify(payload);
-    for (const ws of viewers) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(json);
+  private broadcastToSessionViewers(sessionId: string, payload: any, secondarySessionId?: string) {
+    const targets = new Set<WebSocket>();
+    const norm1 = this.normalizeSessionId(sessionId);
+    const viewers1 = this.viewersBySession.get(norm1);
+    if (viewers1) {
+      for (const ws of viewers1) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
+    }
+    if (secondarySessionId) {
+      const norm2 = this.normalizeSessionId(secondarySessionId);
+      const viewers2 = this.viewersBySession.get(norm2);
+      if (viewers2) {
+        for (const ws of viewers2) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
       }
+    }
+    if (targets.size === 0) return;
+    const json = JSON.stringify(payload);
+    for (const ws of targets) {
+      try {
+        ws.send(json);
+      } catch (_) {}
     }
   }
 
-  private broadcastToSessionAll(sessionId: string, payload: any) {
-    const norm = this.normalizeSessionId(sessionId);
-    const json = JSON.stringify(payload);
-    const viewers = this.viewersBySession.get(norm);
-    if (viewers) {
-      for (const ws of viewers) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(json);
+  private broadcastToSessionAll(sessionId: string, payload: any, secondarySessionId?: string) {
+    const targets = new Set<WebSocket>();
+    const norm1 = this.normalizeSessionId(sessionId);
+    const viewers1 = this.viewersBySession.get(norm1);
+    if (viewers1) {
+      for (const ws of viewers1) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
+    }
+    const mobiles1 = this.mobilesBySession.get(norm1);
+    if (mobiles1) {
+      for (const ws of mobiles1) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
+    }
+    if (secondarySessionId) {
+      const norm2 = this.normalizeSessionId(secondarySessionId);
+      const viewers2 = this.viewersBySession.get(norm2);
+      if (viewers2) {
+        for (const ws of viewers2) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
+      }
+      const mobiles2 = this.mobilesBySession.get(norm2);
+      if (mobiles2) {
+        for (const ws of mobiles2) if (ws.readyState === WebSocket.OPEN) targets.add(ws);
       }
     }
-    const mobiles = this.mobilesBySession.get(norm);
-    if (mobiles) {
-      for (const ws of mobiles) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(json);
-      }
+    if (targets.size === 0) return;
+    const json = JSON.stringify(payload);
+    for (const ws of targets) {
+      try {
+        ws.send(json);
+      } catch (_) {}
     }
   }
 }
