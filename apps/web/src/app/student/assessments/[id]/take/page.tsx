@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -471,6 +471,42 @@ export default function TakeAssessmentPage() {
 
   const preflightVideoRef = useRef<HTMLVideoElement>(null);
   const livePipVideoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  mediaStreamRef.current = mediaStream;
+
+  const attachPreflightVideo = useCallback(
+    (node: HTMLVideoElement | null) => {
+      preflightVideoRef.current = node;
+      if (node) {
+        node.muted = true;
+        node.defaultMuted = true;
+        if (mediaStream) {
+          if (node.srcObject !== mediaStream) {
+            node.srcObject = mediaStream;
+          }
+          node.play().catch(() => {});
+        }
+      }
+    },
+    [mediaStream]
+  );
+
+  const attachLivePipVideo = useCallback(
+    (node: HTMLVideoElement | null) => {
+      livePipVideoRef.current = node;
+      if (node) {
+        node.muted = true;
+        node.defaultMuted = true;
+        if (mediaStream) {
+          if (node.srcObject !== mediaStream) {
+            node.srcObject = mediaStream;
+          }
+          node.play().catch(() => {});
+        }
+      }
+    },
+    [mediaStream]
+  );
   const offscreenCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastViolationTimeRef = useRef<Record<string, number>>({});
 
@@ -528,11 +564,11 @@ export default function TakeAssessmentPage() {
     };
   }, [examData, showPreFlight]);
 
-  // Clean up media streams and audio context on unmount
+  // Clean up media streams and audio context ONLY on component unmount
   useEffect(() => {
     return () => {
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((track) => track.stop());
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       }
       if (audioCtxRef.current) {
         try {
@@ -540,19 +576,24 @@ export default function TakeAssessmentPage() {
         } catch {}
       }
     };
-  }, [mediaStream]);
+  }, []);
 
-  // Connect media stream to video elements when available
+  // Connect media stream to video elements whenever stream or DOM elements mount/update
   useEffect(() => {
-    if (mediaStream) {
-      if (preflightVideoRef.current && !preflightVideoRef.current.srcObject) {
-        preflightVideoRef.current.srcObject = mediaStream;
+    if (!mediaStream) return;
+    const attachAndPlay = (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      video.muted = true;
+      video.defaultMuted = true;
+      if (video.srcObject !== mediaStream) {
+        video.srcObject = mediaStream;
       }
-      if (livePipVideoRef.current && !livePipVideoRef.current.srcObject) {
-        livePipVideoRef.current.srcObject = mediaStream;
-      }
-    }
-  }, [mediaStream, showPreFlight, pipMinimized]);
+      video.play().catch(() => {});
+    };
+
+    attachAndPlay(preflightVideoRef.current);
+    attachAndPlay(livePipVideoRef.current);
+  }, [mediaStream, showPreFlight, pipMinimized, loading, cameraPermission]);
 
   const startAssessment = async () => {
     setLoading(true);
@@ -631,6 +672,20 @@ export default function TakeAssessmentPage() {
       setCameraPermission('granted');
       setMicPermission('granted');
 
+      // Immediately connect to video element if already rendered
+      if (preflightVideoRef.current) {
+        preflightVideoRef.current.muted = true;
+        preflightVideoRef.current.defaultMuted = true;
+        preflightVideoRef.current.srcObject = stream;
+        preflightVideoRef.current.play().catch(() => {});
+      }
+      if (livePipVideoRef.current) {
+        livePipVideoRef.current.muted = true;
+        livePipVideoRef.current.defaultMuted = true;
+        livePipVideoRef.current.srcObject = stream;
+        livePipVideoRef.current.play().catch(() => {});
+      }
+
       // Initialize Web Audio API Analyser for ambient conversation / voice anomaly telemetry
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -688,7 +743,40 @@ export default function TakeAssessmentPage() {
   const handleCaptureFace = async () => {
     if (!examData?.submissionId) return;
     const video = preflightVideoRef.current;
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+    if (!video) {
+      alert('Camera feed is still initializing. Please wait a moment and try again.');
+      return;
+    }
+
+    // Ensure camera stream is attached and playing
+    if (mediaStream && video.srcObject !== mediaStream) {
+      video.muted = true;
+      video.defaultMuted = true;
+      video.srcObject = mediaStream;
+      try {
+        await video.play();
+      } catch {}
+    }
+
+    if (video.paused) {
+      try {
+        await video.play();
+      } catch {}
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      // Brief grace period for video frame settling
+      await new Promise((r) => setTimeout(r, 250));
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      try {
+        await video.play();
+        await new Promise((r) => setTimeout(r, 200));
+      } catch {}
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
       alert('Camera feed is still initializing. Please wait a moment and try again.');
       return;
     }
@@ -2025,10 +2113,13 @@ export default function TakeAssessmentPage() {
               {cameraPermission === 'granted' ? (
                 <>
                   <video
-                    ref={preflightVideoRef}
+                    ref={attachPreflightVideo}
                     autoPlay
                     playsInline
                     muted
+                    onLoadedMetadata={(e) => {
+                      e.currentTarget.play().catch(() => {});
+                    }}
                     className="w-full h-full object-cover"
                     style={{ transform: 'scaleX(-1)' }}
                   />
@@ -3118,10 +3209,13 @@ export default function TakeAssessmentPage() {
           <>
             <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800">
               <video
-                ref={livePipVideoRef}
+                ref={attachLivePipVideo}
                 autoPlay
                 playsInline
                 muted
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.play().catch(() => {});
+                }}
                 className="w-full h-full object-cover mirror"
                 style={{ transform: 'scaleX(-1)' }}
               />
