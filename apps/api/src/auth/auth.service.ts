@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  HttpException,
   UnauthorizedException,
   NotFoundException,
   Inject,
@@ -268,282 +269,372 @@ export class AuthService {
   async registerStudent(dto: RegisterStudentDto) {
     const role = dto.role || UserRole.STUDENT;
     const email = this.normalizeEmail(dto.email, role);
-    const record = this.otpStore.get(email);
 
-    // Re-verify strict domain requirements
-    this.validateEmailDomain(email, role);
+    try {
+      const record = this.otpStore.get(email);
 
-    // Verify OTP
-    await this.verifyOtp({ email, otp: dto.otp, role });
+      // Re-verify strict domain requirements
+      this.validateEmailDomain(email, role);
 
-    // Hash password securely
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+      // Verify OTP
+      await this.verifyOtp({ email, otp: dto.otp, role });
 
-    if (role === UserRole.STUDENT) {
-      let authorized = await this.prisma.authorizedStudent.findUnique({
-        where: { email },
-      });
+      // Hash password securely
+      const passwordHash = await bcrypt.hash(dto.password, 10);
 
-      if (!authorized) {
-        const prefix = email.split('@')[0];
-        const enrollmentNumber = prefix.toUpperCase();
-        authorized = await this.prisma.authorizedStudent.findUnique({
-          where: { enrollmentNumber },
+      if (role === UserRole.STUDENT) {
+        let authorized = await this.prisma.authorizedStudent.findUnique({
+          where: { email },
         });
-        if (authorized) {
-          authorized = await this.prisma.authorizedStudent.update({
+
+        if (!authorized) {
+          const prefix = email.split('@')[0];
+          const enrollmentNumber = prefix.toUpperCase();
+          authorized = await this.prisma.authorizedStudent.findUnique({
+            where: { enrollmentNumber },
+          });
+          if (authorized) {
+            authorized = await this.prisma.authorizedStudent.update({
+              where: { id: authorized.id },
+              data: { email },
+            });
+          }
+        }
+
+        if (!authorized) {
+          throw new NotFoundException('Authorized student record missing.');
+        }
+
+        // Prefer user-entered full name if provided, else fallback to clean default
+        const studentName =
+          dto.fullName && dto.fullName.trim().length > 0
+            ? dto.fullName.trim()
+            : (authorized.name && !authorized.name.startsWith('Student ')
+                ? authorized.name
+                : `Student ${authorized.enrollmentNumber}`);
+
+        // Atomically create or update User and StudentProfile
+        const user = await this.prisma.$transaction(async (tx) => {
+          let targetUser = await tx.user.findUnique({
+            where: { email },
+          });
+
+          if (targetUser) {
+            targetUser = await tx.user.update({
+              where: { id: targetUser.id },
+              data: {
+                passwordHash,
+                role: UserRole.STUDENT,
+                emailVerified: true,
+                status: UserStatus.ACTIVE,
+              },
+            });
+          } else {
+            targetUser = await tx.user.create({
+              data: {
+                email,
+                passwordHash,
+                role: UserRole.STUDENT,
+                emailVerified: true,
+                status: UserStatus.ACTIVE,
+              },
+            });
+          }
+
+          const hasBiometrics = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
+
+          // Check if student profile already exists (either by authorizedStudentId or userId)
+          let profile = await tx.studentProfile.findFirst({
+            where: {
+              OR: [
+                { authorizedStudentId: authorized.id },
+                { userId: targetUser.id },
+              ],
+            },
+          });
+
+          if (profile) {
+            profile = await tx.studentProfile.update({
+              where: { id: profile.id },
+              data: {
+                userId: targetUser.id,
+                authorizedStudentId: authorized.id,
+                faceFrontSnapshot: dto.faceFrontSnapshot || profile.faceFrontSnapshot,
+                faceLeftSnapshot: dto.faceLeftSnapshot || profile.faceLeftSnapshot,
+                faceRightSnapshot: dto.faceRightSnapshot || profile.faceRightSnapshot,
+                faceDescriptorFront: dto.faceDescriptorFront || profile.faceDescriptorFront,
+                faceDescriptorLeft: dto.faceDescriptorLeft || profile.faceDescriptorLeft,
+                faceDescriptorRight: dto.faceDescriptorRight || profile.faceDescriptorRight,
+                faceEnrollmentDate: hasBiometrics ? new Date() : profile.faceEnrollmentDate,
+                faceEnrollmentLocked: hasBiometrics ? true : profile.faceEnrollmentLocked,
+              },
+            });
+          } else {
+            profile = await tx.studentProfile.create({
+              data: {
+                userId: targetUser.id,
+                authorizedStudentId: authorized.id,
+                faceFrontSnapshot: dto.faceFrontSnapshot || null,
+                faceLeftSnapshot: dto.faceLeftSnapshot || null,
+                faceRightSnapshot: dto.faceRightSnapshot || null,
+                faceDescriptorFront: dto.faceDescriptorFront || null,
+                faceDescriptorLeft: dto.faceDescriptorLeft || null,
+                faceDescriptorRight: dto.faceDescriptorRight || null,
+                faceEnrollmentDate: hasBiometrics ? new Date() : null,
+                faceEnrollmentLocked: hasBiometrics ? true : false,
+              },
+            });
+          }
+
+          await tx.authorizedStudent.update({
             where: { id: authorized.id },
-            data: { email },
-          });
-        }
-      }
-
-      if (!authorized) {
-        throw new NotFoundException('Authorized student record missing.');
-      }
-
-      // Prefer user-entered full name if provided, else fallback to clean default
-      const studentName =
-        dto.fullName && dto.fullName.trim().length > 0
-          ? dto.fullName.trim()
-          : (authorized.name && !authorized.name.startsWith('Student ')
-              ? authorized.name
-              : `Student ${authorized.enrollmentNumber}`);
-
-      // Atomically create User and StudentProfile
-      const user = await this.prisma.$transaction(async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            email,
-            passwordHash,
-            role: UserRole.STUDENT,
-            emailVerified: true,
-            status: UserStatus.ACTIVE,
-          },
-        });
-
-        const hasBiometrics = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
-        const profile = await tx.studentProfile.create({
-          data: {
-            userId: newUser.id,
-            authorizedStudentId: authorized.id,
-            faceFrontSnapshot: dto.faceFrontSnapshot || null,
-            faceLeftSnapshot: dto.faceLeftSnapshot || null,
-            faceRightSnapshot: dto.faceRightSnapshot || null,
-            faceDescriptorFront: dto.faceDescriptorFront || null,
-            faceDescriptorLeft: dto.faceDescriptorLeft || null,
-            faceDescriptorRight: dto.faceDescriptorRight || null,
-            faceEnrollmentDate: hasBiometrics ? new Date() : null,
-            faceEnrollmentLocked: hasBiometrics ? true : false,
-          } as any,
-        });
-
-        await tx.authorizedStudent.update({
-          where: { id: authorized.id },
-          data: {
-            activated: true,
-            userId: newUser.id,
-            name: studentName,
-          },
-        });
-
-        return {
-          ...newUser,
-          studentProfile: profile,
-        };
-      });
-
-      // Clear OTP after successful registration
-      this.otpStore.delete(email);
-
-      // Also sync user_profiles record for seamless profile syncing
-      try {
-        const hasBio = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
-        await this.prisma.$executeRawUnsafe(
-          `
-          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, avatarUrl, faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentDate, faceEnrollmentLocked, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-          ON DUPLICATE KEY UPDATE
-            fullName = VALUES(fullName),
-            department = VALUES(department),
-            designation = VALUES(designation),
-            specialization = VALUES(specialization),
-            avatarUrl = VALUES(avatarUrl),
-            faceFrontSnapshot = VALUES(faceFrontSnapshot),
-            faceLeftSnapshot = VALUES(faceLeftSnapshot),
-            faceRightSnapshot = VALUES(faceRightSnapshot),
-            faceDescriptorFront = VALUES(faceDescriptorFront),
-            faceDescriptorLeft = VALUES(faceDescriptorLeft),
-            faceDescriptorRight = VALUES(faceDescriptorRight),
-            faceEnrollmentDate = VALUES(faceEnrollmentDate),
-            faceEnrollmentLocked = VALUES(faceEnrollmentLocked)
-        `,
-          user.id,
-          studentName,
-          authorized.department,
-          'Student Scholar',
-          `${authorized.institute} Campus`,
-          authorized.programName,
-          dto.faceFrontSnapshot || '',
-          dto.faceFrontSnapshot || null,
-          dto.faceLeftSnapshot || null,
-          dto.faceRightSnapshot || null,
-          dto.faceDescriptorFront || null,
-          dto.faceDescriptorLeft || null,
-          dto.faceDescriptorRight || null,
-          hasBio ? new Date() : null,
-          hasBio ? 1 : 0,
-        );
-      } catch (e: any) {
-        this.logger.warn(`Could not sync user_profiles record for student: ${e.message}`);
-      }
-
-      // Send welcome onboarding email asynchronously
-      this.emailService.sendWelcome(email, studentName).catch((err) => {
-        this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
-      });
-
-      // Generate JWT
-      const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
-      return {
-        success: true,
-        message: 'Account successfully registered and activated.',
-        accessToken: token,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          name: studentName,
-          enrollmentNumber: authorized.enrollmentNumber,
-          studentId: user.studentProfile.id,
-          studentDetails: { ...authorized, name: studentName },
-        },
-      };
-    } else {
-      // Non-student role registration: Faculty, Counsellor, HOD, Head, Admin
-      let department = await this.prisma.department.findFirst({
-        where: { code: 'CSE' },
-      });
-      if (!department) {
-        department = await this.prisma.department.findFirst();
-      }
-
-      // If registering as FACULTY, a teaching subject is strictly required
-      let assignedCourse: any = null;
-      if (role === UserRole.FACULTY) {
-        if (!dto.courseId) {
-          throw new BadRequestException(
-            'Teaching subject is mandatory. Please select which subject you teach to register as faculty.',
-          );
-        }
-        assignedCourse = await this.prisma.course.findUnique({
-          where: { id: dto.courseId },
-        });
-        if (!assignedCourse) {
-          throw new BadRequestException('Selected teaching subject does not exist in the curriculum.');
-        }
-      }
-
-      const displayName = dto.fullName || record?.displayName || `Prof. ${email.split('@')[0]}`;
-      const employeeCode = dto.employeeCode || `EMP_${Date.now().toString().slice(-6)}`;
-
-      const user = await this.prisma.$transaction(async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            email,
-            passwordHash,
-            role,
-            emailVerified: true,
-            status: UserStatus.ACTIVE,
-          },
-        });
-
-        let facultyProfile = null;
-        if (role === UserRole.FACULTY || role === UserRole.HOD) {
-          facultyProfile = await tx.facultyProfile.create({
             data: {
-              userId: newUser.id,
-              employeeCode,
-              departmentId: department?.id,
-              courseId: assignedCourse ? assignedCourse.id : undefined,
-            },
-            include: {
-              course: true,
+              activated: true,
+              userId: targetUser.id,
+              name: studentName,
             },
           });
+
+          return {
+            ...targetUser,
+            studentProfile: profile,
+          };
+        });
+
+        // Clear OTP after successful registration
+        this.otpStore.delete(email);
+
+        // Also sync user_profiles record for seamless profile syncing
+        try {
+          const hasBio = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
+          await this.prisma.$executeRawUnsafe(
+            `
+            INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, avatarUrl, faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentDate, faceEnrollmentLocked, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+              fullName = VALUES(fullName),
+              department = VALUES(department),
+              designation = VALUES(designation),
+              specialization = VALUES(specialization),
+              avatarUrl = VALUES(avatarUrl),
+              faceFrontSnapshot = VALUES(faceFrontSnapshot),
+              faceLeftSnapshot = VALUES(faceLeftSnapshot),
+              faceRightSnapshot = VALUES(faceRightSnapshot),
+              faceDescriptorFront = VALUES(faceDescriptorFront),
+              faceDescriptorLeft = VALUES(faceDescriptorLeft),
+              faceDescriptorRight = VALUES(faceDescriptorRight),
+              faceEnrollmentDate = VALUES(faceEnrollmentDate),
+              faceEnrollmentLocked = VALUES(faceEnrollmentLocked)
+          `,
+            user.id,
+            studentName,
+            authorized.department,
+            'Student Scholar',
+            `${authorized.institute} Campus`,
+            authorized.programName,
+            dto.faceFrontSnapshot || '',
+            dto.faceFrontSnapshot || null,
+            dto.faceLeftSnapshot || null,
+            dto.faceRightSnapshot || null,
+            dto.faceDescriptorFront || null,
+            dto.faceDescriptorLeft || null,
+            dto.faceDescriptorRight || null,
+            hasBio ? new Date() : null,
+            hasBio ? 1 : 0,
+          );
+        } catch (e: any) {
+          this.logger.warn(`Could not sync user_profiles record for student: ${e.message}`);
         }
 
+        // Send welcome onboarding email asynchronously
+        this.emailService.sendWelcome(email, studentName).catch((err) => {
+          this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
+        });
+
+        // Generate JWT
+        const token = this.generateToken(user.id, user.email, user.role, user.studentProfile.id);
         return {
-          ...newUser,
-          facultyProfile,
+          success: true,
+          message: 'Account successfully registered and activated.',
+          accessToken: token,
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: studentName,
+            enrollmentNumber: authorized.enrollmentNumber,
+            studentId: user.studentProfile.id,
+            studentDetails: { ...authorized, name: studentName },
+          },
         };
-      });
+      } else {
+        // Non-student role registration: Faculty, Counsellor, HOD, Head, Admin
+        let department = await this.prisma.department.findFirst({
+          where: { code: 'CSE' },
+        });
+        if (!department) {
+          department = await this.prisma.department.findFirst();
+        }
 
-      // Also create extended user_profiles record for seamless profile syncing
-      try {
-        await this.prisma.$executeRawUnsafe(
-          `
-          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-          ON DUPLICATE KEY UPDATE
-            fullName = VALUES(fullName),
-            department = VALUES(department),
-            designation = VALUES(designation),
-            specialization = VALUES(specialization)
-        `,
+        // If registering as FACULTY, a teaching subject is strictly required
+        let assignedCourse: any = null;
+        if (role === UserRole.FACULTY) {
+          if (!dto.courseId) {
+            throw new BadRequestException(
+              'Teaching subject is mandatory. Please select which subject you teach to register as faculty.',
+            );
+          }
+          assignedCourse = await this.prisma.course.findUnique({
+            where: { id: dto.courseId },
+          });
+          if (!assignedCourse) {
+            throw new BadRequestException('Selected teaching subject does not exist in the curriculum.');
+          }
+        }
+
+        const displayName = dto.fullName || record?.displayName || `Prof. ${email.split('@')[0]}`;
+        const employeeCode = dto.employeeCode || `EMP_${Date.now().toString().slice(-6)}`;
+
+        const user = await this.prisma.$transaction(async (tx) => {
+          let targetUser = await tx.user.findUnique({
+            where: { email },
+          });
+
+          if (targetUser) {
+            targetUser = await tx.user.update({
+              where: { id: targetUser.id },
+              data: {
+                passwordHash,
+                role,
+                emailVerified: true,
+                status: UserStatus.ACTIVE,
+              },
+            });
+          } else {
+            targetUser = await tx.user.create({
+              data: {
+                email,
+                passwordHash,
+                role,
+                emailVerified: true,
+                status: UserStatus.ACTIVE,
+              },
+            });
+          }
+
+          let facultyProfile = null;
+          if (role === UserRole.FACULTY || role === UserRole.HOD) {
+            facultyProfile = await tx.facultyProfile.findUnique({
+              where: { userId: targetUser.id },
+            });
+
+            if (facultyProfile) {
+              facultyProfile = await tx.facultyProfile.update({
+                where: { id: facultyProfile.id },
+                data: {
+                  employeeCode: employeeCode || facultyProfile.employeeCode,
+                  departmentId: department?.id || facultyProfile.departmentId,
+                  courseId: assignedCourse ? assignedCourse.id : facultyProfile.courseId,
+                },
+                include: {
+                  course: true,
+                },
+              });
+            } else {
+              facultyProfile = await tx.facultyProfile.create({
+                data: {
+                  userId: targetUser.id,
+                  employeeCode,
+                  departmentId: department?.id,
+                  courseId: assignedCourse ? assignedCourse.id : undefined,
+                },
+                include: {
+                  course: true,
+                },
+              });
+            }
+          }
+
+          return {
+            ...targetUser,
+            facultyProfile,
+          };
+        });
+
+        // Also create extended user_profiles record for seamless profile syncing
+        try {
+          await this.prisma.$executeRawUnsafe(
+            `
+            INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+              fullName = VALUES(fullName),
+              department = VALUES(department),
+              designation = VALUES(designation),
+              specialization = VALUES(specialization)
+          `,
+            user.id,
+            displayName,
+            department?.name || 'Computer Science and Engineering',
+            role === UserRole.FACULTY ? 'Assistant Professor' : role,
+            'CSPIT CSE Building',
+            assignedCourse ? `${assignedCourse.code} - ${assignedCourse.name}` : 'Computer Science',
+          );
+        } catch (e: any) {
+          this.logger.warn(`Could not sync user_profiles record: ${e.message}`);
+        }
+
+        this.otpStore.delete(email);
+
+        this.emailService.sendWelcome(email, displayName).catch((err) => {
+          this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
+        });
+
+        const token = this.generateToken(
           user.id,
-          displayName,
-          department?.name || 'Computer Science and Engineering',
-          role === UserRole.FACULTY ? 'Assistant Professor' : role,
-          'CSPIT CSE Building',
-          assignedCourse ? `${assignedCourse.code} - ${assignedCourse.name}` : 'Computer Science',
+          user.email,
+          user.role,
+          undefined,
+          user.facultyProfile?.id,
+          user.facultyProfile?.courseId || undefined,
+          user.role === UserRole.COUNSELLOR,
+          user.role === UserRole.FACULTY,
+          user.facultyProfile?.departmentId || undefined,
         );
-      } catch (e) {
-        this.logger.warn(`Could not sync user_profiles record: ${e.message}`);
+
+        return {
+          success: true,
+          message: `${role} account successfully registered and activated.`,
+          accessToken: token,
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: displayName,
+            facultyId: user.facultyProfile?.id,
+            departmentId: user.facultyProfile?.departmentId || null,
+            courseId: user.facultyProfile?.courseId,
+            courseCode: assignedCourse?.code,
+            courseName: assignedCourse?.name,
+            assignedCourse: assignedCourse
+              ? {
+                  id: assignedCourse.id,
+                  code: assignedCourse.code,
+                  name: assignedCourse.name,
+                  semester: assignedCourse.semester,
+                }
+              : null,
+          },
+        };
       }
-
-      this.otpStore.delete(email);
-
-      this.emailService.sendWelcome(email, displayName).catch((err) => {
-        this.logger.warn(`Could not dispatch welcome email to ${email}: ${err.message}`);
-      });
-
-      const token = this.generateToken(
-        user.id,
-        user.email,
-        user.role,
-        undefined,
-        user.facultyProfile?.id,
-        user.facultyProfile?.courseId || undefined,
-        user.role === UserRole.COUNSELLOR,
-        user.role === UserRole.FACULTY,
-        user.facultyProfile?.departmentId || undefined,
+    } catch (err: any) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      this.logger.error(`Registration processing error for ${email}: ${err?.message || err}`, err?.stack);
+      throw new BadRequestException(
+        err?.message || 'Registration failed due to a processing error. Please try again.',
       );
-
-      return {
-        success: true,
-        message: `${role} account successfully registered and activated.`,
-        accessToken: token,
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          name: displayName,
-          facultyId: user.facultyProfile?.id,
-          departmentId: user.facultyProfile?.departmentId || null,
-          courseId: user.facultyProfile?.courseId,
-          courseCode: assignedCourse?.code,
-          courseName: assignedCourse?.name,
-          assignedCourse: assignedCourse
-            ? {
-                id: assignedCourse.id,
-                code: assignedCourse.code,
-                name: assignedCourse.name,
-                semester: assignedCourse.semester,
-              }
-            : null,
-        },
-      };
     }
   }
 
