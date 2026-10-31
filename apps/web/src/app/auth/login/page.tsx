@@ -111,6 +111,19 @@ export default function LoginPage() {
     router.prefetch('/hod/dashboard');
     router.prefetch('/head/dashboard');
     router.prefetch('/admin/dashboard');
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roleParam = params.get('role')?.toUpperCase();
+      if (roleParam) {
+        const matchingPreset = ROLE_PRESETS.find((p) => p.id === roleParam);
+        if (matchingPreset) {
+          setSelectedRole(matchingPreset.id);
+          setEmail(matchingPreset.email);
+          setPassword(matchingPreset.password);
+        }
+      }
+    }
   }, [router]);
 
   const handleSelectPreset = (preset: RolePreset) => {

@@ -223,19 +223,8 @@ export default function RegisterPage() {
         courseId: selectedRole === UserRole.FACULTY ? selectedCourseId : undefined,
       });
 
-      localStorage.setItem('clias_token', res.accessToken);
-      localStorage.setItem('clias_user', JSON.stringify(res.user));
-      toast.success('Account successfully registered! Redirecting to your dashboard...', 'Registration Complete');
-
-      if (selectedRole === UserRole.FACULTY) {
-        router.push('/faculty/dashboard');
-      } else if (selectedRole === UserRole.COUNSELLOR) {
-        router.push('/counsellor/dashboard');
-      } else if (selectedRole === UserRole.HOD) {
-        router.push('/hod/dashboard');
-      } else {
-        router.push('/student/dashboard');
-      }
+      toast.success('Account successfully registered! Please sign in with your credentials.', 'Registration Complete');
+      router.push('/auth/login');
     } catch (err: any) {
       const errMsg = err.message || 'Registration failed.';
       setError(errMsg);

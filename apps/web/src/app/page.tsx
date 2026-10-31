@@ -142,11 +142,11 @@ export default function CLIASHomePage() {
               Sign In
             </Link>
             <Link
-              href="/auth/register"
+              href="/auth/login"
               className="px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-white bg-[#e05033] hover:bg-[#c93f25] transition shadow-sm"
               style={{ borderRadius: 0 }}
             >
-              Register
+              Sign Up
             </Link>
           </div>
         </div>
@@ -168,14 +168,14 @@ export default function CLIASHomePage() {
             {/* Primary Action Row */}
             <div className="flex flex-wrap items-center gap-3.5 mt-8">
               <Link
-                href="/student/dashboard"
+                href="/auth/login?role=STUDENT"
                 className="inline-flex items-center gap-2.5 px-6 py-3.5 font-mono text-xs font-bold uppercase tracking-wider text-white bg-[#e05033] hover:bg-[#c93f25] shadow-md shadow-red-600/20 active:scale-[0.98] transition cursor-pointer"
                 style={{ borderRadius: 0 }}
               >
                 <span>Launch Student Portal →</span>
               </Link>
               <Link
-                href="/faculty/dashboard"
+                href="/auth/login?role=FACULTY"
                 className="inline-flex items-center gap-2 px-5 py-3.5 font-mono text-xs font-semibold uppercase tracking-wider text-[#1a2540] dark:text-slate-200 bg-[#faf7f2] dark:bg-[#121b30] hover:bg-[#ede8df] dark:hover:bg-slate-800 border border-[rgba(74,111,165,0.3)] shadow-xs active:scale-[0.98] transition"
                 style={{ borderRadius: 0 }}
               >
@@ -602,7 +602,7 @@ export default function CLIASHomePage() {
 
                   <div className="pt-2 text-xs">
                     <Link
-                      href="/student/dashboard"
+                      href="/auth/login?role=STUDENT"
                       className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#e05033] hover:underline flex items-center gap-1"
                     >
                       <span>View all topics &rarr;</span>
@@ -739,7 +739,7 @@ export default function CLIASHomePage() {
                     Previous
                   </button>
                   <Link
-                    href="/student/assessments"
+                    href="/auth/login?role=STUDENT"
                     className="px-4 py-2 bg-[#e05033] hover:bg-[#c93f25] text-white font-mono text-xs font-bold uppercase tracking-wider shadow-sm"
                     style={{ borderRadius: 0 }}
                   >
@@ -797,7 +797,7 @@ export default function CLIASHomePage() {
 
               <div className="pt-2 text-right">
                 <Link
-                  href="/faculty/dashboard"
+                  href="/auth/login?role=FACULTY"
                   className="inline-flex items-center gap-1.5 font-mono text-xs font-bold uppercase tracking-wider text-[#e05033] hover:underline"
                 >
                   <span>Open Full Faculty Dashboard</span>
@@ -852,7 +852,7 @@ export default function CLIASHomePage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 text-xs font-mono">
           <Link
-            href="/auth/login"
+            href="/auth/login?role=STUDENT"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-[#e05033] hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
@@ -861,7 +861,7 @@ export default function CLIASHomePage() {
           </Link>
 
           <Link
-            href="/auth/login"
+            href="/auth/login?role=FACULTY"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-[#4a6fa5] hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
@@ -870,7 +870,7 @@ export default function CLIASHomePage() {
           </Link>
 
           <Link
-            href="/auth/login"
+            href="/auth/login?role=COUNSELLOR"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-amber-500 hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
@@ -879,7 +879,7 @@ export default function CLIASHomePage() {
           </Link>
 
           <Link
-            href="/auth/login"
+            href="/auth/login?role=HOD"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-[#4a6fa5] hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
@@ -888,7 +888,7 @@ export default function CLIASHomePage() {
           </Link>
 
           <Link
-            href="/auth/login"
+            href="/auth/login?role=HEAD"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-purple-500 hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
@@ -897,7 +897,7 @@ export default function CLIASHomePage() {
           </Link>
 
           <Link
-            href="/auth/login"
+            href="/auth/login?role=ADMIN"
             className="p-4 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.25)] hover:border-[#e05033] hover:shadow-md transition-all text-center shadow-2xs group"
             style={{ borderRadius: 0 }}
           >
