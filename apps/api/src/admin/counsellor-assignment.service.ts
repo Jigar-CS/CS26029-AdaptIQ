@@ -568,7 +568,7 @@ export class CounsellorAssignmentService {
     // 2. By partial email or name match in existing counsellors/faculty
     const candidates = await this.prisma.user.findMany({
       where: {
-        role: { in: [UserRole.COUNSELLOR, UserRole.FACULTY, UserRole.HOD] },
+        role: { in: [UserRole.FACULTY, UserRole.HOD] },
       },
     });
 
@@ -594,7 +594,7 @@ export class CounsellorAssignmentService {
 
     // 3. If query literally contains "counsellor" or "mentor" and a counsellor user exists
     if (query.toLowerCase().includes('counsellor') || query.toLowerCase().includes('mentor')) {
-      const defaultCounsellor = candidates.find((c) => c.role === UserRole.COUNSELLOR);
+      const defaultCounsellor = candidates.find((c) => c.role === UserRole.FACULTY);
       if (defaultCounsellor) return defaultCounsellor;
     }
 
@@ -607,7 +607,7 @@ export class CounsellorAssignmentService {
       data: {
         email: newEmail,
         passwordHash,
-        role: UserRole.COUNSELLOR,
+        role: UserRole.FACULTY,
         status: UserStatus.ACTIVE,
         emailVerified: true,
       },

@@ -1,9 +1,7 @@
 export enum UserRole {
   STUDENT = 'STUDENT',
   FACULTY = 'FACULTY',
-  COUNSELLOR = 'COUNSELLOR',
   HOD = 'HOD',
-  HEAD = 'HEAD',
   SUPER_ADMIN = 'SUPER_ADMIN',
 }
 

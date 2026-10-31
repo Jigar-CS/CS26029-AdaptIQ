@@ -48,9 +48,8 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
   // Check if user is a dual-role Faculty + Counsellor
   const isDualRole = Boolean(
     user && (
-      (user.role === UserRole.FACULTY && user.isCounsellor) ||
-      (user.role === UserRole.COUNSELLOR && user.isFaculty) ||
-      (user.isCounsellor && user.isFaculty)
+      (user.role === UserRole.FACULTY && Boolean(user.isCounsellor || (user as any).isDualCounsellor)) ||
+      (user.role === UserRole.HOD && Boolean(user.isCounsellor || (user as any).isDualCounsellor))
     )
   );
 
@@ -60,7 +59,7 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
   React.useEffect(() => {
     setMounted(true);
     if (typeof window !== 'undefined' && user) {
-      if (pathname.startsWith('/counsellor')) {
+      if (pathname.startsWith('/faculty/counselling')) {
         setActiveRoleView('COUNSELLOR');
         localStorage.setItem('clias_active_role_view', 'COUNSELLOR');
       } else if (pathname.startsWith('/faculty')) {
@@ -70,8 +69,6 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
         const saved = localStorage.getItem('clias_active_role_view');
         if (saved === 'COUNSELLOR' || saved === 'FACULTY') {
           setActiveRoleView(saved);
-        } else if (user.role === UserRole.COUNSELLOR) {
-          setActiveRoleView('COUNSELLOR');
         } else {
           setActiveRoleView('FACULTY');
         }
@@ -94,11 +91,11 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
       localStorage.setItem('clias_active_role_view', targetRole);
     }
     if (targetRole === 'COUNSELLOR') {
-      if (!pathname.startsWith('/counsellor')) {
-        router.push('/counsellor/dashboard');
+      if (!pathname.startsWith('/faculty/counselling')) {
+        router.push('/faculty/counselling');
       }
     } else {
-      if (!pathname.startsWith('/faculty')) {
+      if (!pathname.startsWith('/faculty/dashboard') && pathname.startsWith('/faculty/counselling')) {
         router.push('/faculty/dashboard');
       }
     }
@@ -120,8 +117,8 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
     { name: 'Authorized Students', href: '/admin/students', icon: Users },
     { name: 'Institution Hierarchy', href: '/admin/institutes', icon: Building2 },
     { name: 'HOD Department View', href: '/hod/dashboard', icon: Building2 },
-    { name: 'Counsellor Console', href: '/counsellor/dashboard', icon: ShieldCheck },
     { name: 'Faculty Console', href: '/faculty/dashboard', icon: BookOpen },
+    { name: 'Counsellor Panel', href: '/faculty/counselling', icon: ShieldCheck },
     { name: 'System Settings', href: '/admin/settings', icon: Settings },
     { name: 'My Profile', href: '/admin/profile', icon: UserCircle },
   ];
@@ -138,39 +135,30 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
   ];
 
   const counsellorLinks = [
-    { name: 'Counsellor Dashboard', href: '/counsellor/dashboard', icon: LayoutDashboard },
-    { name: 'Assigned Students', href: '/counsellor/students', icon: Users },
-    { name: 'Intervention Alerts', href: '/counsellor/alerts', icon: ShieldCheck },
-    { name: 'My Profile', href: '/counsellor/profile', icon: UserCircle },
+    { name: 'Counsellor Overview', href: '/faculty/counselling', icon: LayoutDashboard },
+    { name: 'Assigned Mentees', href: '/faculty/counselling/students', icon: Users },
+    { name: 'Intervention Alerts', href: '/faculty/counselling/alerts', icon: ShieldCheck },
+    { name: 'Academic Mode', href: '/faculty/dashboard', icon: BookOpen },
+    { name: 'My Profile', href: '/faculty/profile', icon: UserCircle },
   ];
 
   const hodLinks = [
     { name: 'Department Dashboard', href: '/hod/dashboard', icon: LayoutDashboard },
     { name: 'Curriculum Mastery', href: '/hod/dashboard#curriculum', icon: TrendingUp },
     { name: 'Faculty Console', href: '/faculty/dashboard', icon: BookOpen },
-    { name: 'Counsellor Panel', href: '/counsellor/dashboard', icon: Users },
+    { name: 'Counselling Overview', href: '/faculty/counselling', icon: Users },
     { name: 'My Profile', href: '/hod/profile', icon: UserCircle },
-  ];
-
-  const headLinks = [
-    { name: 'Institutional Overview', href: '/head/dashboard', icon: LayoutDashboard },
-    { name: 'Program Comparison', href: '/head/programs', icon: Building2 },
-    { name: 'My Profile', href: '/head/profile', icon: UserCircle },
   ];
 
   let currentLinks = studentLinks;
   if (user.role === UserRole.SUPER_ADMIN) {
     currentLinks = adminLinks;
+  } else if (user.role === UserRole.HOD) {
+    currentLinks = isDualRole && activeRoleView === 'COUNSELLOR' ? counsellorLinks : hodLinks;
   } else if (isDualRole) {
     currentLinks = activeRoleView === 'COUNSELLOR' ? counsellorLinks : facultyLinks;
   } else if (user.role === UserRole.FACULTY) {
     currentLinks = facultyLinks;
-  } else if (user.role === UserRole.COUNSELLOR) {
-    currentLinks = counsellorLinks;
-  } else if (user.role === UserRole.HOD) {
-    currentLinks = hodLinks;
-  } else if (user.role === UserRole.HEAD) {
-    currentLinks = headLinks;
   }
 
   const { theme, toggleTheme } = useTheme();
@@ -414,7 +402,7 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
         {isExpanded ? (
           <div className="flex items-center justify-between animate-in fade-in duration-200">
             <Link
-              href={isDualRole ? (activeRoleView === 'COUNSELLOR' ? '/counsellor/profile' : '/faculty/profile') : `/${user.role.toLowerCase()}/profile`}
+              href={`/${user.role.toLowerCase()}/profile`}
               onClick={(e) => {
                 if (isLocked) {
                   e.preventDefault();
@@ -480,7 +468,7 @@ export function Sidebar({ isLocked = false, onLockedClick }: SidebarProps = {}) 
               )}
             </button>
             <Link
-              href={isDualRole ? (activeRoleView === 'COUNSELLOR' ? '/counsellor/profile' : '/faculty/profile') : `/${user.role.toLowerCase()}/profile`}
+              href={`/${user.role.toLowerCase()}/profile`}
               onClick={(e) => {
                 if (isLocked) {
                   e.preventDefault();

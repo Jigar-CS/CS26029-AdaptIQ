@@ -107,7 +107,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     router.prefetch('/faculty/dashboard');
     router.prefetch('/student/dashboard');
-    router.prefetch('/counsellor/dashboard');
+    router.prefetch('/faculty/counselling');
     router.prefetch('/hod/dashboard');
     router.prefetch('/head/dashboard');
     router.prefetch('/admin/dashboard');
@@ -153,13 +153,13 @@ export default function LoginPage() {
       if (user.role === UserRole.SUPER_ADMIN) {
         router.push('/admin/dashboard');
       } else if (user.role === UserRole.FACULTY) {
-        router.push('/faculty/dashboard');
-      } else if (user.role === UserRole.COUNSELLOR) {
-        router.push('/counsellor/dashboard');
+        if (selectedRole === 'COUNSELLOR' && (user.isCounsellor || (user as any).isDualCounsellor)) {
+          router.push('/faculty/counselling');
+        } else {
+          router.push('/faculty/dashboard');
+        }
       } else if (user.role === UserRole.HOD) {
         router.push('/hod/dashboard');
-      } else if (user.role === UserRole.HEAD) {
-        router.push('/head/dashboard');
       } else {
         router.push('/student/dashboard');
       }

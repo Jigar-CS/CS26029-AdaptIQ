@@ -32,13 +32,13 @@ export class DisputesController {
   }
 
   @Get('faculty-queue')
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getFacultyQueue() {
     return this.disputesService.getFacultyDisputesQueue();
   }
 
   @Post(':id/resolve')
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async resolveDispute(
     @Req() req: any,
     @Param('id') disputeId: string,
@@ -52,9 +52,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   async getNotifications(@Req() req: any) {
@@ -65,9 +65,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   streamNotifications(@Req() req: any) {
@@ -81,9 +81,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   async markAllNotificationsRead(@Req() req: any) {
@@ -94,9 +94,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   async markNotificationRead(
@@ -110,9 +110,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   async clearAllNotifications(@Req() req: any) {
@@ -123,9 +123,9 @@ export class DisputesController {
   @Roles(
     UserRole.STUDENT,
     UserRole.FACULTY,
-    UserRole.COUNSELLOR,
+    
     UserRole.HOD,
-    UserRole.HEAD,
+    
     UserRole.SUPER_ADMIN,
   )
   async clearNotification(

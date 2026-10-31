@@ -32,7 +32,7 @@ export class RolesGuard implements CanActivate {
 
     // Dual-role check: Faculty with counsellor privileges
     if (
-      requiredRoles.includes(UserRole.COUNSELLOR) &&
+      false &&
       (user.isCounsellor || user.role === UserRole.HOD)
     ) {
       return true;

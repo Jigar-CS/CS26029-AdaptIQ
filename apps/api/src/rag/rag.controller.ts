@@ -78,7 +78,7 @@ export class RagController {
    */
   @Post('extract-questions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async extractQuestions(@Req() req: any, @Body() dto: ExtractQuestionsDto) {
     if (req.user?.role === UserRole.FACULTY && req.user?.courseId && dto.courseId && dto.courseId !== req.user.courseId) {
       throw new ForbiddenException('Faculty can only extract questions for their assigned course.');
@@ -91,7 +91,7 @@ export class RagController {
    */
   @Post('courses/:courseId/import-questions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async importQuestions(
     @Req() req: any,
     @Param('courseId') courseId: string,
@@ -109,7 +109,7 @@ export class RagController {
    */
   @Post('import-questions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async importQuestionsFallback(
     @Req() req: any,
     @Body('courseId') bodyCourseId: string,
@@ -128,7 +128,7 @@ export class RagController {
    */
   @Post('courses/:courseId/create-assessment')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async createAssessmentFromQuestions(
     @Req() req: any,
     @Param('courseId') courseId: string,

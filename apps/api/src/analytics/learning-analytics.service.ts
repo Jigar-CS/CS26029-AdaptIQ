@@ -1015,7 +1015,7 @@ export class LearningAnalyticsService {
 
     if (!faculty) {
       const user = await this.prisma.user.findUnique({ where: { id: facultyUserId } });
-      if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD || user?.role === UserRole.HEAD) {
+      if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD ) {
         return;
       }
       throw new ForbiddenException('Faculty profile not found.');
@@ -1121,7 +1121,7 @@ export class LearningAnalyticsService {
 
     // 4. Admin / HOD role bypasses cohort checks
     const user = await this.prisma.user.findUnique({ where: { id: facultyUserId } });
-    if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD || user?.role === UserRole.HEAD) {
+    if (user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.HOD ) {
       return;
     }
 

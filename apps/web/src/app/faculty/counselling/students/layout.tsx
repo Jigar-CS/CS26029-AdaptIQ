@@ -15,16 +15,16 @@ export const metadata: Metadata = {
     'CHARUSAT Mentorship Roster',
   ],
   alternates: {
-    canonical: '/counsellor/students',
+    canonical: '/faculty/counselling/students',
   },
   openGraph: {
     title: 'Mentee Roster & Academic Trajectory Dossiers | CLIAS — CHARUSAT',
     description:
       'Individual student learning trajectory dossiers, continuous assessment histories, and personal counselling logs on CLIAS by Jigar Sakhia & Param Shah.',
-    url: 'https://clias.vercel.app/counsellor/students',
+    url: 'https://clias.vercel.app/faculty/counselling/students',
   },
 };
 
-export default function CounsellorStudentsLayout({ children }: { children: React.ReactNode }) {
+export default function FacultyCounsellingStudentsLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

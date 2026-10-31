@@ -366,7 +366,7 @@ export class DisputesService {
       createdAt: Date;
     }> = [];
 
-    if (role === 'FACULTY' || role === 'HOD' || role === 'HEAD' || role === 'SUPER_ADMIN') {
+    if (role === 'FACULTY' || role === 'HOD'  || role === 'SUPER_ADMIN') {
       try {
         const pendingDisputes = await this.prisma.questionDispute.findMany({
           where: { status: DisputeStatus.PENDING },
@@ -435,7 +435,7 @@ export class DisputesService {
       }
     }
 
-    if (role === 'COUNSELLOR' || role === 'SUPER_ADMIN' || role === 'HOD' || role === 'HEAD') {
+    if (role === 'COUNSELLOR' || role === 'SUPER_ADMIN' || role === 'HOD' ) {
       try {
         const atRiskAlerts = await this.prisma.atRiskAlert.findMany({
           where: { status: 'PENDING' as any },

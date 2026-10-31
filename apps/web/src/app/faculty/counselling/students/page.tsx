@@ -135,7 +135,7 @@ export default function CounsellorAssignedStudentsPage() {
   const [detailTab, setDetailTab] = useState<'practice' | 'progress' | 'violations' | 'assessments' | 'advisory'>('practice');
 
   useEffect(() => {
-    if (!authLoading && (!user || (user.role !== UserRole.COUNSELLOR && user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.HOD && !user.isCounsellor))) {
+    if (!authLoading && (!user || (user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.HOD && !user.isCounsellor))) {
       router.push('/auth/login');
       return;
     }

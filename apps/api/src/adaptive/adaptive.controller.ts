@@ -132,7 +132,7 @@ export class AdaptiveController {
   }
 
   @Get('misconceptions')
-  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.COUNSELLOR)
+  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getMisconceptions(@Req() req: any) {
     return this.adaptiveService.getStudentMisconceptions(resolveStudentId(req));
   }

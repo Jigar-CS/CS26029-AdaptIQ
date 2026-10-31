@@ -99,14 +99,10 @@ export class ProfileService implements OnModuleInit {
     const defaultDesignation =
       user.role === UserRole.SUPER_ADMIN
         ? 'Lead System Administrator'
-        : user.role === UserRole.HEAD
-        ? 'Institute Dean / Director'
         : user.role === UserRole.HOD
         ? 'Head of Department'
-        : user.role === UserRole.COUNSELLOR
-        ? 'Academic Mentor & Counsellor'
         : user.role === UserRole.FACULTY
-        ? 'Assistant Professor'
+        ? ((user as any).isCounsellor ? 'Assistant Professor & Mentor' : 'Assistant Professor')
         : 'Student Scholar';
 
     const defaultDepartment =
@@ -430,9 +426,9 @@ export class ProfileService implements OnModuleInit {
     const totalUsers = await this.prisma.user.count();
     const students = await this.prisma.user.count({ where: { role: UserRole.STUDENT } });
     const faculty = await this.prisma.user.count({ where: { role: UserRole.FACULTY } });
-    const counsellors = await this.prisma.user.count({ where: { role: UserRole.COUNSELLOR } });
+    const counsellors = 0;
     const hods = await this.prisma.user.count({ where: { role: UserRole.HOD } });
-    const heads = await this.prisma.user.count({ where: { role: UserRole.HEAD } });
+    const heads = 0;
     const admins = await this.prisma.user.count({ where: { role: UserRole.SUPER_ADMIN } });
 
     return {
@@ -440,9 +436,9 @@ export class ProfileService implements OnModuleInit {
       breakdown: {
         STUDENT: students,
         FACULTY: faculty,
-        COUNSELLOR: counsellors,
+        
         HOD: hods,
-        HEAD: heads,
+        
         SUPER_ADMIN: admins,
       },
     };

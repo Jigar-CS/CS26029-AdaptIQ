@@ -13,17 +13,12 @@ function getAuthorizedDashboard(user: any): string {
       return '/student/dashboard';
     case UserRole.FACULTY:
       return '/faculty/dashboard';
-    case UserRole.COUNSELLOR:
-      return '/counsellor/dashboard';
     case UserRole.HOD:
       return '/hod/dashboard';
-    case UserRole.HEAD:
-      return '/head/dashboard';
     case UserRole.SUPER_ADMIN:
       return '/admin/dashboard';
     default:
       if (user.isFaculty) return '/faculty/dashboard';
-      if (user.isCounsellor) return '/counsellor/dashboard';
       return '/student/dashboard';
   }
 }
@@ -35,6 +30,13 @@ function isUserAuthorizedForPath(user: any, pathname: string): boolean {
   if (pathname.startsWith('/student')) {
     return user.role === UserRole.STUDENT;
   }
+  if (pathname.startsWith('/faculty/counselling')) {
+    return (
+      user.role === UserRole.FACULTY ||
+      user.role === UserRole.HOD ||
+      Boolean(user.isCounsellor)
+    );
+  }
   if (pathname.startsWith('/faculty')) {
     return (
       user.role === UserRole.FACULTY ||
@@ -42,18 +44,8 @@ function isUserAuthorizedForPath(user: any, pathname: string): boolean {
       Boolean(user.isFaculty)
     );
   }
-  if (pathname.startsWith('/counsellor')) {
-    return (
-      user.role === UserRole.COUNSELLOR ||
-      user.role === UserRole.HOD ||
-      Boolean(user.isCounsellor)
-    );
-  }
   if (pathname.startsWith('/hod')) {
     return user.role === UserRole.HOD;
-  }
-  if (pathname.startsWith('/head')) {
-    return user.role === UserRole.HEAD;
   }
   if (pathname.startsWith('/admin')) {
     return user.role === UserRole.SUPER_ADMIN;

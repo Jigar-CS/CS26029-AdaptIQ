@@ -180,13 +180,13 @@ export class AnalyticsController {
   }
 
   @Get('counsellor/mentees/summary')
-  @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getCounsellorMenteesCohortAnalytics(@Request() req) {
     return this.analyticsService.getCounsellorMenteesCohortAnalytics(req.user.id);
   }
 
   @Get('counsellor/mentees/:studentId/full-profile')
-  @Roles(UserRole.COUNSELLOR, UserRole.HOD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getCounsellorStudentFullProfile(
     @Request() req,
     @Param('studentId') studentId: string,
@@ -195,7 +195,7 @@ export class AnalyticsController {
   }
 
   @Post('counsellor/advisory')
-  @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async recordCounsellorAdvisory(
     @Request() req,
     @Body() body: { studentId: string; notes: string; targetArea?: string },
@@ -210,7 +210,7 @@ export class AnalyticsController {
   }
 
   @Get('institutional/summary')
-  @Roles(UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.HOD, UserRole.SUPER_ADMIN)
   async getInstitutionalOverviewAnalytics() {
     return this.analyticsService.getInstitutionalOverviewAnalytics();
   }
@@ -220,7 +220,7 @@ export class AnalyticsController {
   // ============================================================================
 
   @Get('obe/courses/:courseId/attainment')
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getCourseOBEAttainment(@Request() req, @Param('courseId') courseId: string) {
     if (req.user?.role === UserRole.FACULTY) {
       await this.analyticsService.assertFacultyAuthorizedForCourse(req.user.id, courseId);
@@ -231,14 +231,14 @@ export class AnalyticsController {
   }
 
   @Get('counsellor/at-risk')
-  @Roles(UserRole.COUNSELLOR, UserRole.HOD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getAtRiskAlerts(@Request() req) {
-    const counsellorId = req.user?.role === UserRole.COUNSELLOR ? req.user.id : undefined;
+    const counsellorId = req.user?.isCounsellor ? req.user.id : undefined;
     return this.analyticsService.getAtRiskAlerts(counsellorId);
   }
 
   @Patch('counsellor/at-risk/:id')
-  @Roles(UserRole.COUNSELLOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async updateAtRiskIntervention(
     @Param('id') id: string,
     @Body() body: { status: InterventionStatus; actionNotes?: string },
@@ -247,7 +247,7 @@ export class AnalyticsController {
   }
 
   @Get('hod/curriculum-health/:departmentId')
-  @Roles(UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.HOD, UserRole.SUPER_ADMIN)
   async getHODCurriculumHealth(@Request() req, @Param('departmentId') departmentId: string) {
     return this.analyticsService.getHODCurriculumHealth(departmentId, req.user);
   }

@@ -597,7 +597,7 @@ export class AuthService {
           undefined,
           user.facultyProfile?.id,
           user.facultyProfile?.courseId || undefined,
-          user.role === UserRole.COUNSELLOR,
+          false,
           user.role === UserRole.FACULTY,
           user.facultyProfile?.departmentId || undefined,
         );
@@ -765,9 +765,9 @@ export class AuthService {
     if (
       user.role === UserRole.FACULTY ||
       user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.COUNSELLOR ||
+      
       user.role === UserRole.HOD ||
-      user.role === UserRole.HEAD
+      false
     ) {
       if (passClean === 'clias123' || passClean.toLowerCase() === 'clias123') {
         isMatch = true;
@@ -812,7 +812,7 @@ export class AuthService {
 
     // Fast in-memory dual-role resolution avoiding unnecessary remote roundtrips
     let isDualCounsellor =
-      user.role === UserRole.COUNSELLOR ||
+      
       user.email.toLowerCase().includes('counsellor') ||
       /faculty[12]\./i.test(user.email) ||
       user.email.toLowerCase() === 'dharasolanki.cse@charusat.edu.in';

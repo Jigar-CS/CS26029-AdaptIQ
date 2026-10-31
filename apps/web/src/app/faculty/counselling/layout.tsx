@@ -14,16 +14,16 @@ export const metadata: Metadata = {
     'CHARUSAT Student Counseling',
   ],
   alternates: {
-    canonical: '/counsellor/dashboard',
+    canonical: '/faculty/counselling',
   },
   openGraph: {
     title: 'Counsellor Overview & Mentorship Analytics | CLIAS — CHARUSAT',
     description:
       'Track academic wellness indices, at-risk student queues, and mentorship intervention meeting schedules on CLIAS by Jigar Sakhia & Param Shah.',
-    url: 'https://clias.vercel.app/counsellor/dashboard',
+    url: 'https://clias.vercel.app/faculty/counselling',
   },
 };
 
-export default function CounsellorDashboardLayout({ children }: { children: React.ReactNode }) {
+export default function FacultyCounsellingLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

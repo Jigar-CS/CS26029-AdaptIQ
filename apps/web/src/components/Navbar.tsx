@@ -254,7 +254,7 @@ function NotificationCardBody({ item }: { item: NotificationItem }) {
         </p>
         <div className="pt-1">
           <Link
-            href="/counsellor/alerts"
+            href="/faculty/counselling/alerts"
             className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg shadow-xs transition"
           >
             <span>Open Student Intervention</span>

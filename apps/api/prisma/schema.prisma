@@ -10,9 +10,7 @@ generator client {
 enum UserRole {
   STUDENT
   FACULTY
-  COUNSELLOR
   HOD
-  HEAD
   SUPER_ADMIN
 }
 

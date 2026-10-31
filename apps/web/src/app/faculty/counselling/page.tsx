@@ -49,7 +49,7 @@ export default function CounsellorDashboard() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'RESOLVED'>('ALL');
 
   useEffect(() => {
-    if (!loading && (!user || (user.role !== UserRole.COUNSELLOR && user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.HOD && !user.isCounsellor))) {
+    if (!loading && (!user || (user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.HOD && !user.isCounsellor))) {
       router.push('/auth/login');
       return;
     }
@@ -202,7 +202,7 @@ export default function CounsellorDashboard() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => router.push('/counsellor/students')}
+                onClick={() => router.push('/faculty/counselling/students')}
                 className="action-button bg-[#e05033] hover:bg-[#c93f24] text-white shrink-0"
                 style={{ borderRadius: 0 }}
               >
@@ -372,7 +372,7 @@ export default function CounsellorDashboard() {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Assigned Student Knowledge Profiles</h3>
               <a
-                href="/counsellor/students"
+                href="/faculty/counselling/students"
                 className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-cyan-400 dark:hover:text-cyan-300 hover:underline flex items-center gap-1"
               >
                 <span>Full Roster View</span>

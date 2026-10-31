@@ -154,7 +154,7 @@ export class AssessmentController {
    * Faculty: View assessment cohort analytics and score distribution
    */
   @Get(':id/analytics')
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getFacultyAnalytics(@Param('id') assessmentId: string) {
     return this.assessmentService.getFacultyAnalytics(assessmentId);
   }
@@ -163,7 +163,7 @@ export class AssessmentController {
    * Student & Faculty: View dynamic assessment leaderboard sorted by score & time
    */
   @Get(':id/leaderboard')
-  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.STUDENT, UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getAssessmentLeaderboard(@Req() req: any, @Param('id') assessmentId: string) {
     const studentProfileId =
       req.user?.studentId ||

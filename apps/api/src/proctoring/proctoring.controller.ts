@@ -53,7 +53,7 @@ export class ProctoringController {
   }
 
   @Get('invigilator/sessions')
-  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.HEAD, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FACULTY, UserRole.HOD, UserRole.SUPER_ADMIN)
   async getInvigilatorSessions() {
     return this.proctoringService.getInvigilatorSessions();
   }
@@ -62,8 +62,8 @@ export class ProctoringController {
   @Roles(
     UserRole.FACULTY,
     UserRole.HOD,
-    UserRole.HEAD,
-    UserRole.COUNSELLOR,
+    
+    
     UserRole.SUPER_ADMIN,
   )
   async submitInvigilatorReview(
