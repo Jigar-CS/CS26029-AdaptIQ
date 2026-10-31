@@ -9,25 +9,25 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/auth/login</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/auth/register</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -37,49 +37,49 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/student/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/practice</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/assessments</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/coding</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/learning-path</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/leaderboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/placement</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/student/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -89,49 +89,49 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/faculty/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/assessments</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/questions</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/ai-generator</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/analytics</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/invigilation</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/disputes</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/faculty/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -141,25 +141,25 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/counsellor/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/counsellor/students</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/counsellor/alerts</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/counsellor/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -169,13 +169,13 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/hod/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/hod/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -185,19 +185,19 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/head/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/head/programs</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/head/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -207,31 +207,31 @@
   <!-- ============================================================ -->
   <url>
     <loc>https://clias.vercel.app/admin/dashboard</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/admin/institutes</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/admin/students</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/admin/settings</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://clias.vercel.app/admin/profile</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-31</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

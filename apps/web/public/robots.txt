@@ -1,8 +1,17 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /student/assessments/*/take
 
 User-agent: Googlebot
 Allow: /
+Disallow: /api/
+Disallow: /student/assessments/*/take
+
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Disallow: /student/assessments/*/take
 
 Sitemap: https://clias.vercel.app/sitemap.xml
+
