@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AdaptIQ Answer Companion</string>
+    <string name="admin_receiver_description">Enforces institutional exam lockdown and disables screen pinning escape gestures.</string>
+</resources>

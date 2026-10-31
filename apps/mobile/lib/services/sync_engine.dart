@@ -261,6 +261,24 @@ class SyncEngine {
     });
   }
 
+  void sendLockdownViolation(String reason) {
+    if (_isConnected && _channel != null) {
+      try {
+        _channel!.sink.add(jsonEncode({
+          'type': 'COMPANION_SECURITY_VIOLATION',
+          'sessionId': sessionId,
+          'questionId': questionId,
+          'reason': reason,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        }));
+        debugPrint('[SyncEngine] Sent COMPANION_SECURITY_VIOLATION: $reason');
+      } catch (e) {
+        debugPrint('[SyncEngine] Failed to send violation: $e');
+      }
+    }
+  }
+
+
   /// Performs a delta sync operation.
   Future<void> performSync() async {
     if (_pendingDelta.isEmpty && _deletedDelta.isEmpty) return;
