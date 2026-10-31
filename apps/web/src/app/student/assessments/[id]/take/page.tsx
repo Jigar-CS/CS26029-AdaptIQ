@@ -1681,8 +1681,8 @@ export default function TakeAssessmentPage() {
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Dedicated Ultra-Fast Handheld Mobile Phone Detector (600ms High-Frequency Scan)
-  // Operates on a lightweight 320x240 offscreen canvas buffer for lightning-fast ~25ms inference
+  // Dedicated Ultra-Fast Handheld Mobile Phone Detector (Sub-Second 150ms Scan)
+  // Operates on a lightweight 320x240 offscreen canvas buffer for instant (< 25ms) inference
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
@@ -1698,27 +1698,35 @@ export default function TakeAssessmentPage() {
     const runFastPhoneDetection = async () => {
       if (isDisposed) return;
       if (isDetectingPhone || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
-        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 600);
+        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 150);
         return;
       }
 
       const video = livePipVideoRef.current;
       if (!video || video.videoWidth === 0 || video.videoHeight === 0 || !visionModelRef.current || !phoneCtx) {
-        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 600);
+        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 200);
         return;
       }
 
       isDetectingPhone = true;
       try {
         phoneCtx.drawImage(video, 0, 0, 320, 240);
-        const predictions = await visionModelRef.current.detect(phoneCanvas);
+        // Explicitly pass minScore: 0.18 so COCO-SSD doesn't suppress predictions below default 0.50
+        const predictions = await visionModelRef.current.detect(phoneCanvas, 10, 0.18);
 
         const phone = predictions.find((p: any) => {
           const c = (p.class || '').toLowerCase();
-          if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote' && !c.includes('phone')) {
+          if (
+            c !== 'cell phone' &&
+            c !== 'mobile phone' &&
+            c !== 'telephone' &&
+            c !== 'remote' &&
+            !c.includes('phone') &&
+            !c.includes('mobile')
+          ) {
             return false;
           }
-          return p.score >= 0.22;
+          return p.score >= 0.18;
         });
 
         if (phone && !isAutoSubmittingRef.current) {
@@ -1762,13 +1770,13 @@ export default function TakeAssessmentPage() {
       } finally {
         isDetectingPhone = false;
         if (!isDisposed) {
-          timer = setTimeout(runFastPhoneDetection, 600);
+          timer = setTimeout(runFastPhoneDetection, 150);
         }
       }
     };
 
-    // Immediate start on exam entry (300ms)
-    timer = setTimeout(runFastPhoneDetection, 300);
+    // Immediate start on exam entry (100ms)
+    timer = setTimeout(runFastPhoneDetection, 100);
 
     return () => {
       isDisposed = true;
@@ -1820,12 +1828,12 @@ export default function TakeAssessmentPage() {
             const cCtx = canvas.getContext('2d');
             if (cCtx) {
               cCtx.drawImage(video, 0, 0, 320, 240);
-              const predictions = await visionModelRef.current.detect(canvas);
+              const predictions = await visionModelRef.current.detect(canvas, 10, 0.18);
 
               const phone = predictions.find((p: any) => {
                 const c = (p.class || '').toLowerCase();
-                if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote' && !c.includes('phone')) return false;
-                return p.score >= 0.22;
+                if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote' && !c.includes('phone') && !c.includes('mobile')) return false;
+                return p.score >= 0.18;
               });
 
               if (phone) {
