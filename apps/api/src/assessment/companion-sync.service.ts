@@ -823,14 +823,41 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     const pairing = this.resolvePairing(sessionId);
     const norm = pairing ? pairing.pin : this.normalizeSessionId(sessionId);
     const q = questionId.toUpperCase();
-    const key = `${norm}:${q}`;
-    if (
-      this.answerSheets[key] &&
-      Array.isArray(this.answerSheets[key].strokes) &&
-      this.answerSheets[key].strokes.length > 0
-    ) {
-      return this.answerSheets[key];
+
+    // Check candidate keys in priority order
+    const candidateKeys = [
+      `${norm}:${q}`,
+      `${this.normalizeSessionId(sessionId)}:${q}`,
+      `${sessionId}:${q}`,
+    ];
+    if (pairing) {
+      if (pairing.pin) candidateKeys.push(`${pairing.pin}:${q}`);
+      if (pairing.token) candidateKeys.push(`${pairing.token}:${q}`);
+      if (pairing.submissionId) candidateKeys.push(`${this.normalizeSessionId(pairing.submissionId)}:${q}`);
     }
+
+    for (const key of candidateKeys) {
+      const sheet = this.answerSheets[key];
+      if (sheet && Array.isArray(sheet.strokes) && sheet.strokes.length > 0) {
+        return sheet;
+      }
+    }
+
+    // Dynamic fallback: scan all buffered sheets matching this question id
+    for (const [k, sheet] of Object.entries(this.answerSheets)) {
+      if (k.toUpperCase().endsWith(`:${q}`) && Array.isArray(sheet.strokes) && sheet.strokes.length > 0) {
+        const prefix = k.split(':')[0].toUpperCase();
+        if (
+          prefix === norm ||
+          prefix === sessionId.toUpperCase() ||
+          prefix === this.normalizeSessionId(sessionId) ||
+          (pairing && (prefix === pairing.pin || prefix === pairing.token?.toUpperCase() || prefix === this.normalizeSessionId(pairing.submissionId)))
+        ) {
+          return sheet;
+        }
+      }
+    }
+
     return { sessionId: norm, questionId: q, strokes: [], lastUpdated: Date.now() };
   }
 
@@ -877,7 +904,8 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     if (targetSubId && targetSubId !== norm) {
       this.exitPasses[targetSubId] = randomPass;
       this.submittedSessions.add(targetSubId);
-      for (let i = 1; i <= 10; i++) {
+      // Synchronize and persist student answer sheets under both PIN and submissionId keys
+      for (let i = 1; i <= 20; i++) {
         const q = `Q${i}`;
         const sourceSheet = this.answerSheets[`${norm}:${q}`];
         if (sourceSheet && sourceSheet.strokes && sourceSheet.strokes.length > 0) {
@@ -917,16 +945,7 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
       this.invalidateEphemeralPairing(targetSubId, false);
     }
 
-    // Reset this room's live buffer after submission so subsequent attempts start fresh
-    for (let i = 1; i <= 10; i++) {
-      const q = `Q${i}`;
-      this.answerSheets[`${norm}:${q}`] = {
-        sessionId: norm,
-        questionId: q,
-        strokes: [],
-        lastUpdated: Date.now(),
-      };
-    }
+    // Persist all completed answer sheets safely to disk for faculty inspection
     this.saveToDisk();
 
     return {

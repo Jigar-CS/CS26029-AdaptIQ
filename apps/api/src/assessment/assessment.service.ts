@@ -1303,13 +1303,6 @@ export class AssessmentService {
       },
     });
 
-    // Notify companion gateway, lock drawing canvas, and generate/broadcast exit pass to mobile
-    let exitPassCode: string | undefined = undefined;
-    try {
-      const exitRes = this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
-      exitPassCode = exitRes?.exitPass;
-    } catch (_) {}
-
     if (lockResult.count === 0) {
       const existing = await this.prisma.assessmentSubmission.findUnique({
         where: { id: submissionId },
@@ -1443,29 +1436,49 @@ export class AssessmentService {
 
       if (isDescriptive) {
         hasDescriptiveQuestions = true;
-        let finalAnswerText =
+        let typedCandidate =
           ans.answerText ||
           ans.sourceCode ||
           (ans.selectedOptionId && !String(ans.selectedOptionId).startsWith('opt-')
             ? String(ans.selectedOptionId)
             : null);
 
-        // If no text was packaged by client, check if companion sync service holds buffered strokes
-        if (!finalAnswerText) {
-          const qIdx = submission.assessment.questions.findIndex((aq) => aq.questionId === ans.questionId);
-          const qKey = qIdx >= 0 ? `Q${qIdx + 1}` : null;
-          if (qKey) {
-            const sheet = this.companionSync.getStrokes(submissionId, qKey);
-            if (sheet && sheet.strokes && sheet.strokes.length > 0) {
-              finalAnswerText = JSON.stringify({
-                type: 'DIGITAL_INK',
-                questionId: qKey,
-                strokesCount: sheet.strokes.length,
-                strokes: sheet.strokes,
-                lastUpdated: sheet.lastUpdated,
-              });
-            }
+        if (typeof typedCandidate === 'string') {
+          typedCandidate = typedCandidate.trim();
+        }
+
+        const qIdx = submission.assessment.questions.findIndex((aq) => aq.questionId === ans.questionId);
+        const qKey = qIdx >= 0 ? `Q${qIdx + 1}` : null;
+
+        // Check companion sync service for buffered digital ink strokes
+        let companionSheet: any = null;
+        if (qKey) {
+          const sheet = this.companionSync.getStrokes(submissionId, qKey);
+          if (sheet && sheet.strokes && sheet.strokes.length > 0) {
+            companionSheet = sheet;
           }
+        }
+
+        let finalAnswerText: string | null = null;
+        if (companionSheet && typedCandidate) {
+          finalAnswerText = JSON.stringify({
+            type: 'DESCRIPTIVE_SUBMISSION',
+            questionId: qKey,
+            typedText: typedCandidate,
+            strokesCount: companionSheet.strokes.length,
+            strokes: companionSheet.strokes,
+            lastUpdated: companionSheet.lastUpdated,
+          });
+        } else if (companionSheet) {
+          finalAnswerText = JSON.stringify({
+            type: 'DIGITAL_INK',
+            questionId: qKey,
+            strokesCount: companionSheet.strokes.length,
+            strokes: companionSheet.strokes,
+            lastUpdated: companionSheet.lastUpdated,
+          });
+        } else if (typedCandidate) {
+          finalAnswerText = typedCandidate;
         }
 
         answerRecords.push({
@@ -1515,6 +1528,13 @@ export class AssessmentService {
     await this.prisma.submissionAnswer.createMany({
       data: answerRecords,
     });
+
+    // Notify companion gateway, lock drawing canvas, and generate/broadcast exit pass to mobile
+    let exitPassCode: string | undefined = undefined;
+    try {
+      const exitRes = this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
+      exitPassCode = exitRes?.exitPass;
+    } catch (_) {}
 
     const finalStatus = hasDescriptiveQuestions
       ? SubmissionStatus.SUBMITTED

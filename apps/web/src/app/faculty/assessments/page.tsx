@@ -293,17 +293,27 @@ export default function FacultyAssessmentsPage() {
 
   const PAGE_HEIGHT = 750;
   const sheetTotalPages = React.useMemo(() => {
-    if (!sheetStrokes || sheetStrokes.length === 0) return 0;
-    let maxY = 0;
-    for (const stroke of sheetStrokes) {
-      const pts = stroke.points || stroke.pts || [];
-      for (const p of pts) {
-        const py = Number(p.y) || 0;
-        if (py > maxY) maxY = py;
+    if (sheetStrokes && sheetStrokes.length > 0) {
+      let maxY = 0;
+      for (const stroke of sheetStrokes) {
+        const pts = stroke.points || stroke.pts || [];
+        for (const p of pts) {
+          const py = Number(p.y) || 0;
+          if (py > maxY) maxY = py;
+        }
       }
+      return Math.max(1, Math.ceil((maxY > 0 ? maxY + 60 : 1) / PAGE_HEIGHT));
     }
-    return Math.max(1, Math.ceil((maxY > 0 ? maxY + 40 : 1) / PAGE_HEIGHT));
-  }, [sheetStrokes]);
+    if (sheetTypedText && sheetTypedText.trim().length > 0) {
+      const lines = sheetTypedText.split('\n');
+      let estimatedLines = 0;
+      for (const l of lines) {
+        estimatedLines += Math.max(1, Math.ceil(l.length / 65));
+      }
+      return Math.max(1, Math.ceil((estimatedLines * 36 + 140) / PAGE_HEIGHT));
+    }
+    return 1;
+  }, [sheetStrokes, sheetTypedText]);
 
   // Interactive Faculty Grading State
   const [gradingMarks, setGradingMarks] = useState<Record<string, number>>({});
@@ -616,8 +626,13 @@ export default function FacultyAssessmentsPage() {
     let ans = null;
     if (subObj?.answers && Array.isArray(subObj.answers)) {
       if (targetQuestionId) {
-        ans = subObj.answers.find((a: any) => a.questionId === targetQuestionId) || null;
-      } else {
+        ans = subObj.answers.find((a: any) =>
+          a.questionId === targetQuestionId ||
+          a.question?.id === targetQuestionId ||
+          a.id === targetQuestionId
+        ) || null;
+      }
+      if (!ans) {
         ans = subObj.answers.find((a: any) => a.order === (qIndex + 1)) || subObj.answers[qIndex] || null;
       }
     }
@@ -646,6 +661,7 @@ export default function FacultyAssessmentsPage() {
           rawPayload.typedText ||
           rawPayload.text ||
           rawPayload.answer ||
+          rawPayload.answerText ||
           rawPayload.descriptiveAnswer ||
           rawPayload.studentAnswer ||
           rawPayload.studentResponse ||
@@ -680,6 +696,7 @@ export default function FacultyAssessmentsPage() {
             const textCandidate =
               parsed.typedText ||
               parsed.text ||
+              parsed.answerText ||
               parsed.answer ||
               parsed.descriptiveAnswer ||
               parsed.studentAnswer ||
@@ -708,14 +725,18 @@ export default function FacultyAssessmentsPage() {
       if (!foundText && ans.studentAnswer) parseAnswerPayload(ans.studentAnswer);
       if (!foundText && ans.sourceCode) parseAnswerPayload(ans.sourceCode);
       if (!foundText && ans.text && !isSystemBoilerplate(ans.text)) parseAnswerPayload(ans.text);
+      if (!foundText && ans.selectedOptionId && !String(ans.selectedOptionId).startsWith('opt-')) {
+        parseAnswerPayload(ans.selectedOptionId);
+      }
     }
 
-    // 2. Only check companion sync buffer if this submission had ZERO answers persisted in DB (legacy/un-synced)
-    const hasAnyPersistedDbAnswers = subObj?.answers?.some((a: any) => a.answerText || a.sourceCode);
-    if (!hasAnyPersistedDbAnswers && foundStrokes.length === 0 && subObj) {
+    // 2. Fallback to companion sync buffer if digital ink strokes were not packaged in DB record
+    if (foundStrokes.length === 0 && subObj) {
       const candidates = [
         subObj.submissionId,
         subObj.id,
+        subObj.pairingPin,
+        subObj.pin,
         subObj.enrollmentNumber ? `CLIAS-${subObj.enrollmentNumber}` : null,
       ].filter(Boolean);
 
@@ -752,7 +773,8 @@ export default function FacultyAssessmentsPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const totalHeight = sheetTotalPages * PAGE_HEIGHT;
+    const totalPages = Math.max(1, sheetTotalPages);
+    const totalHeight = totalPages * PAGE_HEIGHT;
     if (canvas.width !== 900 || canvas.height !== totalHeight) {
       canvas.width = 900;
       canvas.height = totalHeight;
@@ -782,7 +804,7 @@ export default function FacultyAssessmentsPage() {
     ctx.stroke();
 
     // 4. Page Break Dividers between pages (at y = 750, 1500, etc.)
-    for (let p = 1; p < sheetTotalPages; p++) {
+    for (let p = 1; p < totalPages; p++) {
       const py = p * PAGE_HEIGHT;
 
       // Distinct page break line
@@ -807,70 +829,165 @@ export default function FacultyAssessmentsPage() {
       ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`— PAGE ${p + 1} OF ${sheetTotalPages} • ${sheetActiveQ} —`, 450, py);
+      ctx.fillText(`— PAGE ${p + 1} OF ${totalPages} • ${sheetActiveQ} —`, 450, py);
       ctx.restore();
     }
 
-    // 5. Render ALL handwritten student strokes directly with natural coordinates
-    for (const stroke of sheetStrokes) {
-      const pts = stroke.points || stroke.pts || [];
-      if (pts.length === 0) continue;
+    // 5. Render handwritten strokes if available
+    if (sheetStrokes && sheetStrokes.length > 0) {
+      // Analyze coordinate bounds
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const stroke of sheetStrokes) {
+        const pts = stroke.points || stroke.pts || [];
+        for (const p of pts) {
+          const px = Number(p.x) || 0;
+          const py = Number(p.y) || 0;
+          if (px < minX) minX = px;
+          if (px > maxX) maxX = px;
+          if (py < minY) minY = py;
+          if (py > maxY) maxY = py;
+        }
+      }
 
+      const isNormalized = maxX > 0 && maxX <= 1.0 && maxY <= 1.0;
+      const isMobileScale = maxX > 1.0 && maxX < 480;
+
+      const transformPoint = (px: number, py: number) => {
+        if (isNormalized) {
+          return {
+            x: 75 + px * 780,
+            y: 48 + py * (totalHeight - 80),
+          };
+        }
+        if (isMobileScale) {
+          // Proportionally scale phone coordinates so natural writing fits across ruled notebook lines
+          const scale = Math.min(1.7, 780 / Math.max(320, maxX));
+          return {
+            x: 75 + (px - Math.min(minX, 20)) * scale,
+            y: Math.max(25, py * scale),
+          };
+        }
+        return { x: px, y: py };
+      };
+
+      for (const stroke of sheetStrokes) {
+        const rawPts = stroke.points || stroke.pts || [];
+        if (rawPts.length === 0) continue;
+
+        const pts = rawPts.map((p: any) => transformPoint(Number(p.x) || 0, Number(p.y) || 0));
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const toolType = (stroke.toolType || stroke.tool || 'PEN').toUpperCase();
+        if (toolType === 'HIGHLIGHTER') {
+          ctx.globalAlpha = 0.4;
+          ctx.strokeStyle = '#FACC15';
+          ctx.lineWidth = (stroke.strokeWidth || stroke.w || 20) * (isMobileScale ? 1.3 : 1.0);
+        } else if (toolType === 'ERASER') {
+          ctx.globalAlpha = 1.0;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = (stroke.strokeWidth || stroke.w || 24) * (isMobileScale ? 1.3 : 1.0);
+        } else {
+          ctx.globalAlpha = 1.0;
+          let color = '#0F172A';
+          if (stroke.color) {
+            if (typeof stroke.color === 'number') {
+              const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
+              const r = parseInt(hex.substring(2, 4), 16);
+              const g = parseInt(hex.substring(4, 6), 16);
+              const b = parseInt(hex.substring(6, 8), 16);
+              color = `rgb(${r},${g},${b})`;
+            } else if (typeof stroke.color === 'string') {
+              color = stroke.color;
+            }
+          }
+          ctx.strokeStyle = color;
+          ctx.lineWidth = (stroke.strokeWidth || stroke.w || 3.0) * (isMobileScale ? 1.25 : 1.0);
+        }
+
+        // Handle single point (dots on 'i', periods, commas)
+        if (pts.length === 1) {
+          ctx.beginPath();
+          const r = Math.max(1.5, (ctx.lineWidth || 3.0) / 2);
+          ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.fill();
+          ctx.restore();
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+
+        for (let i = 1; i < pts.length; i++) {
+          const p0 = pts[i - 1];
+          const p1 = pts[i];
+          const midX = (p0.x + p1.x) / 2;
+          const midY = (p0.y + p1.y) / 2;
+          ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+        }
+
+        const last = pts[pts.length - 1];
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (sheetTypedText && sheetTypedText.trim().length > 0) {
+      // 6. Typeset student typed descriptive response cleanly onto the ruled lines
       ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.font = '500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = '#0F172A';
+      ctx.textBaseline = 'alphabetic';
 
-      const toolType = (stroke.toolType || stroke.tool || 'PEN').toUpperCase();
-      if (toolType === 'HIGHLIGHTER') {
-        ctx.globalAlpha = 0.4;
-        ctx.strokeStyle = '#FACC15';
-        ctx.lineWidth = stroke.strokeWidth || stroke.w || 20;
-      } else {
-        ctx.globalAlpha = 1.0;
-        let color = '#0F172A';
-        if (stroke.color) {
-          if (typeof stroke.color === 'number') {
-            const hex = (stroke.color >>> 0).toString(16).padStart(8, '0');
-            const r = parseInt(hex.substring(2, 4), 16);
-            const g = parseInt(hex.substring(4, 6), 16);
-            const b = parseInt(hex.substring(6, 8), 16);
-            color = `rgb(${r},${g},${b})`;
-          } else if (typeof stroke.color === 'string') {
-            color = stroke.color;
+      const leftMargin = 76;
+      const maxWidth = 780;
+      const startY = 48; // starts at first ruled line
+      let currentY = startY + lineSpacing - 8;
+
+      const paragraphs = sheetTypedText.split('\n');
+      for (const para of paragraphs) {
+        if (!para.trim()) {
+          currentY += lineSpacing;
+          continue;
+        }
+
+        const words = para.split(' ');
+        let currentLine = '';
+
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const metrics = ctx.measureText(testLine);
+
+          if (metrics.width > maxWidth && currentLine) {
+            ctx.fillText(currentLine, leftMargin, currentY);
+            currentLine = word;
+            currentY += lineSpacing;
+          } else {
+            currentLine = testLine;
           }
         }
-        ctx.strokeStyle = color;
-        ctx.lineWidth = stroke.strokeWidth || stroke.w || 3.0;
+
+        if (currentLine) {
+          ctx.fillText(currentLine, leftMargin, currentY);
+          currentY += lineSpacing;
+        }
       }
-
-      // Handle single point (dots on 'i', periods, commas)
-      if (pts.length === 1) {
-        ctx.beginPath();
-        const r = Math.max(1.5, (stroke.strokeWidth || stroke.w || 3.0) / 2);
-        ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
-        ctx.fillStyle = ctx.strokeStyle;
-        ctx.fill();
-        ctx.restore();
-        continue;
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-
-      for (let i = 1; i < pts.length; i++) {
-        const p0 = pts[i - 1];
-        const p1 = pts[i];
-        const midX = (p0.x + p1.x) / 2;
-        const midY = (p0.y + p1.y) / 2;
-        ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-      }
-
-      const last = pts[pts.length - 1];
-      ctx.lineTo(last.x, last.y);
-      ctx.stroke();
+      ctx.restore();
+    } else {
+      // 7. Watermark / Clean Placeholder when no response was recorded
+      ctx.save();
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.45)';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('— NO WRITTEN RESPONSE RECORDED FOR THIS QUESTION —', 450, 360);
+      ctx.font = '12px sans-serif';
+      ctx.fillText('The candidate did not submit handwritten strokes or typed responses.', 450, 390);
       ctx.restore();
     }
-  }, [sheetModalOpen, sheetStrokes, sheetTotalPages, sheetActiveQ, sheetViewMode]);
+  }, [sheetModalOpen, sheetStrokes, sheetTypedText, sheetTotalPages, sheetActiveQ, sheetViewMode]);
 
   const exportMarksCsv = (analyticsData?: any) => {
     const target = analyticsData || activeAnalytics;
@@ -4559,7 +4676,9 @@ export default function FacultyAssessmentsPage() {
                         <span className="text-xs font-bold text-slate-300 block">Inspection Summary</span>
                         <div className="flex justify-between text-xs text-slate-400">
                           <span>Stroke Count:</span>
-                          <strong className="text-emerald-400 font-mono">{sheetStrokes.length} digital ink strokes</strong>
+                          <strong className="text-emerald-400 font-mono">
+                            {sheetStrokes.length > 0 ? `${sheetStrokes.length} digital ink strokes` : (sheetTypedText ? 'Typed text response' : '0 strokes')}
+                          </strong>
                         </div>
                         <div className="flex justify-between text-xs text-slate-400">
                           <span>Pages Written:</span>
@@ -4568,9 +4687,15 @@ export default function FacultyAssessmentsPage() {
                           </strong>
                         </div>
                         <div className="flex justify-between text-xs text-slate-400">
-                          <span>Page Dimensions:</span>
-                          <strong className="text-slate-200 font-mono">
-                            {sheetTotalPages} × (900 × 750 px)
+                          <span>Submission Format:</span>
+                          <strong className="text-slate-200 font-mono text-[11px]">
+                            {sheetStrokes.length > 0 && sheetTypedText
+                              ? 'Hybrid (Digital Ink + Typed)'
+                              : sheetStrokes.length > 0
+                              ? 'Digital Ink (Companion Pad)'
+                              : sheetTypedText
+                              ? 'Typed Descriptive Answer'
+                              : 'No Submission'}
                           </strong>
                         </div>
                       </div>
@@ -4595,12 +4720,17 @@ export default function FacultyAssessmentsPage() {
                         </div>
                       )}
 
-                      {sheetStrokes.length > 0 && (
+                      {(sheetStrokes.length > 0 || sheetTypedText) && (
                         <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-300">Student Submitted Answer Sheet</span>
+                            <span className="font-semibold text-slate-300">
+                              {sheetStrokes.length > 0 ? 'Student Submitted Answer Sheet' : 'Ruled Examination Answer Sheet'}
+                            </span>
                             <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                               {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              {sheetStrokes.length > 0 ? 'Digital Ink' : 'Typeset Paper'}
                             </span>
                           </div>
 
@@ -4662,17 +4792,15 @@ export default function FacultyAssessmentsPage() {
                           const top = e.currentTarget.scrollTop;
                           const currentP = Math.min(
                             Math.max(1, sheetTotalPages),
-                            Math.max(1, Math.floor(top / PAGE_HEIGHT) + 1)
+                            Math.floor(top / PAGE_HEIGHT) + 1
                           );
                           setSheetCurrentPage(currentP);
                         }}
                         className="relative border-2 border-slate-700 rounded-2xl overflow-y-auto p-3.5 bg-slate-900/90 shadow-2xl max-h-[660px] space-y-4"
                       >
-                        {/* Unified Multi-Page Answer Sheet Card - Hidden when 0 strokes recorded */}
+                        {/* Unified Multi-Page Answer Sheet Card - Always visible with proper rendering */}
                         <div
-                          className={`bg-white rounded-2xl shadow-xl border-2 border-slate-600/70 overflow-hidden relative transition-all ${
-                            sheetStrokes.length === 0 ? 'hidden' : 'block'
-                          } ${
+                          className={`bg-white rounded-2xl shadow-xl border-2 border-slate-600/70 overflow-hidden relative transition-all block ${
                             sheetViewMode === '100' ? 'w-[900px] mx-auto' : 'w-full'
                           }`}
                         >
@@ -4686,7 +4814,7 @@ export default function FacultyAssessmentsPage() {
                               </span>
                             </div>
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                              CLIAS DIGITAL INK EXAM SHEET ({Math.max(1, sheetTotalPages)} {sheetTotalPages <= 1 ? 'PAGE' : 'PAGES'})
+                              CLIAS OFFICIAL EXAM ANSWER SHEET ({Math.max(1, sheetTotalPages)} {sheetTotalPages <= 1 ? 'PAGE' : 'PAGES'})
                             </span>
                           </div>
 
@@ -4699,30 +4827,22 @@ export default function FacultyAssessmentsPage() {
                           {/* Page Footer */}
                           <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-[10px] font-mono text-slate-500">
                             <span>{selectedSubForSheet.studentName} ({selectedSubForSheet.enrollmentNumber || selectedSubForSheet.email})</span>
-                            <span>Total Exam Writing: {sheetTotalPages} {sheetTotalPages === 1 ? 'Page' : 'Pages'} • {sheetStrokes.length} Strokes Recorded</span>
+                            <span>
+                              {sheetStrokes.length > 0
+                                ? `Total Exam Writing: ${sheetTotalPages} ${sheetTotalPages === 1 ? 'Page' : 'Pages'} • ${sheetStrokes.length} Strokes Recorded`
+                                : sheetTypedText
+                                ? `Typeset Submission: ${sheetTotalPages} ${sheetTotalPages === 1 ? 'Page' : 'Pages'} • Verified Response`
+                                : 'Empty Sheet'}
+                            </span>
                           </div>
                         </div>
 
-                        {sheetStrokes.length === 0 && !sheetLoading && (
-                          sheetTypedText ? (
-                            <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/30 text-xs text-slate-300 flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-                                <CheckCircle2 className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <p className="font-bold text-white text-xs">Descriptive Response Recorded Above</p>
-                                <p className="text-[11px] text-slate-400 mt-0.5">
-                                  Candidate completed this descriptive question via typed response. No handwriting strokes were captured on the digital companion pad.
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 bg-slate-950/80 rounded-2xl border border-slate-800">
-                              <FileText className="w-12 h-12 text-slate-500 mb-2" />
-                              <p className="font-bold text-sm text-slate-200">No response recorded for {sheetActiveQ}</p>
-                              <p className="text-xs text-slate-400 mt-1">The student did not submit written digital ink strokes or typed text for this question.</p>
-                            </div>
-                          )
+                        {sheetStrokes.length === 0 && !sheetLoading && !sheetTypedText && (
+                          <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 bg-slate-950/80 rounded-2xl border border-slate-800">
+                            <FileText className="w-12 h-12 text-slate-500 mb-2" />
+                            <p className="font-bold text-sm text-slate-200">No response recorded for {sheetActiveQ}</p>
+                            <p className="text-xs text-slate-400 mt-1">The student did not submit written digital ink strokes or typed text for this question.</p>
+                          </div>
                         )}
                       </div>
                     </div>
