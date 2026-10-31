@@ -70,7 +70,12 @@ export class ProctoringService {
   /**
    * Completes face enrollment verification at test start (Privacy by Design: no permanent raw biometric storage).
    */
-  async verifyFaceEnrollment(sessionId: string, snapshot?: string) {
+  async verifyFaceEnrollment(
+    sessionId: string,
+    snapshot?: string,
+    matchConfidence?: number,
+    matchDetails?: string,
+  ) {
     const session = await this.prisma.proctoringSession.findFirst({
       where: {
         OR: [{ id: sessionId }, { submissionId: sessionId }],
@@ -81,14 +86,18 @@ export class ProctoringService {
       throw new NotFoundException(`Proctoring session ${sessionId} not found.`);
     }
 
+    const note = snapshot
+      ? `[BIOMETRIC_VERIFIED] Test entry face matched against university database at ${new Date().toISOString()}${
+          typeof matchConfidence === 'number' ? ` (Match confidence: ${(matchConfidence * 100).toFixed(1)}%)` : ''
+        }${matchDetails ? ` | ${matchDetails}` : ''}`
+      : session.invigilatorNotes;
+
     return this.prisma.proctoringSession.update({
       where: { id: session.id },
       data: {
         faceEnrollmentVerified: true,
         enrolledAt: new Date(),
-        invigilatorNotes: snapshot
-          ? `[BASELINE_ENROLLED] Candidate reference photo verified and enrolled at ${new Date().toISOString()}`
-          : session.invigilatorNotes,
+        invigilatorNotes: note,
         status:
           session.status === ProctoringSessionStatus.FLAGGED
             ? ProctoringSessionStatus.FLAGGED

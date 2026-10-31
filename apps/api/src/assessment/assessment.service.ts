@@ -998,7 +998,7 @@ export class AssessmentService {
         student?.authorizedStudent?.enrollmentNumber,
         assessment.id,
       );
-      return await this.formatAttemptPayload(assessment, active, proc, student?.authorizedStudent?.enrollmentNumber, pairing);
+      return await this.formatAttemptPayload(assessment, active, proc, student?.authorizedStudent?.enrollmentNumber, pairing, student);
     }
 
     if (studentSubmissions.length >= assessment.allowedAttempts) {
@@ -1066,7 +1066,55 @@ export class AssessmentService {
       student?.authorizedStudent?.enrollmentNumber,
       assessment.id,
     );
-    return await this.formatAttemptPayload(assessment, newSubmission, proc, student?.authorizedStudent?.enrollmentNumber, pairing);
+    return await this.formatAttemptPayload(assessment, newSubmission, proc, student?.authorizedStudent?.enrollmentNumber, pairing, student);
+  }
+
+  private async getStudentBiometrics(student: any, userId?: string) {
+    let front = student?.faceFrontSnapshot || null;
+    let left = student?.faceLeftSnapshot || null;
+    let right = student?.faceRightSnapshot || null;
+    let descFront = student?.faceDescriptorFront || null;
+    let descLeft = student?.faceDescriptorLeft || null;
+    let descRight = student?.faceDescriptorRight || null;
+
+    if (!front && (student?.userId || userId)) {
+      try {
+        const uId = student?.userId || userId;
+        const rows: any[] = await this.prisma.$queryRawUnsafe(
+          'SELECT faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentLocked FROM user_profiles WHERE userId = ? LIMIT 1',
+          uId,
+        );
+        if (rows && rows.length > 0) {
+          front = rows[0].faceFrontSnapshot || null;
+          left = rows[0].faceLeftSnapshot || null;
+          right = rows[0].faceRightSnapshot || null;
+          descFront = rows[0].faceDescriptorFront || null;
+          descLeft = rows[0].faceDescriptorLeft || null;
+          descRight = rows[0].faceDescriptorRight || null;
+        }
+      } catch (_) {}
+    }
+
+    return {
+      enrolled: Boolean(front || descFront),
+      faceFrontSnapshot: front,
+      faceLeftSnapshot: left,
+      faceRightSnapshot: right,
+      faceDescriptorFront: this.safeParseDescriptor(descFront),
+      faceDescriptorLeft: this.safeParseDescriptor(descLeft),
+      faceDescriptorRight: this.safeParseDescriptor(descRight),
+    };
+  }
+
+  private safeParseDescriptor(val: any) {
+    if (!val) return null;
+    if (Array.isArray(val)) return val;
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   private async ensureProctoringSession(submissionId: string, studentId: string) {
@@ -1083,7 +1131,14 @@ export class AssessmentService {
     });
   }
 
-  private async formatAttemptPayload(assessment: any, submission: any, proctoring?: any, studentEnrollment?: string, pairing?: any) {
+  private async formatAttemptPayload(
+    assessment: any,
+    submission: any,
+    proctoring?: any,
+    studentEnrollment?: string,
+    pairing?: any,
+    student?: any,
+  ) {
     // High-performance batch prefetch for any coding problems
     const codingQuestions = assessment.questions.filter((aq: any) => aq.question.type === QuestionType.CODING);
     const problemMap = new Map<string, any>();
@@ -1242,6 +1297,7 @@ export class AssessmentService {
       proctoringSessionId: proctoring?.id || null,
       trustScore: proctoring?.trustScore ?? 100,
       faceEnrollmentVerified: proctoring?.faceEnrollmentVerified ?? false,
+      dbBiometrics: await this.getStudentBiometrics(student, submission?.student?.userId),
       questions,
     };
   }

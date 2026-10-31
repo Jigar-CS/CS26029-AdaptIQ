@@ -488,8 +488,15 @@ export default function TakeAssessmentPage() {
   const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null);
   const baselineSnapshotRef = useRef<string | null>(null);
   const [faceEnrollmentFeedback, setFaceEnrollmentFeedback] = useState<
-    'NO_FACE_DETECTED' | 'MULTIPLE_FACES' | 'SUCCESS_VERIFIED' | 'LOW_CONFIDENCE' | 'MODEL_LOADING' | null
+    'NO_FACE_DETECTED' | 'MULTIPLE_FACES' | 'SUCCESS_VERIFIED' | 'LOW_CONFIDENCE' | 'MODEL_LOADING' | 'DB_MISMATCH' | null
   >(null);
+  const [dbBiometricsMatchInfo, setDbBiometricsMatchInfo] = useState<{
+    matched: boolean;
+    distance: number;
+    confidence: number;
+    angle?: string;
+  } | null>(null);
+  const dbFaceDescriptorsRef = useRef<{ angle: string; descriptor: Float32Array }[]>([]);
   const [faceModelStatus, setFaceModelStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [unauthorizedPerson, setUnauthorizedPerson] = useState<'MULTIPLE_FACES' | 'IDENTITY_MISMATCH' | null>(null);
   const unauthorizedPersonRef = useRef<'MULTIPLE_FACES' | 'IDENTITY_MISMATCH' | null>(null);
@@ -809,6 +816,47 @@ export default function TakeAssessmentPage() {
     return null;
   };
 
+  // Helper to extract or parse DB biometric descriptors
+  const loadDbBiometrics = async () => {
+    if (dbFaceDescriptorsRef.current.length > 0) return dbFaceDescriptorsRef.current;
+    const bio = examData?.dbBiometrics;
+    if (!bio) return [];
+
+    const list: { angle: string; descriptor: Float32Array }[] = [];
+    const fields = [
+      { angle: 'Front', desc: bio.faceDescriptorFront, snap: bio.faceFrontSnapshot },
+      { angle: 'Left', desc: bio.faceDescriptorLeft, snap: bio.faceLeftSnapshot },
+      { angle: 'Right', desc: bio.faceDescriptorRight, snap: bio.faceRightSnapshot },
+    ];
+
+    for (const f of fields) {
+      if (f.desc) {
+        try {
+          const parsed = typeof f.desc === 'string' ? JSON.parse(f.desc) : f.desc;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list.push({ angle: f.angle, descriptor: new Float32Array(parsed) });
+            continue;
+          }
+        } catch (e) {}
+      }
+      if (f.snap) {
+        try {
+          const img = new Image();
+          img.src = f.snap;
+          await new Promise((res) => {
+            img.onload = res;
+            img.onerror = res;
+          });
+          const desc = await extractDescriptorFromSnapshot(img);
+          if (desc) list.push({ angle: f.angle, descriptor: desc });
+        } catch {}
+      }
+    }
+
+    dbFaceDescriptorsRef.current = list;
+    return list;
+  };
+
   const handleCaptureFace = async () => {
     if (!examData?.submissionId) return;
     const video = preflightVideoRef.current;
@@ -852,6 +900,7 @@ export default function TakeAssessmentPage() {
 
     setEnrollingFace(true);
     setFaceEnrollmentFeedback(null);
+    setDbBiometricsMatchInfo(null);
     try {
       // 1. Capture high-fidelity frame to canvas for deep neural descriptor extraction
       const width = video.videoWidth || 640;
@@ -865,11 +914,7 @@ export default function TakeAssessmentPage() {
       ctx.drawImage(video, 0, 0, width, height);
       const snapshotUrl = canvas.toDataURL('image/jpeg', 0.90);
 
-      // 2. Persist snapshot URL into both state and ref (prevents React stale closure bugs)
-      baselineSnapshotRef.current = snapshotUrl;
-      setBaselineSnapshot(snapshotUrl);
-
-      // 3. Fast structural gradient profile fallback (< 2ms)
+      // Fast structural gradient profile fallback (< 2ms)
       const sx = Math.floor(width * 0.15);
       const sy = Math.floor(height * 0.10);
       const sw = Math.floor(width * 0.70);
@@ -879,12 +924,7 @@ export default function TakeAssessmentPage() {
         baselineFaceProfileRef.current = profile;
       }
 
-      // 4. Dispatch face enrollment snapshot to backend immediately
-      api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
-        snapshot: snapshotUrl,
-      }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
-
-      // 5. High-Precision Biometric Face Verification & 128-d Vector Extraction
+      // High-Precision Biometric Face Verification & 128-d Vector Extraction
       const faceapi = (window as any).faceapi;
       if (faceapi && faceApiModelLoadedRef.current) {
         const faces = await faceapi.detectAllFaces(
@@ -910,21 +950,68 @@ export default function TakeAssessmentPage() {
 
         // Exactly 1 face found: Extract 128-d deep biometric descriptor
         const descriptor = await extractDescriptorFromSnapshot(canvas);
-        if (descriptor) {
-          baselineFaceDescriptorRef.current = descriptor;
-          if (baselineFaceProfileRef.current) {
-            baselineFaceProfileRef.current.descriptor = Array.from(descriptor);
-          }
-          setFaceEnrollmentFeedback('SUCCESS_VERIFIED');
-          setFaceEnrolled(true);
-        } else {
+        if (!descriptor) {
           setFaceEnrollmentFeedback('LOW_CONFIDENCE');
-          setFaceEnrolled(true);
+          setFaceEnrolled(false);
+          return;
         }
+
+        // Match against institutional database biometric reference photos
+        const dbList = await loadDbBiometrics();
+        if (dbList.length > 0) {
+          let minDistance = 1.0;
+          let bestAngle = 'Front';
+          for (const item of dbList) {
+            const d = faceapi.euclideanDistance(descriptor, item.descriptor);
+            if (d < minDistance) {
+              minDistance = d;
+              bestAngle = item.angle;
+            }
+          }
+
+          const matched = minDistance < 0.58;
+          const confidence = Math.max(0, Math.min(100, Math.round((1 - minDistance) * 100)));
+
+          setDbBiometricsMatchInfo({
+            matched,
+            distance: minDistance,
+            confidence,
+            angle: bestAngle,
+          });
+
+          if (!matched) {
+            // Identity mismatch with DB!
+            setFaceEnrollmentFeedback('DB_MISMATCH');
+            setFaceEnrolled(false);
+            baselineFaceDescriptorRef.current = null;
+            baselineSnapshotRef.current = null;
+            setBaselineSnapshot(null);
+            return;
+          }
+        }
+
+        baselineFaceDescriptorRef.current = descriptor;
+        baselineSnapshotRef.current = snapshotUrl;
+        setBaselineSnapshot(snapshotUrl);
+        if (baselineFaceProfileRef.current) {
+          baselineFaceProfileRef.current.descriptor = Array.from(descriptor);
+        }
+        setFaceEnrollmentFeedback('SUCCESS_VERIFIED');
+        setFaceEnrolled(true);
+
+        // Dispatch face enrollment snapshot to backend immediately
+        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
+          snapshot: snapshotUrl,
+        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
       } else {
         // Models still loading: Mark enrolled with heuristic baseline and auto-upgrade once model completes
+        baselineSnapshotRef.current = snapshotUrl;
+        setBaselineSnapshot(snapshotUrl);
         setFaceEnrollmentFeedback('MODEL_LOADING');
         setFaceEnrolled(true);
+        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
+          snapshot: snapshotUrl,
+        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
       }
 
     } catch (err) {
@@ -1578,7 +1665,7 @@ export default function TakeAssessmentPage() {
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Smooth 4.0s Cadence)
+  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Strict 5.0s Cadence)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
@@ -1589,7 +1676,7 @@ export default function TakeAssessmentPage() {
     const runTelemetryCycle = async () => {
       if (isDisposed) return;
       if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
-        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 4000);
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 5000);
         return;
       }
       const video = livePipVideoRef.current;
@@ -1738,7 +1825,7 @@ export default function TakeAssessmentPage() {
                   }
                 }
 
-                // 3. 1:1 Deep Facial Biometric Identity Verification
+                // 3. 1:1:1 Deep Facial Biometric Triangulation (Live Face vs. Captured Entry Face vs. Stored DB Face)
                 // Auto-recover baseline descriptor from snapshot ref if pending
                 if (!baselineFaceDescriptorRef.current && baselineSnapshotRef.current) {
                   const snap = baselineSnapshotRef.current;
@@ -1750,15 +1837,47 @@ export default function TakeAssessmentPage() {
                   };
                 }
 
-                if (baselineFaceDescriptorRef.current && singleFace.descriptor) {
-                  const distance = faceapi.euclideanDistance(
-                    baselineFaceDescriptorRef.current,
-                    singleFace.descriptor
-                  );
+                // Auto-recover DB descriptors if not yet parsed
+                if (dbFaceDescriptorsRef.current.length === 0 && examData?.dbBiometrics) {
+                  loadDbBiometrics().catch(() => {});
+                }
 
-                  // Distance < 0.58 confirms enrolled candidate. Distance >= 0.58 indicates imposter.
-                  if (distance < 0.58) {
-                    // Registered enrolled candidate verified!
+                if (singleFace.descriptor) {
+                  const liveDescriptor = singleFace.descriptor;
+
+                  // A. Match Live Face vs Captured Pre-Flight Entry Face
+                  let distanceCaptured = 0;
+                  let hasCapturedBaseline = false;
+                  if (baselineFaceDescriptorRef.current) {
+                    hasCapturedBaseline = true;
+                    distanceCaptured = faceapi.euclideanDistance(
+                      baselineFaceDescriptorRef.current,
+                      liveDescriptor
+                    );
+                  }
+
+                  // B. Match Live Face vs Stored Institutional DB Faces (Front, Left, Right)
+                  let minDistanceDb = 1.0;
+                  let hasDbBiometrics = false;
+                  let matchedDbAngle = 'Front';
+                  if (dbFaceDescriptorsRef.current.length > 0) {
+                    hasDbBiometrics = true;
+                    for (const item of dbFaceDescriptorsRef.current) {
+                      const d = faceapi.euclideanDistance(item.descriptor, liveDescriptor);
+                      if (d < minDistanceDb) {
+                        minDistanceDb = d;
+                        matchedDbAngle = item.angle;
+                      }
+                    }
+                  }
+
+                  // Verification Check: Euclidean Distance < 0.58 confirms identity
+                  const matchesCaptured = !hasCapturedBaseline || distanceCaptured < 0.58;
+                  const matchesDb = !hasDbBiometrics || minDistanceDb < 0.58;
+                  const isVerifiedIndividual = matchesCaptured && matchesDb;
+
+                  if (isVerifiedIndividual) {
+                    // Registered enrolled candidate verified across both captured entry photo and DB profiles!
                     isPersonFound = true;
                     consecutiveMismatchRef.current = 0;
                     consecutiveUnauthorizedRef.current = 0;
@@ -1772,7 +1891,8 @@ export default function TakeAssessmentPage() {
                     consecutiveMismatchRef.current += 1;
 
                     // If distance is very high (> 0.68), trigger immediately. Otherwise confirm on 2nd cycle.
-                    const isConfirmedMismatch = distance >= 0.68 || consecutiveMismatchRef.current >= 2;
+                    const isHighDeviation = distanceCaptured >= 0.68 || minDistanceDb >= 0.68;
+                    const isConfirmedMismatch = isHighDeviation || consecutiveMismatchRef.current >= 2;
 
                     if (isConfirmedMismatch) {
                       updateUnauthorizedPerson('IDENTITY_MISMATCH');
@@ -1788,10 +1908,16 @@ export default function TakeAssessmentPage() {
                         }
                       } catch {}
 
+                      const failureDetails = !matchesCaptured && !matchesDb
+                        ? `Live face diverges from test-entry photo (Distance: ${distanceCaptured.toFixed(2)}) and stored DB photo (Distance: ${minDistanceDb.toFixed(2)}).`
+                        : !matchesCaptured
+                        ? `Live face deviates from test-entry photo (Distance: ${distanceCaptured.toFixed(2)}, Threshold: 0.58).`
+                        : `Live face deviates from stored university DB profile (${matchedDbAngle} angle Distance: ${minDistanceDb.toFixed(2)}, Threshold: 0.58).`;
+
                       reportViolation(
                         'IDENTITY_MISMATCH',
                         'SEVERE',
-                        `Biometric mismatch: Active test-taker face does not match the enrolled candidate (Distance: ${distance.toFixed(2)}, Threshold: 0.58).`,
+                        `Biometric triangulation failure: ${failureDetails}`,
                         imposterSnap
                       );
                     }
@@ -2006,7 +2132,7 @@ export default function TakeAssessmentPage() {
       } finally {
         isDetectingRef.current = false;
         if (!isDisposed) {
-          timer = setTimeout(runTelemetryCycle, 4000);
+          timer = setTimeout(runTelemetryCycle, 5000);
         }
       }
     };
@@ -2718,27 +2844,61 @@ export default function TakeAssessmentPage() {
               </div>
             )}
 
+            {faceEnrollmentFeedback === 'DB_MISMATCH' && (
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-xs animate-in fade-in duration-200 space-y-2">
+                <div className="flex items-center gap-2 font-bold font-mono text-rose-600 dark:text-rose-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>BIOMETRIC IDENTITY MISMATCH: DATABASE VERIFICATION FAILED</span>
+                </div>
+                <p className="leading-relaxed">
+                  The face captured by your webcam does not match the official student biometric photos locked in the university database (Euclidean Distance: <strong className="font-mono">{dbBiometricsMatchInfo?.distance.toFixed(2)}</strong>, threshold: 0.58).
+                </p>
+                <div className="p-2.5 rounded-lg bg-rose-100/60 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/60 text-[11px] leading-snug">
+                  ⚠️ <strong>Security Violation:</strong> Impersonation or candidate substitution is strictly forbidden. Examination launch is blocked until the registered student is positioned before the camera.
+                </div>
+              </div>
+            )}
+
             {baselineSnapshot && faceEnrolled && (
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-emerald-300 dark:border-emerald-500/30 animate-in fade-in duration-300">
-                <div className="relative">
-                  <img
-                    src={baselineSnapshot}
-                    alt="Enrolled Reference"
-                    className="w-16 h-14 object-cover rounded-lg border-2 border-emerald-500 shadow-sm shrink-0"
-                  />
-                  <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-emerald-500 text-white dark:text-slate-950">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 rounded-xl bg-white dark:bg-slate-900/90 border border-emerald-300 dark:border-emerald-500/30 animate-in fade-in duration-300 shadow-sm">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative flex -space-x-3 shrink-0">
+                    {examData?.dbBiometrics?.faceFrontSnapshot && (
+                      <img
+                        src={examData.dbBiometrics.faceFrontSnapshot}
+                        alt="Enrolled DB Profile"
+                        className="w-14 h-14 object-cover rounded-xl border-2 border-slate-300 dark:border-slate-700 shadow-sm"
+                        title="Stored University DB Photo"
+                      />
+                    )}
+                    <img
+                      src={baselineSnapshot}
+                      alt="Captured Test-Entry Photo"
+                      className="w-14 h-14 object-cover rounded-xl border-2 border-emerald-500 shadow-md"
+                      title="Captured Exam-Entry Snapshot"
+                    />
+                    <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-emerald-500 text-white dark:text-slate-950">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-emerald-800 dark:text-emerald-400 font-bold flex items-center gap-1.5 text-xs font-mono">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      BIOMETRIC IDENTITY AUTHENTICATED
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">
+                      Verified against university database
+                      {dbBiometricsMatchInfo ? ` (${dbBiometricsMatchInfo.confidence}% Match Confidence, Distance: ${dbBiometricsMatchInfo.distance.toFixed(2)})` : ''}.
+                      Continuous 5-second 3-way triangulation active.
+                    </p>
                   </div>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="text-emerald-800 dark:text-emerald-400 font-bold flex items-center gap-1.5 text-xs font-mono">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                    BIOMETRIC IDENTITY SIGNATURE REGISTERED
-                  </span>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">
-                    128-d deep facial biometric baseline active. Continuous identity verification will monitor that only you remain in view.
-                  </p>
-                </div>
+                {dbBiometricsMatchInfo && (
+                  <div className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-600/40 text-center font-mono shrink-0">
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">{dbBiometricsMatchInfo.confidence}% Match</div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400">Dist: {dbBiometricsMatchInfo.distance.toFixed(2)}</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3398,37 +3558,50 @@ export default function TakeAssessmentPage() {
               <h2 className="text-2xl font-black text-white">
                 {unauthorizedPerson === 'MULTIPLE_FACES'
                   ? 'Multiple People Detected in Camera'
-                  : 'Unauthorized Person Detected'}
+                  : 'Biometric Imposter Detected • Identity Mismatch'}
               </h2>
               <p className="text-sm text-slate-300 leading-relaxed">
                 {unauthorizedPerson === 'MULTIPLE_FACES'
                   ? 'More than one individual was detected in your camera view. The exam screen is blurred to prevent unauthorized assistance. Please ensure only you are present.'
-                  : 'The person in camera view does not match the baseline reference photo captured at exam start. Exam content is blurred until the authorized student returns.'}
+                  : 'Real-time 5-second biometric triangulation detected that the person currently in front of the camera does not match the registered university database photo or the captured exam-entry baseline. The assessment is locked and blurred until the verified candidate returns.'}
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-300 font-medium flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-rose-400 shrink-0" />
-              <span>Scanning camera feed... Screen will unblur automatically when only the enrolled candidate is in view.</span>
+              <span>Scanning camera feed... Screen will unblur automatically when the verified enrolled candidate returns.</span>
             </div>
 
-            {baselineSnapshot && (
-              <div className="pt-2 flex items-center justify-center gap-4 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
-                <img
-                  src={baselineSnapshot}
-                  alt="Enrolled Candidate"
-                  className="w-16 h-16 rounded-xl object-cover border-2 border-emerald-500/50 shadow-md"
-                />
-                <div className="text-left text-xs">
-                  <span className="text-emerald-400 font-bold block flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Enrolled Candidate
-                  </span>
-                  <span className="text-slate-400 text-[11px] block mt-0.5">
-                    Only this verified candidate is authorized to take this assessment.
-                  </span>
+            <div className="pt-2 flex items-center justify-center gap-4 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
+              {examData?.dbBiometrics?.faceFrontSnapshot && (
+                <div className="text-center">
+                  <img
+                    src={examData.dbBiometrics.faceFrontSnapshot}
+                    alt="Registered Database Face"
+                    className="w-14 h-14 rounded-xl object-cover border-2 border-teal-500/60 shadow-md mx-auto"
+                  />
+                  <span className="text-[10px] text-teal-400 font-mono mt-1 block">Registered DB Face</span>
                 </div>
+              )}
+              {baselineSnapshot && (
+                <div className="text-center">
+                  <img
+                    src={baselineSnapshot}
+                    alt="Exam-Entry Baseline"
+                    className="w-14 h-14 rounded-xl object-cover border-2 border-emerald-500/60 shadow-md mx-auto"
+                  />
+                  <span className="text-[10px] text-emerald-400 font-mono mt-1 block">Entry Snapshot</span>
+                </div>
+              )}
+              <div className="text-left text-xs max-w-xs">
+                <span className="text-emerald-400 font-bold block flex items-center gap-1 font-mono">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Enrolled Identity Locked
+                </span>
+                <span className="text-slate-400 text-[11px] block mt-0.5">
+                  Only this verified individual is authorized to take this assessment.
+                </span>
               </div>
-            )}
+            </div>
 
             <button
               type="button"

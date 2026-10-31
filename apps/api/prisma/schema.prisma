@@ -201,6 +201,16 @@ model StudentProfile {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
+  // Biometric Facial Identity Enrollment (Front, Left, Right profiles)
+  faceFrontSnapshot   String?            @db.LongText
+  faceLeftSnapshot    String?            @db.LongText
+  faceRightSnapshot   String?            @db.LongText
+  faceDescriptorFront String?            @db.Text
+  faceDescriptorLeft  String?            @db.Text
+  faceDescriptorRight String?            @db.Text
+  faceEnrollmentDate  DateTime?
+  faceEnrollmentLocked Boolean           @default(false)
+
   practiceSessions    PracticeSession[]
   attempts            QuestionAttempt[]
   skillMasteries      SkillMastery[]

@@ -57,6 +57,30 @@ export class RegisterStudentDto {
   @IsOptional()
   @IsString()
   courseId?: string;
+
+  @IsOptional()
+  @IsString()
+  faceFrontSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
+  faceLeftSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
+  faceRightSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
+  faceDescriptorFront?: string;
+
+  @IsOptional()
+  @IsString()
+  faceDescriptorLeft?: string;
+
+  @IsOptional()
+  @IsString()
+  faceDescriptorRight?: string;
 }
 
 export class LoginDto {

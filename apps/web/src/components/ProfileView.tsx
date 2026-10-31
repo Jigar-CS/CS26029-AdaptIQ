@@ -81,6 +81,13 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
   const [division, setDivision] = useState('CE-A');
   const [graduationYear, setGraduationYear] = useState<number>(2026);
   const [targetRole, setTargetRole] = useState('SDE');
+  const [biometrics, setBiometrics] = useState<{
+    faceFrontSnapshot?: string | null;
+    faceLeftSnapshot?: string | null;
+    faceRightSnapshot?: string | null;
+    faceEnrollmentDate?: string | null;
+    faceEnrollmentLocked?: boolean;
+  } | null>(null);
 
   // Faculty & Admin specific
   const [employeeCode, setEmployeeCode] = useState('');
@@ -153,6 +160,10 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
 
         if (data.preferences) {
           setPreferences((prev) => ({ ...prev, ...data.preferences }));
+        }
+
+        if (data.biometrics) {
+          setBiometrics(data.biometrics);
         }
       }
     } catch {
@@ -716,6 +727,93 @@ export function ProfileView({ forcedRole, roleTitle, roleDescription }: ProfileV
                       {graduationYear}
                     </p>
                   </div>
+                </div>
+
+                {/* Official Biometric Identity Record (Locked) */}
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-blue-500/10 border border-teal-500/20 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-teal-600 text-white">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>Institutional Biometric Identity Record</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Three-angle biometric reference images enrolled for real-time exam proctoring
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 text-xs font-mono font-bold border border-teal-300 dark:border-teal-700 w-fit">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Locked by Academic Registry</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1.5 font-bold">1. Frontal View</div>
+                      {biometrics?.faceFrontSnapshot ? (
+                        <img
+                          src={biometrics.faceFrontSnapshot}
+                          alt="Front Face Profile"
+                          className="w-full h-24 object-cover rounded-lg border-2 border-emerald-500/40 mx-auto"
+                        />
+                      ) : (
+                        <div className="w-full h-24 rounded-lg bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 text-xs">
+                          <User className="w-6 h-6 opacity-40 mb-1" />
+                          <span>Not Enrolled</span>
+                        </div>
+                      )}
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1.5 block">
+                        {biometrics?.faceFrontSnapshot ? '✓ Authenticated' : 'Pending Enrollment'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1.5 font-bold">2. Left Angle (~35°)</div>
+                      {biometrics?.faceLeftSnapshot ? (
+                        <img
+                          src={biometrics.faceLeftSnapshot}
+                          alt="Left Face Profile"
+                          className="w-full h-24 object-cover rounded-lg border-2 border-emerald-500/40 mx-auto"
+                        />
+                      ) : (
+                        <div className="w-full h-24 rounded-lg bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 text-xs">
+                          <User className="w-6 h-6 opacity-40 mb-1" />
+                          <span>Not Enrolled</span>
+                        </div>
+                      )}
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1.5 block">
+                        {biometrics?.faceLeftSnapshot ? '✓ Authenticated' : 'Pending Enrollment'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1.5 font-bold">3. Right Angle (~35°)</div>
+                      {biometrics?.faceRightSnapshot ? (
+                        <img
+                          src={biometrics.faceRightSnapshot}
+                          alt="Right Face Profile"
+                          className="w-full h-24 object-cover rounded-lg border-2 border-emerald-500/40 mx-auto"
+                        />
+                      ) : (
+                        <div className="w-full h-24 rounded-lg bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 text-xs">
+                          <User className="w-6 h-6 opacity-40 mb-1" />
+                          <span>Not Enrolled</span>
+                        </div>
+                      )}
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1.5 block">
+                        {biometrics?.faceRightSnapshot ? '✓ Authenticated' : 'Pending Enrollment'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    🔒 <strong>Strict Academic Policy:</strong> To protect examination integrity, student biometric photos are permanently locked and cannot be modified or replaced. They are triangulated in real-time every 5 seconds during all AI-proctored exams.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

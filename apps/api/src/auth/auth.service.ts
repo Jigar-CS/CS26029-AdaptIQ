@@ -322,11 +322,20 @@ export class AuthService {
           },
         });
 
+        const hasBiometrics = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
         const profile = await tx.studentProfile.create({
           data: {
             userId: newUser.id,
             authorizedStudentId: authorized.id,
-          },
+            faceFrontSnapshot: dto.faceFrontSnapshot || null,
+            faceLeftSnapshot: dto.faceLeftSnapshot || null,
+            faceRightSnapshot: dto.faceRightSnapshot || null,
+            faceDescriptorFront: dto.faceDescriptorFront || null,
+            faceDescriptorLeft: dto.faceDescriptorLeft || null,
+            faceDescriptorRight: dto.faceDescriptorRight || null,
+            faceEnrollmentDate: hasBiometrics ? new Date() : null,
+            faceEnrollmentLocked: hasBiometrics ? true : false,
+          } as any,
         });
 
         await tx.authorizedStudent.update({
@@ -349,15 +358,25 @@ export class AuthService {
 
       // Also sync user_profiles record for seamless profile syncing
       try {
+        const hasBio = Boolean(dto.faceFrontSnapshot || dto.faceDescriptorFront);
         await this.prisma.$executeRawUnsafe(
           `
-          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+          INSERT INTO user_profiles (userId, fullName, department, designation, officeLocation, specialization, avatarUrl, faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentDate, faceEnrollmentLocked, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
           ON DUPLICATE KEY UPDATE
             fullName = VALUES(fullName),
             department = VALUES(department),
             designation = VALUES(designation),
-            specialization = VALUES(specialization)
+            specialization = VALUES(specialization),
+            avatarUrl = VALUES(avatarUrl),
+            faceFrontSnapshot = VALUES(faceFrontSnapshot),
+            faceLeftSnapshot = VALUES(faceLeftSnapshot),
+            faceRightSnapshot = VALUES(faceRightSnapshot),
+            faceDescriptorFront = VALUES(faceDescriptorFront),
+            faceDescriptorLeft = VALUES(faceDescriptorLeft),
+            faceDescriptorRight = VALUES(faceDescriptorRight),
+            faceEnrollmentDate = VALUES(faceEnrollmentDate),
+            faceEnrollmentLocked = VALUES(faceEnrollmentLocked)
         `,
           user.id,
           studentName,
@@ -365,6 +384,15 @@ export class AuthService {
           'Student Scholar',
           `${authorized.institute} Campus`,
           authorized.programName,
+          dto.faceFrontSnapshot || '',
+          dto.faceFrontSnapshot || null,
+          dto.faceLeftSnapshot || null,
+          dto.faceRightSnapshot || null,
+          dto.faceDescriptorFront || null,
+          dto.faceDescriptorLeft || null,
+          dto.faceDescriptorRight || null,
+          hasBio ? new Date() : null,
+          hasBio ? 1 : 0,
         );
       } catch (e: any) {
         this.logger.warn(`Could not sync user_profiles record for student: ${e.message}`);

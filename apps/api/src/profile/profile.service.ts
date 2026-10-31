@@ -202,6 +202,14 @@ export class ProfileService implements OnModuleInit {
             lastAssessedAt: placement.lastAssessedAt,
           }
         : null,
+      biometrics: {
+        enrolled: Boolean((user.studentProfile as any)?.faceFrontSnapshot || extended?.faceFrontSnapshot),
+        locked: Boolean((user.studentProfile as any)?.faceEnrollmentLocked || extended?.faceEnrollmentLocked),
+        faceFrontSnapshot: (user.studentProfile as any)?.faceFrontSnapshot || extended?.faceFrontSnapshot || null,
+        faceLeftSnapshot: (user.studentProfile as any)?.faceLeftSnapshot || extended?.faceLeftSnapshot || null,
+        faceRightSnapshot: (user.studentProfile as any)?.faceRightSnapshot || extended?.faceRightSnapshot || null,
+        enrollmentDate: (user.studentProfile as any)?.faceEnrollmentDate || extended?.faceEnrollmentDate || null,
+      },
       facultyDetails: faculty
         ? {
             employeeCode: faculty.employeeCode || 'FAC-' + user.id.slice(0, 6).toUpperCase(),
@@ -277,6 +285,10 @@ export class ProfileService implements OnModuleInit {
 
     const preferencesJson = dto.preferences ? JSON.stringify(dto.preferences) : undefined;
 
+    // Strict Institutional Integrity: If student biometric enrollment is locked, disallow replacing official photo
+    const isStudentLocked = user.role === UserRole.STUDENT && Boolean((user.studentProfile as any)?.faceEnrollmentLocked);
+    const effectiveAvatarUrl = isStudentLocked ? undefined : dto.avatarUrl;
+
     // 1. Upsert into user_profiles table — all values are sanitized above and
     //    passed as parameterized placeholders (?), preventing SQL injection.
     try {
@@ -302,7 +314,7 @@ export class ProfileService implements OnModuleInit {
         userId,
         cleanName       ?? null,
         cleanPhone      ?? null,
-        dto.avatarUrl   ?? null,
+        effectiveAvatarUrl ?? null,
         cleanBio        ?? null,
         cleanDept       ?? null,
         cleanDesig      ?? null,
@@ -316,7 +328,7 @@ export class ProfileService implements OnModuleInit {
         // parameters for ON DUPLICATE KEY UPDATE:
         cleanName       ?? null,
         cleanPhone      ?? null,
-        dto.avatarUrl   ?? null,
+        effectiveAvatarUrl ?? null,
         cleanBio        ?? null,
         cleanDept       ?? null,
         cleanDesig      ?? null,
