@@ -50,7 +50,6 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
   // Proctor hidden exit gesture detection (5 taps in corner within 3s)
   int _proctorTapCount = 0;
   DateTime? _firstTapTime;
-  Timer? _lockWatchdogTimer;
   DateTime? _lastViolationReported;
 
   @override
@@ -109,9 +108,8 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
     // Fetch dynamic questions list from laptop
     _fetchQuestionsFromLaptop();
 
-    // Enforce instant device lockdown upon entry and start active watchdog
+    // Enforce instant device lockdown upon entry
     _initiateLockdown();
-    _startLockWatchdog();
   }
 
   Future<void> _fetchQuestionsFromLaptop() async {
@@ -233,28 +231,15 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
     await KioskService().enterLockdown();
   }
 
-  void _startLockWatchdog() {
-    _lockWatchdogTimer?.cancel();
-    _lockWatchdogTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) async {
-      if (!mounted) return;
-      final isLocked = await KioskService().checkLockState();
-      if (!isLocked) {
-        debugPrint('[SecurityWatchdog] LockTask unpinned or inactive! Forcing instant re-lock.');
-        await KioskService().enterLockdown();
-        _handleLockBreachViolation('Screen unpinned or minimized');
-      }
-    });
-  }
-
   void _handleLockBreachViolation(String reason) {
     final now = DateTime.now();
-    if (_lastViolationReported != null && now.difference(_lastViolationReported!).inSeconds < 3) {
+    if (_lastViolationReported != null && now.difference(_lastViolationReported!).inSeconds < 4) {
       return;
     }
     _lastViolationReported = now;
 
+    // Send security violation packet to server and faculty invigilation console
     _syncEngine.sendLockdownViolation(reason);
-    KioskService().enterLockdown();
 
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -266,13 +251,13 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'SECURITY ALERT: Exiting or unpinning the exam sheet is strictly prohibited. Violation logged.',
+                  'EXAM WARNING: Leaving or unpinning the companion app is logged on the faculty proctor panel.',
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
             ],
           ),
-          backgroundColor: const Color(0xFFDC2626),
+          backgroundColor: const Color(0xFFE11D48),
           duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -287,7 +272,7 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
       debugPrint('[SecurityAlert] App switching / backgrounding attempt detected!');
-      _handleLockBreachViolation('Student switched apps or attempted unpinning');
+      _handleLockBreachViolation('COMPANION_UNPINNED');
     }
   }
 
@@ -371,7 +356,6 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
 
   @override
   void dispose() {
-    _lockWatchdogTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,

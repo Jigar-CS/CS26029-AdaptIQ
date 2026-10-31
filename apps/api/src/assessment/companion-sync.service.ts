@@ -699,6 +699,19 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         clearPayload,
         pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
       );
+    } else if (type === 'COMPANION_SECURITY_VIOLATION' || type === 'COMPANION_UNPINNED') {
+      const violationPayload = {
+        type: 'COMPANION_UNPINNED',
+        sessionId: normSession,
+        reason: data.reason || 'Companion app unpinned or backgrounded',
+        timestamp: Date.now(),
+      };
+      this.logger.warn(`⚠️ Companion unpinned in room [${normSession}]: ${data.reason}`);
+      this.broadcastToSessionViewers(
+        normSession,
+        violationPayload,
+        pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+      );
     } else if (type === 'HEARTBEAT') {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'HEARTBEAT_ACK', timestamp: Date.now() }));

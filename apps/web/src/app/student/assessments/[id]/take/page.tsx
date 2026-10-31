@@ -2307,9 +2307,11 @@ export default function TakeAssessmentPage() {
   const handleAutoSubmit = async (reason?: string) => {
     if (submitting || result) return;
     // Lab concurrency jitter: Stagger simultaneous end-of-exam submissions across 0-2200ms
-    // Immediate violations (tab switch, face absence) submit with 0ms delay
+    // Immediate violations (tab switch, face absence, companion unpin limit) submit with 0ms delay
     const jitter =
-      reason === 'TAB_SWITCH' || reason === 'FACE_ABSENCE_EXCEEDED'
+      reason === 'TAB_SWITCH' ||
+      reason === 'FACE_ABSENCE_EXCEEDED' ||
+      reason === 'COMPANION_UNPIN_LIMIT_EXCEEDED'
         ? 0
         : Math.floor(Math.random() * 2200);
 
@@ -2317,6 +2319,77 @@ export default function TakeAssessmentPage() {
       submitExam();
     }, jitter);
   };
+
+  // Companion unpin tracking: Allow unpinning up to 2 times, on 3rd unpin (> 2) notify faculty and auto-submit
+  const companionUnpinCountRef = useRef<number>(0);
+  const lastCompanionUnpinTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !examData || showPreFlight || result) return;
+    const sId = examData.submissionId || examData.assessment?.id;
+    if (!sId) return;
+
+    const wsUrl = getCompanionWsUrl(sId, pairingHostRef.current);
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'COMPANION_UNPINNED' || msg.type === 'COMPANION_SECURITY_VIOLATION') {
+            const now = Date.now();
+            if (now - lastCompanionUnpinTimeRef.current < 4000) return;
+            lastCompanionUnpinTimeRef.current = now;
+
+            companionUnpinCountRef.current += 1;
+            const currentUnpin = companionUnpinCountRef.current;
+
+            if (currentUnpin === 1) {
+              reportViolation(
+                'COMPANION_UNPINNED',
+                'MEDIUM',
+                'Companion app unpinned or backgrounded (Strike 1 of 2 allowed). On the 3rd exit, the exam will automatically terminate.',
+                { strike: 1, maxAllowed: 2, remaining: 1 }
+              );
+              alert(
+                '⚠️ COMPANION APP WARNING (Warning 1/2):\nYou left or unpinned the digital answer companion app. You are allowed 2 exits. On the 3rd exit, your exam will be automatically terminated and submitted.'
+              );
+            } else if (currentUnpin === 2) {
+              reportViolation(
+                'COMPANION_UNPINNED',
+                'HIGH',
+                'Companion app unpinned or backgrounded (Warning 2 of 2 - FINAL WARNING). Any subsequent exit will terminate and auto-submit the exam.',
+                { strike: 2, maxAllowed: 2, remaining: 0 }
+              );
+              alert(
+                '🚨 FINAL WARNING (Warning 2/2):\nYou left or unpinned the digital answer companion app. You have 0 warnings remaining. If you leave or unpin the companion app again, your examination will be terminated and submitted immediately.'
+              );
+            } else {
+              reportViolation(
+                'COMPANION_UNPINNED',
+                'SEVERE',
+                'Exam terminated: Companion app unpinned more than twice (3rd exit).',
+                { strike: currentUnpin, maxAllowed: 2 }
+              );
+              alert(
+                '❌ EXAM TERMINATED:\nYou exceeded the maximum companion app unpin limit (2 exits allowed). Your exam has been automatically submitted.'
+              );
+              handleAutoSubmit('COMPANION_UNPIN_LIMIT_EXCEEDED');
+            }
+          }
+        } catch {}
+      };
+      ws.onerror = () => {};
+    } catch {}
+
+    return () => {
+      try {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close();
+        }
+      } catch {}
+    };
+  }, [examData, showPreFlight, result]);
 
   const handleCodeChange = (qId: string, val: string) => {
     setCodingAnswers((prev) => ({

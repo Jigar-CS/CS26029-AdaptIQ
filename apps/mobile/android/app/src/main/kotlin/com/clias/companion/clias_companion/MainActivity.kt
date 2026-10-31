@@ -1,10 +1,7 @@
 package com.clias.companion.clias_companion
 
 import android.app.ActivityManager
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -18,7 +15,6 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val KIOSK_CHANNEL = "com.clias.companion/kiosk"
-    private var isKioskDesired: Boolean = false
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -77,30 +73,13 @@ class MainActivity : FlutterActivity() {
 
     private fun startKioskLock(): Boolean {
         return try {
-            isKioskDesired = true
-
-            // 1. If configured as Device Owner via ADB/MDM, configure True LockTask Mode.
-            // In True LockTask Mode, Android OS completely removes the swipe-up-and-hold unpin gesture!
-            try {
-                val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
-                val adminComponent = ComponentName(this, AdminReceiver::class.java)
-                if (dpm != null && dpm.isDeviceOwnerApp(packageName)) {
-                    dpm.setLockTaskPackages(adminComponent, arrayOf(packageName))
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        dpm.setLockTaskFeatures(adminComponent, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
-                    }
-                }
-            } catch (e: Exception) {
-                // Standard unmanaged device fallback
-            }
-
-            // 2. Enforce FLAG_SECURE to prevent screenshot / screen recording / screen mirroring
+            // 1. Enforce FLAG_SECURE to prevent screenshot / screen recording / screen mirroring
             setScreenSecureFlag(true)
 
-            // 3. Hide status bar and navigation gestures
+            // 2. Hide status bar and navigation gestures
             hideSystemUI()
 
-            // 4. Enter Android LockTask (pinned mode or kiosk mode)
+            // 3. Enter Android LockTask (standard pinned mode)
             startLockTask()
             true
         } catch (e: Exception) {
@@ -111,7 +90,6 @@ class MainActivity : FlutterActivity() {
 
     private fun stopKioskLock(): Boolean {
         return try {
-            isKioskDesired = false
             stopLockTask()
             setScreenSecureFlag(false)
             showSystemUI()
@@ -132,49 +110,6 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            if (isKioskDesired) {
-                hideSystemUI()
-                if (!isLockTaskActive()) {
-                    try {
-                        startLockTask()
-                    } catch (_: Exception) {}
-                }
-            }
-        } else {
-            // When user attempts swipe up / unpin gesture, bring activity immediately back to front
-            if (isKioskDesired) {
-                bringToFrontAndLock()
-            }
-        }
-    }
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (isKioskDesired) {
-            bringToFrontAndLock()
-        }
-    }
-
-    private fun bringToFrontAndLock() {
-        if (!isKioskDesired) return
-        try {
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            am?.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
-            val intent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            startActivity(intent)
-            if (!isLockTaskActive()) {
-                startLockTask()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun setScreenSecureFlag(enable: Boolean) {
         runOnUiThread {
             if (enable) {
@@ -190,8 +125,7 @@ class MainActivity : FlutterActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.insetsController?.let { controller ->
                     controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                    // BEHAVIOR_DEFAULT suppresses transient bars on normal swipes
-                    controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_DEFAULT
+                    controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
             } else {
                 @Suppress("DEPRECATION")
