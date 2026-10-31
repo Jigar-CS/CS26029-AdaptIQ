@@ -2348,8 +2348,7 @@ export default function TakeAssessmentPage() {
               reportViolation(
                 'COMPANION_UNPINNED',
                 'MEDIUM',
-                'Companion app unpinned or backgrounded (Strike 1 of 2 allowed). On the 3rd exit, the exam will automatically terminate.',
-                { strike: 1, maxAllowed: 2, remaining: 1 }
+                'Companion app unpinned or backgrounded (Strike 1 of 2 allowed). On the 3rd exit, the exam will automatically terminate.'
               );
               alert(
                 '⚠️ COMPANION APP WARNING (Warning 1/2):\nYou left or unpinned the digital answer companion app. You are allowed 2 exits. On the 3rd exit, your exam will be automatically terminated and submitted.'
@@ -2358,8 +2357,7 @@ export default function TakeAssessmentPage() {
               reportViolation(
                 'COMPANION_UNPINNED',
                 'HIGH',
-                'Companion app unpinned or backgrounded (Warning 2 of 2 - FINAL WARNING). Any subsequent exit will terminate and auto-submit the exam.',
-                { strike: 2, maxAllowed: 2, remaining: 0 }
+                'Companion app unpinned or backgrounded (Warning 2 of 2 - FINAL WARNING). Any subsequent exit will terminate and auto-submit the exam.'
               );
               alert(
                 '🚨 FINAL WARNING (Warning 2/2):\nYou left or unpinned the digital answer companion app. You have 0 warnings remaining. If you leave or unpin the companion app again, your examination will be terminated and submitted immediately.'
@@ -2368,8 +2366,7 @@ export default function TakeAssessmentPage() {
               reportViolation(
                 'COMPANION_UNPINNED',
                 'SEVERE',
-                'Exam terminated: Companion app unpinned more than twice (3rd exit).',
-                { strike: currentUnpin, maxAllowed: 2 }
+                'Exam terminated: Companion app unpinned more than twice (3rd exit).'
               );
               alert(
                 '❌ EXAM TERMINATED:\nYou exceeded the maximum companion app unpin limit (2 exits allowed). Your exam has been automatically submitted.'
