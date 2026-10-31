@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:crypto/crypto.dart';
 import 'exam_sheet_screen.dart';
-import '../services/kiosk_service.dart';
 
 class PairingScreen extends StatefulWidget {
   const PairingScreen({super.key});
@@ -18,21 +17,6 @@ class _PairingScreenState extends State<PairingScreen> {
       TextEditingController();
   final TextEditingController _questionIdController =
       TextEditingController(text: 'Q1');
-
-  bool _isLockPermitted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPermissions();
-  }
-
-  Future<void> _checkPermissions() async {
-    final permitted = await KioskService().checkLockState();
-    setState(() {
-      _isLockPermitted = permitted;
-    });
-  }
 
   void _launchExamSession() {
     final rawHost = _laptopHostController.text.trim();
@@ -120,35 +104,6 @@ class _PairingScreenState extends State<PairingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Top Status Pill: Secure Companion
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDFA),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF99F6E4)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.shield_rounded, size: 13, color: primaryTeal),
-                          SizedBox(width: 5),
-                          Text(
-                            'ADAPTIQ SECURE COMPANION',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.9,
-                              color: Color(0xFF0F766E),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
                   // App Icon / Branding
                   Center(
                     child: Container(
@@ -175,7 +130,7 @@ class _PairingScreenState extends State<PairingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
                   const Text(
                     'AdaptIQ Answer Companion',
@@ -187,64 +142,17 @@ class _PairingScreenState extends State<PairingScreen> {
                       letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Pair this phone or tablet with your desktop exam to write handwritten descriptive answers in real time.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-
-                  // Kiosk Status Alert
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    decoration: BoxDecoration(
-                      color: _isLockPermitted ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _isLockPermitted ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isLockPermitted ? Icons.lock_rounded : Icons.verified_user_rounded,
-                          color: _isLockPermitted ? const Color(0xFF2563EB) : const Color(0xFF16A34A),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _isLockPermitted
-                                ? 'Device Already Locked (LockTask active)'
-                                : 'Kiosk Lockdown Ready (LockTask & FLAG_SECURE)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: _isLockPermitted ? const Color(0xFF1E40AF) : const Color(0xFF166534),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Field 1: Companion Host / Server URL
                   TextField(
                     controller: _laptopHostController,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      labelText: '1. Companion Host / Server URL',
+                      labelText: 'Companion Host',
                       labelStyle: const TextStyle(fontSize: 13, color: Color(0xFF475569), fontWeight: FontWeight.w600),
                       hintText: 'e.g. clias.onrender.com or 192.168.1.100:4000',
                       hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      helperText: 'Copied from Step 1 on your desktop test screen',
-                      helperStyle: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.dns_rounded, color: primaryTeal, size: 20),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -296,19 +204,17 @@ class _PairingScreenState extends State<PairingScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
-                  // Field 2: Dynamic 6-Digit PIN or Session Token
+                  // Field 2: Exam PIN / Session Token
                   TextField(
                     controller: _sessionTokenController,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1.5),
                     decoration: InputDecoration(
-                      labelText: '2. Dynamic 6-Digit PIN / Session Token',
+                      labelText: 'PIN / Session Token',
                       labelStyle: const TextStyle(fontSize: 13, color: Color(0xFF475569), fontWeight: FontWeight.w600, letterSpacing: 0),
                       hintText: 'e.g. 839-214 or 839214',
                       hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8), letterSpacing: 0),
-                      helperText: 'Displayed in Step 2 on your desktop test screen',
-                      helperStyle: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.password_rounded, color: primaryTeal, size: 20),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -327,19 +233,17 @@ class _PairingScreenState extends State<PairingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
                   // Field 3: Question Identifier
                   TextField(
                     controller: _questionIdController,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      labelText: '3. Starting Question (Optional)',
+                      labelText: 'Question ID',
                       labelStyle: const TextStyle(fontSize: 13, color: Color(0xFF475569), fontWeight: FontWeight.w600),
                       hintText: 'e.g. Q1, Q2, Q3 (defaults to Q1)',
                       hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      helperText: 'Syncs automatically when switching questions on desktop',
-                      helperStyle: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.format_list_numbered_rounded, color: primaryTeal, size: 20),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
@@ -358,7 +262,7 @@ class _PairingScreenState extends State<PairingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 24),
 
                   // Primary Connect & Start Button
                   Container(
@@ -403,26 +307,6 @@ class _PairingScreenState extends State<PairingScreen> {
                           Icon(Icons.arrow_forward_rounded, size: 18),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Security footer note
-                  const Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle_outline_rounded, size: 13, color: Color(0xFF10B981)),
-                        SizedBox(width: 5),
-                        Text(
-                          'Secured with Real-Time Digital Ink Sync & Lockdown',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
