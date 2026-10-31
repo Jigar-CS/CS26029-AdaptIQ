@@ -1372,6 +1372,30 @@ export class AssessmentService {
       }
     }
 
+    const formatSubmitResponse = (
+      subRecord: any,
+      score: number,
+      totalM: number,
+      pct: number,
+      isPass: boolean,
+      passM: number,
+      stat: any,
+      hasDesc: boolean,
+      exitPass?: string,
+    ) => ({
+      submissionId: subRecord.id,
+      id: subRecord.id,
+      totalScore: score,
+      totalMarks: totalM,
+      percentage: pct,
+      passed: isPass,
+      passingMarks: passM,
+      status: stat,
+      isPendingFacultyGrading: hasDesc,
+      submittedAt: subRecord.submittedAt || new Date(),
+      exitPass,
+    });
+
     // Atomic Lock: Only proceed if this submission is currently IN_PROGRESS
     const lockResult = await this.prisma.assessmentSubmission.updateMany({
       where: {
@@ -1388,13 +1412,62 @@ export class AssessmentService {
     if (lockResult.count === 0) {
       const existing = await this.prisma.assessmentSubmission.findUnique({
         where: { id: submissionId },
+        include: {
+          assessment: {
+            include: {
+              questions: {
+                include: { question: { include: { options: true } } },
+              },
+            },
+          },
+        },
       });
-      if (existing && existing.status !== SubmissionStatus.IN_PROGRESS) {
-        return existing;
+      if (existing) {
+        let exitPassCode: string | undefined = undefined;
+        try {
+          const exitRes = this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
+          exitPassCode = exitRes?.exitPass;
+        } catch (_) {}
+
+        const hasDesc = existing.assessment?.questions?.some(
+          (aq) =>
+            aq.question?.type === QuestionType.SHORT_ANSWER ||
+            aq.question?.type === ('DESCRIPTIVE' as any) ||
+            (!(aq.question as any)?.options?.length && aq.question?.type !== QuestionType.CODING),
+        ) ?? true;
+
+        try {
+          const existingProc = await this.prisma.proctoringSession.findUnique({
+            where: { submissionId: submissionId },
+          });
+          if (existingProc && !existingProc.completedAt) {
+            const finalProcStatus = existingProc.status === 'FLAGGED' ? 'FLAGGED' : 'COMPLETED';
+            await this.prisma.proctoringSession.update({
+              where: { id: existingProc.id },
+              data: {
+                status: finalProcStatus as any,
+                completedAt: new Date(),
+              },
+            });
+          }
+        } catch (_) {}
+
+        return formatSubmitResponse(
+          existing,
+          existing.totalScore ?? 0,
+          existing.assessment?.totalMarks ?? 100,
+          existing.percentage ?? 0,
+          existing.passed ?? false,
+          existing.assessment?.passingMarks ?? 40,
+          existing.status,
+          hasDesc || existing.status === SubmissionStatus.SUBMITTED,
+          exitPassCode,
+        );
       }
       throw new BadRequestException('This assessment attempt has already been submitted.');
     }
 
+    try {
     const questionPointsMap = new Map<string, number>();
     const questionOptionsMap = new Map<string, any[]>();
     const questionMap = new Map<string, any>();
@@ -1604,12 +1677,18 @@ export class AssessmentService {
     }
 
     // Clean up any partial answers and insert clean records atomically
-    await this.prisma.submissionAnswer.deleteMany({
-      where: { submissionId: submission.id },
-    });
-    await this.prisma.submissionAnswer.createMany({
-      data: answerRecords,
-    });
+    try {
+      await this.prisma.submissionAnswer.deleteMany({
+        where: { submissionId: submission.id },
+      });
+      if (answerRecords.length > 0) {
+        await this.prisma.submissionAnswer.createMany({
+          data: answerRecords,
+        });
+      }
+    } catch (saveErr: any) {
+      this.logger.error(`Failed saving submission answers: ${saveErr.message}`);
+    }
 
     // Notify companion gateway, lock drawing canvas, and generate/broadcast exit pass to mobile
     let exitPassCode: string | undefined = undefined;
@@ -1721,33 +1800,59 @@ export class AssessmentService {
     }
 
     // Update linked proctoring session completion status
-    const existingProc = await this.prisma.proctoringSession.findUnique({
-      where: { submissionId: submission.id },
-    });
-    if (existingProc) {
-      const finalProcStatus =
-        existingProc.status === 'FLAGGED' ? 'FLAGGED' : 'COMPLETED';
-      await this.prisma.proctoringSession.update({
-        where: { id: existingProc.id },
-        data: {
-          status: finalProcStatus as any,
-          completedAt: new Date(),
-        },
+    try {
+      const existingProc = await this.prisma.proctoringSession.findUnique({
+        where: { submissionId: submission.id },
       });
+      if (existingProc) {
+        const finalProcStatus =
+          existingProc.status === 'FLAGGED' ? 'FLAGGED' : 'COMPLETED';
+        await this.prisma.proctoringSession.update({
+          where: { id: existingProc.id },
+          data: {
+            status: finalProcStatus as any,
+            completedAt: new Date(),
+          },
+        });
+      }
+    } catch (procErr: any) {
+      this.logger.warn(`Could not update proctoring session completion: ${procErr.message}`);
     }
 
-    return {
-      submissionId: evaluatedSubmission.id,
+    return formatSubmitResponse(
+      evaluatedSubmission,
       totalScore,
-      totalMarks: submission.assessment.totalMarks,
+      submission.assessment.totalMarks || 100,
       percentage,
       passed,
-      passingMarks: submission.assessment.passingMarks,
-      status: finalStatus,
-      isPendingFacultyGrading: hasDescriptiveQuestions,
-      submittedAt: evaluatedSubmission.submittedAt,
-      exitPass: exitPassCode,
-    };
+      submission.assessment.passingMarks,
+      finalStatus,
+      hasDescriptiveQuestions,
+      exitPassCode,
+    );
+    } catch (unexpectedErr: any) {
+      this.logger.error(`Unexpected error during submitAttempt: ${unexpectedErr?.message}`, unexpectedErr?.stack);
+      let exitPassCode: string | undefined = undefined;
+      try {
+        const exitRes = this.companionSync.submitExamAndGenerateExitPass(submissionId, submissionId);
+        exitPassCode = exitRes?.exitPass;
+      } catch (_) {}
+
+      const currentSub = await this.prisma.assessmentSubmission.findUnique({
+        where: { id: submissionId },
+      });
+      return formatSubmitResponse(
+        currentSub || submission,
+        currentSub?.totalScore ?? 0,
+        submission.assessment?.totalMarks ?? 100,
+        currentSub?.percentage ?? 0,
+        currentSub?.passed ?? false,
+        submission.assessment?.passingMarks ?? 40,
+        currentSub?.status || SubmissionStatus.SUBMITTED,
+        true,
+        exitPassCode,
+      );
+    }
   }
 
   /**

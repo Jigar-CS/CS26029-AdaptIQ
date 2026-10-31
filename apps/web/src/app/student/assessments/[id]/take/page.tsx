@@ -481,6 +481,7 @@ export default function TakeAssessmentPage() {
     strike: number;
     isTerminated: boolean;
   } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const mobileStrikeCountRef = useRef<number>(0);
   const lastMobileStrikeTimeRef = useRef<number>(0);
 
@@ -1698,7 +1699,6 @@ export default function TakeAssessmentPage() {
     const runFastPhoneDetection = async () => {
       if (isDisposed) return;
       if (isDetectingPhone || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
-        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 150);
         return;
       }
 
@@ -1753,6 +1753,9 @@ export default function TakeAssessmentPage() {
               );
               setMobileAlertModal({ show: true, strike: 1, isTerminated: false });
             } else if (nextStrike >= 2) {
+              isDisposed = true;
+              isAutoSubmittingRef.current = true;
+              if (timer) clearTimeout(timer);
               reportViolation(
                 'MOBILE_PHONE_DETECTED',
                 'SEVERE',
@@ -1760,8 +1763,8 @@ export default function TakeAssessmentPage() {
                 snapshotUri
               );
               setMobileAlertModal({ show: true, strike: 2, isTerminated: true });
-              isAutoSubmittingRef.current = true;
               handleAutoSubmit('MOBILE_VIOLATIONS_EXCEEDED');
+              return;
             }
           }
         }
@@ -1769,7 +1772,7 @@ export default function TakeAssessmentPage() {
         // detection cycle safety
       } finally {
         isDetectingPhone = false;
-        if (!isDisposed) {
+        if (!isDisposed && !isAutoSubmittingRef.current && !isSubmittingExamRef.current && !submitting && !result) {
           timer = setTimeout(runFastPhoneDetection, 150);
         }
       }
@@ -2166,6 +2169,9 @@ export default function TakeAssessmentPage() {
               );
               setMobileAlertModal({ show: true, strike: 1, isTerminated: false });
             } else if (nextStrike >= 2) {
+              isDisposed = true;
+              isAutoSubmittingRef.current = true;
+              if (timer) clearTimeout(timer);
               reportViolation(
                 'MOBILE_PHONE_DETECTED',
                 'SEVERE',
@@ -2173,8 +2179,8 @@ export default function TakeAssessmentPage() {
                 snapshotUri
               );
               setMobileAlertModal({ show: true, strike: 2, isTerminated: true });
-              isAutoSubmittingRef.current = true;
               handleAutoSubmit('MOBILE_VIOLATIONS_EXCEEDED');
+              return;
             }
           }
         }
@@ -2250,7 +2256,7 @@ export default function TakeAssessmentPage() {
         // catch canvas / detection safety
       } finally {
         isDetectingRef.current = false;
-        if (!isDisposed) {
+        if (!isDisposed && !isAutoSubmittingRef.current && !isSubmittingExamRef.current && !submitting && !result) {
           timer = setTimeout(runTelemetryCycle, 2000);
         }
       }
@@ -2305,15 +2311,20 @@ export default function TakeAssessmentPage() {
   };
 
   const handleAutoSubmit = async (reason?: string) => {
-    if (submitting || result) return;
-    // Lab concurrency jitter: Stagger simultaneous end-of-exam submissions across 0-2200ms
-    // Immediate violations (tab switch, face absence, companion unpin limit) submit with 0ms delay
-    const jitter =
+    if (submitting || isSubmittingExamRef.current || result) return;
+    isSubmittingExamRef.current = true;
+    isAutoSubmittingRef.current = true;
+
+    // Lab concurrency jitter: Stagger simultaneous end-of-exam submissions across 0-2000ms
+    // Immediate violations (mobile detection, tab switch, face absence, companion unpin limit, fullscreen) submit with 0ms delay immediately
+    const isImmediateViolation =
+      reason === 'MOBILE_VIOLATIONS_EXCEEDED' ||
       reason === 'TAB_SWITCH' ||
       reason === 'FACE_ABSENCE_EXCEEDED' ||
-      reason === 'COMPANION_UNPIN_LIMIT_EXCEEDED'
-        ? 0
-        : Math.floor(Math.random() * 2200);
+      reason === 'COMPANION_UNPIN_LIMIT_EXCEEDED' ||
+      reason === 'FULLSCREEN_EXCEEDED';
+
+    const jitter = isImmediateViolation ? 0 : Math.floor(Math.random() * 2000);
 
     setTimeout(() => {
       submitExam();
@@ -2337,6 +2348,7 @@ export default function TakeAssessmentPage() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'COMPANION_UNPINNED' || msg.type === 'COMPANION_SECURITY_VIOLATION') {
+            if (isAutoSubmittingRef.current || isSubmittingExamRef.current || submitting || result) return;
             const now = Date.now();
             if (now - lastCompanionUnpinTimeRef.current < 4000) return;
             lastCompanionUnpinTimeRef.current = now;
@@ -2488,6 +2500,7 @@ export default function TakeAssessmentPage() {
     });
 
     try {
+      setSubmitError(null);
       // 1. Submit attempt to backend (backend atomically evaluates and generates exitPass)
       const submitRes = await api.post(`/assessments/submissions/${examData.submissionId}/submit`, {
         answers: answerPayload,
@@ -2505,6 +2518,15 @@ export default function TakeAssessmentPage() {
               .catch(() => null)
           : Promise.resolve(null),
       ]);
+
+      // Clear all alert modals and screen blur overlays immediately
+      setMobileAlertModal(null);
+      setTabSwitchAlertModal(null);
+      setFullscreenAlertModal(null);
+      setFaceAlertModal(null);
+      setUnauthorizedPerson(null);
+      setIsWindowBlurred(false);
+      setSubmitError(null);
 
       if (detailedResult) {
         setResult(detailedResult);
@@ -2542,9 +2564,29 @@ export default function TakeAssessmentPage() {
       }
     } catch (err: any) {
       console.error('Failed to submit exam:', err);
+      // Fallback check: Check if submission was already committed to the database
+      try {
+        const fallbackResult = await api.get(`/assessments/submissions/${examData.submissionId}/result`);
+        if (fallbackResult) {
+          setMobileAlertModal(null);
+          setTabSwitchAlertModal(null);
+          setFullscreenAlertModal(null);
+          setFaceAlertModal(null);
+          setUnauthorizedPerson(null);
+          setIsWindowBlurred(false);
+          setSubmitError(null);
+          setResult(fallbackResult);
+          return;
+        }
+      } catch (_) {}
+
       isSubmittingExamRef.current = false;
       const errMsg = err?.message || 'Failed to submit exam. Please try again.';
-      alert(`Submission notice: ${errMsg}\n\nPlease click Submit Exam again.`);
+      setSubmitError(errMsg);
+      // Only display browser alert if not already trapped inside a termination modal
+      if (!mobileAlertModal?.isTerminated && !tabSwitchAlertModal?.isTerminated && !faceAlertModal?.isTerminated) {
+        alert(`Submission notice: ${errMsg}\n\nPlease click Submit Exam again.`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -3552,16 +3594,50 @@ export default function TakeAssessmentPage() {
             </div>
 
             {tabSwitchAlertModal.isTerminated ? (
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span>Auto-submission Status:</span>
-                  <span className="text-rose-400 font-bold flex items-center gap-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting to Evaluation Server...
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Your submitted responses and proctoring audit telemetry have been transmitted to the Faculty Audit Console.
-                </p>
+              <div className="space-y-3">
+                {submitError ? (
+                  <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-xs text-rose-300 font-medium text-left">
+                    <span className="font-bold block text-rose-200 mb-1">⚠️ Submission Notice:</span>
+                    {submitError}
+                  </div>
+                ) : null}
+
+                {submitError ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitError(null);
+                      isSubmittingExamRef.current = false;
+                      submitExam();
+                    }}
+                    className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Retry Final Submission Now</span>
+                  </button>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span>Auto-submission Status:</span>
+                      <span className="text-rose-400 font-bold flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting to Evaluation Server...
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        isSubmittingExamRef.current = false;
+                        submitExam();
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-mono transition"
+                    >
+                      Click if taking longer than expected
+                    </button>
+                    <p className="text-[11px] text-slate-500">
+                      Your submitted responses and proctoring audit telemetry have been transmitted to the Faculty Audit Console.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-3 pt-2">
@@ -3659,9 +3735,45 @@ export default function TakeAssessmentPage() {
             </div>
 
             {faceAlertModal.isTerminated ? (
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Finalizing assessment auto-submission...</span>
+              <div className="space-y-3">
+                {submitError ? (
+                  <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-xs text-rose-300 font-medium text-left">
+                    <span className="font-bold block text-rose-200 mb-1">⚠️ Submission Notice:</span>
+                    {submitError}
+                  </div>
+                ) : null}
+
+                {submitError ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitError(null);
+                      isSubmittingExamRef.current = false;
+                      submitExam();
+                    }}
+                    className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Retry Final Submission Now</span>
+                  </button>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex flex-col items-center justify-center gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Finalizing assessment auto-submission...</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        isSubmittingExamRef.current = false;
+                        submitExam();
+                      }}
+                      className="mt-1 px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-mono transition"
+                    >
+                      Click if taking longer than expected
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <button
@@ -3720,9 +3832,45 @@ export default function TakeAssessmentPage() {
             </div>
 
             {mobileAlertModal.isTerminated ? (
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Finalizing automatic exam submission...</span>
+              <div className="space-y-3">
+                {submitError ? (
+                  <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-xs text-rose-300 font-medium text-left">
+                    <span className="font-bold block text-rose-200 mb-1">⚠️ Submission Notice:</span>
+                    {submitError}
+                  </div>
+                ) : null}
+
+                {submitError ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitError(null);
+                      isSubmittingExamRef.current = false;
+                      submitExam();
+                    }}
+                    className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Retry Final Submission Now</span>
+                  </button>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-rose-400 font-bold flex flex-col items-center justify-center gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Finalizing automatic exam submission...</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        isSubmittingExamRef.current = false;
+                        submitExam();
+                      }}
+                      className="mt-1 px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-mono transition"
+                    >
+                      Click if taking longer than expected
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <button
