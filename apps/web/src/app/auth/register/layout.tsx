@@ -7,10 +7,21 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'CLIAS Register',
     'CHARUSAT Student Registration',
     'AdaptIQ Registration',
   ],
+  alternates: {
+    canonical: '/auth/register',
+  },
+  openGraph: {
+    title: 'Institutional Account Registration | CLIAS — CHARUSAT',
+    description:
+      'Register for a new student or academic account on CLIAS CHARUSAT platform. Built by Jigar Sakhia & Param Shah with smart adaptive learning integration.',
+    url: 'https://clias.vercel.app/auth/register',
+  },
 };
 
 export default function RegisterLayout({ children }: { children: React.ReactNode }) {

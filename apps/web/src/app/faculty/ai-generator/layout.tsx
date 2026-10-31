@@ -7,12 +7,23 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'AI Question Generator',
     'Automated Question Synthesis',
     'Bloom AI Assessment Studio',
     'CLIAS AI Generator',
     'CHARUSAT AI Studio',
   ],
+  alternates: {
+    canonical: '/faculty/ai-generator',
+  },
+  openGraph: {
+    title: 'AI Question Generation & Cognitive Synthesis Studio | CLIAS — CHARUSAT',
+    description:
+      'Automated AI synthesis of multi-tier questions, distractors, evaluation rubrics, and code test fixtures tailored to CHARUSAT syllabus by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/faculty/ai-generator',
+  },
 };
 
 export default function FacultyAIGeneratorLayout({ children }: { children: React.ReactNode }) {

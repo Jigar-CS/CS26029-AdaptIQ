@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'HOD Department Console',
     'OBE CO PO Attainment',
@@ -17,12 +19,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/hod/dashboard',
+  },
   openGraph: {
-    title: 'HOD Department Curriculum & OBE Console | CLIAS — CHARUSAT',
+    title: 'Head of Department (HOD) Academic Governance Console | CLIAS — CHARUSAT',
     description:
-      'Departmental curriculum governance, CO-PO attainment matrices, and faculty analytics engineered for CHARUSAT HODs by Jigar Sakhia & Jigar.',
+      'Department-wide curriculum attainment telemetry, course coordinator performance, examination audits, and NBA accreditation reporting for CHARUSAT HODs on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/hod/dashboard',
   },
 };

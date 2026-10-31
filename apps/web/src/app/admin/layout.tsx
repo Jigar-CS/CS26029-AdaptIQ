@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'Super Admin Console',
     'CLIAS Admin Dashboard',
@@ -17,12 +19,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/admin/dashboard',
+  },
   openGraph: {
     title: 'Super Administrator & System Control Console | CLIAS — CHARUSAT',
     description:
-      'Master administration console for institute provisioning, multi-tenant architecture, and system telemetry engineered by Jigar Sakhia & Jigar.',
+      'Master administrator console for university multi-tenancy, institute configurations, role-based access management, database migrations, and system telemetry on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/admin/dashboard',
   },
 };

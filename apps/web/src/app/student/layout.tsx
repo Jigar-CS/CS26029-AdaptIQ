@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'Jigar Sakhia AdaptIQ',
     'Student Learning Intelligence',
@@ -19,12 +21,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/student/dashboard',
+  },
   openGraph: {
     title: 'Student Learning Intelligence & Practice Hub | CLIAS — CHARUSAT',
     description:
-      'Continuous adaptive practice, cognitive modeling, and coding sandbox engineered for CHARUSAT students by Jigar Sakhia & Jigar.',
+      'AI-powered smart adaptive practice drills, automated assessments, coding IDE, and curriculum learning pathways for CHARUSAT engineering students, engineered by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/student/dashboard',
   },
 };

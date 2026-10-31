@@ -7,9 +7,20 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'CLIAS Counsellor Profile',
     'CHARUSAT Mentorship Allocation',
   ],
+  alternates: {
+    canonical: '/counsellor/profile',
+  },
+  openGraph: {
+    title: 'Counsellor Profile & Batch Mentorship Assignment | CLIAS — CHARUSAT',
+    description:
+      'Counsellor credentials, designated mentee cohorts, and institutional communication settings on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/counsellor/profile',
+  },
 };
 
 export default function CounsellorProfileLayout({ children }: { children: React.ReactNode }) {

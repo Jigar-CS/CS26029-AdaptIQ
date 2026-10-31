@@ -7,11 +7,22 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Live Invigilation Dashboard',
     'Online Exam Proctoring',
     'Anomaly Detection Surveillance',
     'CLIAS Proctoring Portal',
   ],
+  alternates: {
+    canonical: '/faculty/invigilation',
+  },
+  openGraph: {
+    title: 'Live Proctored Exam Surveillance & Integrity Console | CLIAS — CHARUSAT',
+    description:
+      'Real-time multi-student webcam surveillance, biometric face verification alerts, tab-switch anomaly detection, and exit pass verification on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/faculty/invigilation',
+  },
 };
 
 export default function FacultyInvigilationLayout({ children }: { children: React.ReactNode }) {

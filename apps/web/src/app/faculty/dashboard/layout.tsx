@@ -7,10 +7,21 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'CLIAS Faculty Dashboard',
     'Teaching Analytics',
     'CHARUSAT Faculty Dashboard',
   ],
+  alternates: {
+    canonical: '/faculty/dashboard',
+  },
+  openGraph: {
+    title: 'Faculty Academic Command Console | CLIAS — CHARUSAT',
+    description:
+      'Course-level diagnostic intelligence, assessment metrics, batch performance distributions, and AI generation shortcuts on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/faculty/dashboard',
+  },
 };
 
 export default function FacultyDashboardLayout({ children }: { children: React.ReactNode }) {

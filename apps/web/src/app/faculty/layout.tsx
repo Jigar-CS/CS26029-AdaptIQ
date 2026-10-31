@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'Faculty Assessment Studio',
     'AI Question Generator',
@@ -18,12 +20,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/faculty/dashboard',
+  },
   openGraph: {
     title: 'Faculty Assessment Studio & Curriculum Analytics | CLIAS — CHARUSAT',
     description:
-      'AI-assisted question generation, automated grading, and cognitive analytics engineered for CHARUSAT professors by Jigar Sakhia & Jigar.',
+      'AI question synthesis, proctoring supervision, Bloom taxonomy analytics, and CO-PO attainment suite engineered for CHARUSAT faculty by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/faculty/dashboard',
   },
 };

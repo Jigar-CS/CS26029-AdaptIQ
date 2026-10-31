@@ -7,10 +7,21 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'CLIAS Counsellor Dashboard',
     'Mentee Cohort Health',
     'CHARUSAT Student Counseling',
   ],
+  alternates: {
+    canonical: '/counsellor/dashboard',
+  },
+  openGraph: {
+    title: 'Counsellor Overview & Mentorship Analytics | CLIAS — CHARUSAT',
+    description:
+      'Track academic wellness indices, at-risk student queues, and mentorship intervention meeting schedules on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/counsellor/dashboard',
+  },
 };
 
 export default function CounsellorDashboardLayout({ children }: { children: React.ReactNode }) {

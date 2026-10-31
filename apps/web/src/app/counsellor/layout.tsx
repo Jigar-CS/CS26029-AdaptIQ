@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'Counsellor Monitoring Console',
     'At-Risk Student Alerts',
@@ -17,12 +19,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/counsellor/dashboard',
+  },
   openGraph: {
-    title: 'Counsellor At-Risk Student Monitoring Console | CLIAS — CHARUSAT',
+    title: 'Student Mentorship & At-Risk Intervention Hub | CLIAS — CHARUSAT',
     description:
-      'Predictive student early warning telemetry and counseling intervention logs engineered for CHARUSAT by Jigar Sakhia & Jigar.',
+      'Early warning indicators, predictive drop-out risk modeling, attendance correlations, and batch mentorship tracking for CHARUSAT counsellors on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/counsellor/dashboard',
   },
 };

@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'Jigar Sakhia CHARUSAT',
     'Dean Academic Console',
     'Institutional Governance',
@@ -17,12 +19,15 @@ export const metadata: Metadata = {
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },
     { name: 'Jigar', url: 'https://github.com/Jigar-CS' },
-    { name: 'Param' },
+    { name: 'Param Shah' },
   ],
+  alternates: {
+    canonical: '/head/dashboard',
+  },
   openGraph: {
     title: 'Institutional Governance & Dean Console | CLIAS — CHARUSAT',
     description:
-      'Campus-wide academic metrics, multi-program attainment, and accreditation governance engineered for CHARUSAT by Jigar Sakhia & Jigar.',
+      'Campus-wide academic intelligence, institute-level accreditation telemetry (NAAC/NBA), multi-program evaluation, and governance console for CHARUSAT University leadership on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/head/dashboard',
   },
 };

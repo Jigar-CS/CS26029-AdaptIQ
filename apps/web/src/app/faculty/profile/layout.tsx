@@ -7,9 +7,20 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'CLIAS Faculty Profile',
     'CHARUSAT Professor Credentials',
   ],
+  alternates: {
+    canonical: '/faculty/profile',
+  },
+  openGraph: {
+    title: 'Faculty Profile & Academic Department Credentials | CLIAS — CHARUSAT',
+    description:
+      'Academic credentials, assigned courses, teaching evaluations, and department role authorizations on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/faculty/profile',
+  },
 };
 
 export default function FacultyProfileLayout({ children }: { children: React.ReactNode }) {

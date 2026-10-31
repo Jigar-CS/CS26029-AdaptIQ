@@ -7,11 +7,22 @@ export const metadata: Metadata = {
   keywords: [
     'Jigar Sakhia',
     'Jigar',
+    'Param Shah',
+    'Param',
     'At-Risk Early Warning Alerts',
     'Dropout Prevention Alerts',
     'CLIAS Counsellor Alerts',
     'Academic Risk Modeling',
   ],
+  alternates: {
+    canonical: '/counsellor/alerts',
+  },
+  openGraph: {
+    title: 'At-Risk Predictive Academic Warning Triggers | CLIAS — CHARUSAT',
+    description:
+      'Automated risk flags derived from sudden score drops, low practice velocity, assessment absences, and non-engagement indicators on CLIAS by Jigar Sakhia & Param Shah.',
+    url: 'https://clias.vercel.app/counsellor/alerts',
+  },
 };
 
 export default function CounsellorAlertsLayout({ children }: { children: React.ReactNode }) {
