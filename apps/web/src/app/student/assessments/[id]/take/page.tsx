@@ -1165,60 +1165,76 @@ export default function TakeAssessmentPage() {
       try {
         if (typeof window === 'undefined') return;
 
-        // 1. High-Priority: Load Face-API immediately for instant preflight face verification
-        if (!(window as any).faceapi) {
-          await loadScriptWithFallback([
-            'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js',
-            'https://unpkg.com/@vladmandic/face-api@1.7.12/dist/face-api.js',
-          ]);
-        }
-        if (!active) return;
+        // Concurrently initialize Face-API and COCO-SSD for instant model readiness
+        const initFaceApi = async () => {
+          try {
+            if (!(window as any).faceapi) {
+              await loadScriptWithFallback([
+                'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js',
+                'https://unpkg.com/@vladmandic/face-api@1.7.12/dist/face-api.js',
+              ]);
+            }
+            if (!active) return;
+            const faceapi = (window as any).faceapi;
+            if (active && faceapi && !faceApiModelLoadedRef.current) {
+              const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+              await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+              if (!active) return;
+              await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+              if (!active) return;
+              await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
-        const faceapi = (window as any).faceapi;
-        if (active && faceapi && !faceApiModelLoadedRef.current) {
-          const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
-          await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-          if (!active) return;
-          await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
-          if (!active) return;
-          await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-
-          if (active) {
-            faceApiModelLoadedRef.current = true;
-            setFaceModelStatus('ready');
-            console.log('AI Face Biometric Models (TinyFace + Landmarks68 + ResNet Recognition) loaded successfully.');
-
-            // Pre-warm DB biometric descriptors from snapshots if available
-            loadDbBiometrics().catch(() => {});
+              if (active) {
+                faceApiModelLoadedRef.current = true;
+                setFaceModelStatus('ready');
+                console.log('AI Face Biometric Models loaded successfully.');
+                loadDbBiometrics().catch(() => {});
+              }
+            }
+          } catch (e) {
+            console.warn('Face-api load error:', e);
           }
-        }
-        if (!active) return;
+        };
 
-        // 2. Load TensorFlow.js and COCO-SSD for handheld mobile phone detection
-        if (!(window as any).tf) {
-          await loadScriptWithFallback([
-            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
-            'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
-            'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
-          ]);
-        }
-        if (!active) return;
+        const initCocoSsd = async () => {
+          try {
+            if (!(window as any).tf) {
+              await loadScriptWithFallback([
+                'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+                'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
+              ]);
+            }
+            if (!active) return;
 
-        if (!(window as any).cocoSsd) {
-          await loadScriptWithFallback([
-            'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-            'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-          ]);
-        }
-        if (!active) return;
+            if (!(window as any).cocoSsd) {
+              await loadScriptWithFallback([
+                'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+                'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+              ]);
+            }
+            if (!active) return;
 
-        if (active && (window as any).cocoSsd && !visionModelRef.current) {
-          const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
-          if (active) {
-            visionModelRef.current = m;
-            console.log('AI Proctoring Vision Model (COCO-SSD) loaded successfully.');
+            if (active && (window as any).cocoSsd && !visionModelRef.current) {
+              const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
+              if (active) {
+                visionModelRef.current = m;
+                // Pre-warm WebGL shaders on dummy canvas so 1st real frame takes ~25ms
+                try {
+                  const warmup = document.createElement('canvas');
+                  warmup.width = 160;
+                  warmup.height = 120;
+                  await m.detect(warmup);
+                } catch {}
+                console.log('AI Proctoring Vision Model (COCO-SSD) primed & warmed up.');
+              }
+            }
+          } catch (e) {
+            console.warn('COCO-SSD load error:', e);
           }
-        }
+        };
+
+        await Promise.allSettled([initFaceApi(), initCocoSsd()]);
       } catch (err) {
         console.warn('Vision model initialization error:', err);
       }
@@ -1665,7 +1681,103 @@ export default function TakeAssessmentPage() {
   }, [examData, result, showPreFlight]);
 
   // ---------------------------------------------------------------------------
-  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Strict 5.0s Cadence)
+  // Dedicated Ultra-Fast Handheld Mobile Phone Detector (600ms High-Frequency Scan)
+  // Operates on a lightweight 320x240 offscreen canvas buffer for lightning-fast ~25ms inference
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
+
+    let timer: any = null;
+    let isDisposed = false;
+    let isDetectingPhone = false;
+    const phoneCanvas = document.createElement('canvas');
+    phoneCanvas.width = 320;
+    phoneCanvas.height = 240;
+    const phoneCtx = phoneCanvas.getContext('2d', { willReadFrequently: true });
+
+    const runFastPhoneDetection = async () => {
+      if (isDisposed) return;
+      if (isDetectingPhone || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
+        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 600);
+        return;
+      }
+
+      const video = livePipVideoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0 || !visionModelRef.current || !phoneCtx) {
+        if (!isDisposed) timer = setTimeout(runFastPhoneDetection, 600);
+        return;
+      }
+
+      isDetectingPhone = true;
+      try {
+        phoneCtx.drawImage(video, 0, 0, 320, 240);
+        const predictions = await visionModelRef.current.detect(phoneCanvas);
+
+        const phone = predictions.find((p: any) => {
+          const c = (p.class || '').toLowerCase();
+          if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote' && !c.includes('phone')) {
+            return false;
+          }
+          return p.score >= 0.22;
+        });
+
+        if (phone && !isAutoSubmittingRef.current) {
+          const confidence = Math.round(phone.score * 100);
+          const detectionDetails = `AI Vision: Handheld mobile device detected in examination workstation (${confidence}% confidence).`;
+
+          const now = Date.now();
+          if (now - lastMobileStrikeTimeRef.current >= 3500) {
+            lastMobileStrikeTimeRef.current = now;
+            const nextStrike = mobileStrikeCountRef.current + 1;
+            mobileStrikeCountRef.current = nextStrike;
+
+            let snapshotUri = '';
+            try {
+              snapshotUri = phoneCanvas.toDataURL('image/jpeg', 0.65);
+            } catch {}
+
+            if (nextStrike === 1) {
+              reportViolation(
+                'MOBILE_PHONE_DETECTED',
+                'SEVERE',
+                detectionDetails,
+                snapshotUri
+              );
+              setMobileAlertModal({ show: true, strike: 1, isTerminated: false });
+            } else if (nextStrike >= 2) {
+              reportViolation(
+                'MOBILE_PHONE_DETECTED',
+                'SEVERE',
+                'Exam terminated: Maximum mobile phone warning limit (2/2) exceeded.',
+                snapshotUri
+              );
+              setMobileAlertModal({ show: true, strike: 2, isTerminated: true });
+              isAutoSubmittingRef.current = true;
+              handleAutoSubmit('MOBILE_VIOLATIONS_EXCEEDED');
+            }
+          }
+        }
+      } catch (err) {
+        // detection cycle safety
+      } finally {
+        isDetectingPhone = false;
+        if (!isDisposed) {
+          timer = setTimeout(runFastPhoneDetection, 600);
+        }
+      }
+    };
+
+    // Immediate start on exam entry (300ms)
+    timer = setTimeout(runFastPhoneDetection, 300);
+
+    return () => {
+      isDisposed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [examData, result, showPreFlight, mediaStream]);
+
+  // ---------------------------------------------------------------------------
+  // Periodic Visual & Multi-Parameter Proctoring Telemetry (Face & Identity)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!examData || result || showPreFlight || submitting || isSubmittingExamRef.current || !mediaStream) return;
@@ -1676,13 +1788,13 @@ export default function TakeAssessmentPage() {
     const runTelemetryCycle = async () => {
       if (isDisposed) return;
       if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
-        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 2000);
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 1500);
         return;
       }
       const video = livePipVideoRef.current;
       const canvas = offscreenCanvasRef.current;
       if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
-        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 1000);
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 800);
         return;
       }
 
@@ -1699,29 +1811,28 @@ export default function TakeAssessmentPage() {
         const cycle = detectionCycleRef.current;
 
         // -------------------------------------------------------------
-        // A. Primary Object & Phone Detection via COCO-SSD (Every cycle)
+        // A. Primary Object & Phone Detection via COCO-SSD (Backup scan)
         // -------------------------------------------------------------
         if (visionModelRef.current) {
           try {
-            const predictions = await visionModelRef.current.detect(video);
+            canvas.width = 320;
+            canvas.height = 240;
+            const cCtx = canvas.getContext('2d');
+            if (cCtx) {
+              cCtx.drawImage(video, 0, 0, 320, 240);
+              const predictions = await visionModelRef.current.detect(canvas);
 
-            // 1. Precise Mobile Phone Detection across ALL assessment modes
-            const phone = predictions.find((p: any) => {
-              const c = (p.class || '').toLowerCase();
-              if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote') return false;
-              // Sensitive confidence threshold for webcam video
-              return p.score >= 0.28;
-            });
+              const phone = predictions.find((p: any) => {
+                const c = (p.class || '').toLowerCase();
+                if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote' && !c.includes('phone')) return false;
+                return p.score >= 0.22;
+              });
 
-            if (phone) {
-              consecutiveMobileDetectionRef.current += 1;
-              if (consecutiveMobileDetectionRef.current >= 1) {
+              if (phone) {
                 isMobileDetected = true;
                 mobileConfidence = Math.round(phone.score * 100);
                 detectionDetails = `AI Vision: Handheld mobile device detected in examination workstation (${mobileConfidence}% confidence).`;
               }
-            } else {
-              consecutiveMobileDetectionRef.current = 0;
             }
           } catch (modelErr) {
             console.warn('Vision detection cycle error:', modelErr);
