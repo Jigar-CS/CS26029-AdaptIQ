@@ -650,17 +650,6 @@ async function main() {
     },
   });
 
-  // HEAD
-  const headUser = await prisma.user.create({
-    data: {
-      email: 'head@charusat.edu.in',
-      passwordHash,
-      role: UserRole.HEAD,
-      status: UserStatus.ACTIVE,
-      emailVerified: true,
-    },
-  });
-
   // AUTHORIZED STUDENT & DEMO STUDENT ACCOUNT
   const authorizedRahul = await prisma.authorizedStudent.create({
     data: {

@@ -73,9 +73,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isProtectedRoute =
     pathname.startsWith('/student') ||
     pathname.startsWith('/faculty') ||
-    pathname.startsWith('/counsellor') ||
     pathname.startsWith('/hod') ||
-    pathname.startsWith('/head') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/profile');
 

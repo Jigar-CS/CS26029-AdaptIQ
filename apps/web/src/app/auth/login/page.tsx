@@ -69,15 +69,6 @@ const ROLE_PRESETS: RolePreset[] = [
     accentColor: 'border-teal-500 text-teal-800 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40',
   },
   {
-    id: 'HEAD',
-    label: 'Dean',
-    email: 'head@charusat.edu.in',
-    password: 'clias123',
-    roleBadge: 'DEAN',
-    description: 'Institute Dean / Executive',
-    accentColor: 'border-purple-500 text-purple-800 dark:text-purple-300 bg-purple-50/80 dark:bg-purple-950/40',
-  },
-  {
     id: 'ADMIN',
     label: 'Admin',
     email: 'admin@charusat.edu.in',
@@ -109,7 +100,6 @@ export default function LoginPage() {
     router.prefetch('/student/dashboard');
     router.prefetch('/faculty/counselling');
     router.prefetch('/hod/dashboard');
-    router.prefetch('/head/dashboard');
     router.prefetch('/admin/dashboard');
 
     if (typeof window !== 'undefined') {
@@ -135,9 +125,8 @@ export default function LoginPage() {
     // Warm-up target route for this specific preset
     if (preset.id === 'FACULTY') router.prefetch('/faculty/dashboard');
     else if (preset.id === 'STUDENT') router.prefetch('/student/dashboard');
-    else if (preset.id === 'COUNSELLOR') router.prefetch('/counsellor/dashboard');
+    else if (preset.id === 'COUNSELLOR') router.prefetch('/faculty/counselling');
     else if (preset.id === 'HOD') router.prefetch('/hod/dashboard');
-    else if (preset.id === 'HEAD') router.prefetch('/head/dashboard');
     else if (preset.id === 'ADMIN') router.prefetch('/admin/dashboard');
   };
 
@@ -218,15 +207,16 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] font-bold">
-              {ROLE_PRESETS.map((preset) => {
+            <div className="grid grid-cols-6 gap-1.5 font-mono text-[10px] font-bold">
+              {ROLE_PRESETS.map((preset, idx) => {
                 const isActive = preset.id === selectedRole;
+                const colSpan = idx < 3 ? 'col-span-2' : 'col-span-3';
                 return (
                   <button
                     key={preset.id}
                     type="button"
                     onClick={() => handleSelectPreset(preset)}
-                    className={`py-2 px-2 text-center transition cursor-pointer border flex items-center justify-center gap-1 ${
+                    className={`${colSpan} py-2 px-2 text-center transition cursor-pointer border flex items-center justify-center gap-1 ${
                       isActive
                         ? `${preset.accentColor} border-2 shadow-sm font-black`
                         : 'border-[rgba(74,111,165,0.2)] dark:border-white/10 hover:border-[#e05033]/50 text-slate-600 dark:text-slate-400 bg-white/40 dark:bg-white/5'

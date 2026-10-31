@@ -844,7 +844,6 @@ All pre-seeded demo accounts use the standard password: **`clias123`**
 | **FACULTY** | `faculty@charusat.edu.in` | Dr. CSE Faculty. Assigned to CS301 (Data Structures); overview of question bank and class mastery. |
 | **COUNSELLOR** | `counsellor@charusat.edu.in` | Academic Mentor. Scoped view showing only assigned students via `CounsellorAssignment`. |
 | **HOD** | `hod@charusat.edu.in` | Head of Department. Department-level aggregate curriculum health across CSE semesters. |
-| **HEAD** | `head@charusat.edu.in` | Institutional Head. High-level macro indicators across CSPIT engineering programs. |
 
 ---
 
