@@ -48,6 +48,7 @@ import {
   RotateCcw,
   GraduationCap,
   Shuffle,
+  ShieldCheck,
 } from 'lucide-react';
 import { AssessmentLeaderboardModal } from '@/components/AssessmentLeaderboardModal';
 
@@ -4099,57 +4100,80 @@ export default function FacultyAssessmentsPage() {
 
       {/* Cohort Analytics & Student Marks Modal */}
       {analysisModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#111827] border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[#faf7f2] dark:bg-[#0c1220] border border-[rgba(74,111,165,0.3)] dark:border-[rgba(106,144,197,0.25)] text-[#1a2540] dark:text-[#e8edf5] w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+            <div className="px-6 py-4 border-b border-[rgba(74,111,165,0.22)] dark:border-[rgba(106,144,197,0.2)] bg-[#ede8df] dark:bg-[#121b30] flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20">
-                  <BarChart2 className="w-6 h-6" />
+                <div className="p-2.5 bg-[#4a6fa5]/15 text-[#4a6fa5] dark:text-[#6a90c5] border border-[#4a6fa5]/30">
+                  <BarChart2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-white">Cohort Attempt Analytics & Marks</h3>
+                  <p className="font-mono text-[#4a6fa5] dark:text-[#6a90c5] tracking-widest text-[9px] uppercase font-bold mb-0.5">
+                    COHORT PERFORMANCE &amp; MARKS
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display text-2xl uppercase tracking-tight text-[#1a2540] dark:text-white">
+                      Cohort Attempt Analytics &amp; Marks
+                    </h3>
                     {activeAnalytics && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
+                      <span className="px-2.5 py-0.5 font-mono text-xs font-bold bg-[#faf7f2] dark:bg-[#1a2540] text-[#e05033] dark:text-[#e8604a] border border-[#e05033]/30">
                         {activeAnalytics.code}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {activeAnalytics ? activeAnalytics.title : 'Loading cohort performance metrics...'}
-                  </p>
+                  {activeAnalytics ? (
+                    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-sans mt-0.5 flex-wrap">
+                      <FileText className="w-3.5 h-3.5 text-[#4a6fa5] shrink-0" />
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        {activeAnalytics.title.replace(/^[^\w\s]+/, '').trim() || activeAnalytics.title}
+                      </span>
+                      {activeAnalytics.courseCode && (
+                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                          ({activeAnalytics.courseCode} - {activeAnalytics.courseName})
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5">
+                      Loading cohort performance metrics...
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 {activeAnalytics && (
                   <button
+                    type="button"
                     onClick={() =>
                       setLeaderboardModalData({
                         id: activeAnalytics.assessmentId,
                         title: activeAnalytics.title,
                       })
                     }
-                    className="flex items-center gap-2 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 font-mono text-xs font-bold uppercase tracking-wider transition shadow-2xs"
                     title="Open full dynamic live ranking leaderboard"
                   >
-                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     <span>Live Leaderboard</span>
                   </button>
                 )}
                 {activeAnalytics && activeAnalytics.submissions?.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => exportMarksCsv(activeAnalytics)}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#4a6fa5] hover:bg-[#3b5d8f] text-white border border-[#4a6fa5] font-mono text-xs font-bold uppercase tracking-wider transition shadow-xs"
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="w-3.5 h-3.5" />
                     <span>Export Marks (.CSV)</span>
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => setAnalysisModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+                  className="p-1.5 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-[#ede8df] dark:hover:bg-slate-800 transition"
+                  title="Close"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -4157,37 +4181,45 @@ export default function FacultyAssessmentsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-[#faf7f2] dark:bg-[#0c1220]">
               {analyticsLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
-                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                  <p className="text-sm">Compiling student attempt reports & integrity logs...</p>
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500 dark:text-slate-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#4a6fa5]" />
+                  <p className="text-sm font-sans">Compiling student attempt reports &amp; integrity logs...</p>
                 </div>
               ) : !activeAnalytics ? (
-                <div className="py-16 text-center text-slate-400">
-                  <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-2 opacity-80" />
-                  <p className="font-semibold text-white">Analytics Unavailable</p>
-                  <p className="text-xs text-slate-400 mt-1">Unable to load analytics for this assessment.</p>
+                <div className="py-16 text-center text-slate-500 dark:text-slate-400">
+                  <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-2 opacity-80" />
+                  <p className="font-semibold text-slate-900 dark:text-white">Analytics Unavailable</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Unable to load analytics for this assessment.</p>
                 </div>
               ) : (
                 <>
                   {/* Summary Metric Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                      <span className="text-xs text-slate-400 font-medium">Total Attempts</span>
-                      <p className="text-2xl font-black text-white mt-1">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="bg-[#ede8df]/60 dark:bg-[#121b30] p-4 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] shadow-2xs flex flex-col justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                        Total Attempts
+                      </span>
+                      <p className="font-display text-3xl font-normal text-[#1a2540] dark:text-white my-1">
                         {activeAnalytics.totalSubmissions}
                       </p>
-                      <span className="text-[11px] text-slate-400">Enrolled submissions</span>
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        Enrolled submissions
+                      </span>
                     </div>
 
-                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                      <span className="text-xs text-slate-400 font-medium">Class Average</span>
-                      <p className="text-2xl font-black text-indigo-400 mt-1">
+                    <div className="bg-[#ede8df]/60 dark:bg-[#121b30] p-4 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] shadow-2xs flex flex-col justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                        Class Average
+                      </span>
+                      <p className="font-display text-3xl font-normal text-[#4a6fa5] dark:text-[#6a90c5] my-1">
                         {activeAnalytics.averageScore}{' '}
-                        <span className="text-xs font-normal text-slate-400">/ {activeAnalytics.totalMarks}</span>
+                        <span className="font-sans text-xs font-normal text-slate-500 dark:text-slate-400">
+                          / {activeAnalytics.totalMarks}
+                        </span>
                       </p>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
                         {activeAnalytics.totalMarks > 0
                           ? Math.round((activeAnalytics.averageScore / activeAnalytics.totalMarks) * 100)
                           : 0}
@@ -4195,44 +4227,53 @@ export default function FacultyAssessmentsPage() {
                       </span>
                     </div>
 
-                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                      <span className="text-xs text-slate-400 font-medium">Pass Rate</span>
-                      <p className="text-2xl font-black text-emerald-400 mt-1">
+                    <div className="bg-[#ede8df]/60 dark:bg-[#121b30] p-4 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] shadow-2xs flex flex-col justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                        Pass Rate
+                      </span>
+                      <p className="font-display text-3xl font-normal text-emerald-600 dark:text-emerald-400 my-1">
                         {activeAnalytics.passRate}%
                       </p>
-                      <span className="text-[11px] text-slate-400">Benchmark: {activeAnalytics.passingMarks} marks</span>
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        Benchmark: {activeAnalytics.passingMarks} marks
+                      </span>
                     </div>
 
-                    <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                      <span className="text-xs text-slate-400 font-medium">Score Range</span>
-                      <p className="text-2xl font-black text-white mt-1">
+                    <div className="bg-[#ede8df]/60 dark:bg-[#121b30] p-4 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] shadow-2xs flex flex-col justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                        Score Range
+                      </span>
+                      <p className="font-display text-3xl font-normal text-[#1a2540] dark:text-white my-1">
                         {activeAnalytics.highestScore}{' '}
-                        <span className="text-xs font-normal text-slate-400">high</span> •{' '}
-                        <span className="text-amber-400">{activeAnalytics.lowestScore}</span>{' '}
-                        <span className="text-xs font-normal text-slate-400">low</span>
+                        <span className="font-mono text-[10px] text-slate-500 uppercase">HIGH</span>{' '}
+                        <span className="text-slate-300 dark:text-slate-600 font-sans font-light">•</span>{' '}
+                        <span className="text-[#e05033] dark:text-[#e8604a]">{activeAnalytics.lowestScore}</span>{' '}
+                        <span className="font-mono text-[10px] text-slate-500 uppercase">LOW</span>
                       </p>
-                      <span className="text-[11px] text-slate-400">Max possible: {activeAnalytics.totalMarks}</span>
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        Max possible: {activeAnalytics.totalMarks}
+                      </span>
                     </div>
                   </div>
 
                   {/* Filter & Search Bar */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#ede8df]/70 dark:bg-[#121b30] p-3 border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)]">
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <div className="relative w-full sm:w-72">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                           type="text"
                           value={searchStudent}
                           onChange={(e) => setSearchStudent(e.target.value)}
                           placeholder="Search student, enrollment, email..."
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-[#faf7f2] dark:bg-[#0c1220] border border-[rgba(74,111,165,0.3)] dark:border-[rgba(106,144,197,0.25)] pl-9 pr-3 py-2 text-xs font-sans text-[#1a2540] dark:text-[#e8edf5] placeholder:text-slate-400 focus:outline-none focus:border-[#4a6fa5]"
                         />
                       </div>
 
                       <select
                         value={filterDiv}
                         onChange={(e) => setFilterDiv(e.target.value as any)}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                        className="bg-[#faf7f2] dark:bg-[#0c1220] border border-[rgba(74,111,165,0.3)] dark:border-[rgba(106,144,197,0.25)] px-3 py-2 text-xs font-mono font-semibold text-[#1a2540] dark:text-[#e8edf5] focus:outline-none focus:border-[#4a6fa5]"
                       >
                         <option value="ALL">All Divisions</option>
                         <option value="DIV 1">Division A (DIV 1)</option>
@@ -4240,7 +4281,7 @@ export default function FacultyAssessmentsPage() {
                       </select>
                     </div>
 
-                    <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+                    <span className="text-xs font-mono font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
                       Showing{' '}
                       {(activeAnalytics.submissions || []).filter((s: any) => {
                         const matchDiv = filterDiv === 'ALL' || (s.division || activeAnalytics.division) === filterDiv;
@@ -4256,22 +4297,38 @@ export default function FacultyAssessmentsPage() {
                   </div>
 
                   {/* Students Attempt List Table */}
-                  <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-900/30">
+                  <div className="border border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)] overflow-hidden bg-[#faf7f2] dark:bg-[#0c1220] shadow-2xs">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-900/90 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                        <thead className="bg-[#ede8df] dark:bg-[#121b30] border-b border-[rgba(74,111,165,0.25)] dark:border-[rgba(106,144,197,0.2)]">
                           <tr>
-                            <th className="px-4 py-3.5">Student Details</th>
-                            <th className="px-4 py-3.5">Division</th>
-                            <th className="px-4 py-3.5">Marks Obtained</th>
-                            <th className="px-4 py-3.5">Percentage</th>
-                            <th className="px-4 py-3.5">Status</th>
-                            <th className="px-4 py-3.5">AI Proctoring Trust</th>
-                            <th className="px-4 py-3.5 text-right">Attempt Date</th>
-                            <th className="px-4 py-3.5 text-right">Evaluation</th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Student Details
+                            </th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Division
+                            </th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Marks Obtained
+                            </th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Percentage
+                            </th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Status
+                            </th>
+                            <th className="px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              AI Proctoring Trust
+                            </th>
+                            <th className="px-4 py-3 text-right font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Attempt Date
+                            </th>
+                            <th className="px-4 py-3 text-right font-mono text-[10px] font-bold uppercase tracking-wider text-[#4a6fa5] dark:text-[#6a90c5]">
+                              Evaluation
+                            </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/60 font-medium">
+                        <tbody className="divide-y divide-[rgba(74,111,165,0.15)] dark:divide-[rgba(106,144,197,0.15)] font-sans">
                           {(activeAnalytics.submissions || [])
                             .filter((s: any) => {
                               const matchDiv = filterDiv === 'ALL' || (s.division || activeAnalytics.division) === filterDiv;
@@ -4283,91 +4340,94 @@ export default function FacultyAssessmentsPage() {
                               return matchDiv && matchSearch;
                             })
                             .map((sub: any) => (
-                              <tr key={sub.submissionId || sub.id} className="hover:bg-slate-800/40 transition">
+                              <tr key={sub.submissionId || sub.id} className="hover:bg-[#ede8df]/50 dark:hover:bg-[#121b30]/60 transition">
                                 <td className="px-4 py-3.5">
                                   <div className="flex flex-col">
-                                    <span className="text-white font-bold">{sub.studentName}</span>
-                                    <span className="text-[11px] text-slate-400 font-mono">
+                                    <span className="font-bold text-sm text-[#1a2540] dark:text-[#e8edf5]">
+                                      {sub.studentName}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-[#4a6fa5] dark:text-[#6a90c5]">
                                       {sub.enrollmentNumber || sub.email}
                                     </span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3.5">
-                                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 text-[11px] font-mono">
+                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                  <span className="inline-block px-2.5 py-1 rounded bg-[#ede8df] dark:bg-[#1a2540] text-[#1a2540] dark:text-[#e8edf5] border border-[rgba(74,111,165,0.25)] font-mono text-xs font-bold whitespace-nowrap">
                                     {sub.division || activeAnalytics.division || 'DIV 1'}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3.5">
-                                  <span className="text-white font-bold text-sm">
+                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                  <span className="font-bold text-sm text-[#1a2540] dark:text-[#e8edf5]">
                                     {sub.score}{' '}
-                                    <span className="text-slate-500 font-normal text-xs">
+                                    <span className="font-mono text-xs font-normal text-slate-500 dark:text-slate-400">
                                       / {sub.totalMarks}
                                     </span>
                                   </span>
                                 </td>
-                                <td className="px-4 py-3.5">
+                                <td className="px-4 py-3.5 whitespace-nowrap">
                                   <span
-                                    className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                                    className={`inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold ${
                                       sub.percentage >= 60
-                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                                         : sub.percentage >= 40
-                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                        ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/30'
+                                        : 'bg-rose-500/10 text-rose-800 dark:text-rose-300 border border-rose-500/30'
                                     }`}
                                   >
                                     {sub.percentage}%
                                   </span>
                                 </td>
-                                <td className="px-4 py-3.5">
+                                <td className="px-4 py-3.5 whitespace-nowrap">
                                   {sub.status === 'SUBMITTED' ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
-                                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[11px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 animate-pulse">
+                                      <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                                       PENDING REVIEW
                                     </span>
                                   ) : sub.passed ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[11px] font-bold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                       PASSED
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                      <XCircle className="w-3.5 h-3.5" />
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded font-mono text-[11px] font-bold bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30">
+                                      <XCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                                       RETAKE
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3.5">
+                                <td className="px-4 py-3.5 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
                                     <span
-                                      className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-mono text-[11px] font-bold ${
                                         sub.trustScore >= 80
-                                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                          ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                                           : sub.trustScore >= 50
-                                          ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                                          : 'bg-rose-950 text-rose-300 border border-rose-800'
+                                          ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/30'
+                                          : 'bg-rose-500/10 text-rose-800 dark:text-rose-300 border border-rose-500/30'
                                       }`}
                                     >
+                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                       {sub.trustScore}% Trust
                                     </span>
                                     {sub.violationsCount > 0 && (
-                                      <span className="text-[11px] text-rose-400 font-semibold">
+                                      <span className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
                                         ({sub.violationsCount} violations)
                                       </span>
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-4 py-3.5 text-right text-slate-400 font-mono text-[11px]">
+                                <td className="px-4 py-3.5 text-right font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                   {new Date(sub.submittedAt).toLocaleDateString()} •{' '}
                                   {new Date(sub.submittedAt).toLocaleTimeString([], {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
                                 </td>
-                                <td className="px-4 py-3.5 text-right">
+                                <td className="px-4 py-3.5 text-right whitespace-nowrap">
                                   <button
                                     type="button"
                                     onClick={() => openAnswerSheetModal(sub)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#4a6fa5] hover:bg-[#3b5d8f] text-white border border-[#4a6fa5] rounded font-mono text-xs font-bold tracking-wider uppercase transition shadow-2xs"
                                     title="Inspect digital ink handwritten answer sheets"
                                   >
                                     <Eye className="w-3.5 h-3.5" />
@@ -4379,7 +4439,7 @@ export default function FacultyAssessmentsPage() {
 
                           {(!activeAnalytics.submissions || activeAnalytics.submissions.length === 0) && (
                             <tr>
-                              <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                              <td colSpan={8} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400 font-mono text-xs">
                                 No students have completed or submitted this assessment yet.
                               </td>
                             </tr>
