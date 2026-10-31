@@ -44,6 +44,12 @@ export class CompanionController {
     return this.companionSync.resetSession(sessionId);
   }
 
+  @Post('violation')
+  reportViolation(@Body() body: { sessionId?: string; reason?: string }) {
+    const sId = body.sessionId || 'clias-session-default';
+    return this.companionSync.logDirectViolation(sId, body.reason || 'Companion app unpinned or backgrounded');
+  }
+
   @Get('strokes')
   getStrokes(
     @Query('sessionId') sessionId = 'clias-session-default',

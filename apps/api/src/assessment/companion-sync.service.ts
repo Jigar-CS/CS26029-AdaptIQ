@@ -1,6 +1,7 @@
-import { Injectable, OnApplicationBootstrap, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy, Logger, Optional } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { WebSocketServer, WebSocket } from 'ws'; // Real-time digital ink companion synchronization
+import { PrismaService } from '../prisma/prisma.service';
 import { URL } from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -67,8 +68,12 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
   private exitPasses: Record<string, string> = {}; // normSession -> 6-digit exit PIN
   private submittedSessions: Set<string> = new Set(); // Set of normSessions
   private sessionQuestions: Record<string, any[]> = {}; // normSession -> dynamic questions metadata
+  private readonly unpinStrikeMap: Map<string, number> = new Map();
 
-  constructor(private readonly adapterHost: HttpAdapterHost) {}
+  constructor(
+    private readonly adapterHost: HttpAdapterHost,
+    @Optional() private readonly prisma?: PrismaService,
+  ) {}
 
   /**
    * Normalizes session ID strings so variations match the same room
@@ -700,18 +705,8 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
         pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
       );
     } else if (type === 'COMPANION_SECURITY_VIOLATION' || type === 'COMPANION_UNPINNED') {
-      const violationPayload = {
-        type: 'COMPANION_UNPINNED',
-        sessionId: normSession,
-        reason: data.reason || 'Companion app unpinned or backgrounded',
-        timestamp: Date.now(),
-      };
-      this.logger.warn(`⚠️ Companion unpinned in room [${normSession}]: ${data.reason}`);
-      this.broadcastToSessionViewers(
-        normSession,
-        violationPayload,
-        pairing && pairing.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
-      );
+      this.logger.warn(`⚠️ Companion unpin message received from mobile for room [${normSession}]: ${data.reason}`);
+      this.logDirectViolation(normSession, data.reason || 'Companion app unpinned or backgrounded');
     } else if (type === 'HEARTBEAT') {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'HEARTBEAT_ACK', timestamp: Date.now() }));
@@ -1017,6 +1012,87 @@ export class CompanionSyncService implements OnApplicationBootstrap, OnModuleDes
     }
 
     return false;
+  }
+
+  public async logDirectViolation(sessionId: string, reason: string) {
+    const norm = this.normalizeSessionId(sessionId);
+    const pairing = this.resolvePairing(sessionId);
+    const subId = pairing?.submissionId || norm;
+
+    // Track strike count per submission
+    const currentStrikes = (this.unpinStrikeMap.get(subId) || 0) + 1;
+    this.unpinStrikeMap.set(subId, currentStrikes);
+
+    let recordedViolation: any = null;
+
+    if (this.prisma) {
+      try {
+        const session = await this.prisma.proctoringSession.findFirst({
+          where: {
+            OR: [
+              { submissionId: subId },
+              { id: subId },
+              { submission: { id: subId } },
+            ],
+          },
+        });
+
+        if (session) {
+          const penalty = currentStrikes >= 3 ? 30 : 15;
+          const newTrust = Math.max(0, session.trustScore - penalty);
+          const newCount = session.violationsCount + 1;
+
+          await this.prisma.proctoringSession.update({
+            where: { id: session.id },
+            data: {
+              trustScore: newTrust,
+              violationsCount: newCount,
+              status: currentStrikes >= 3 ? 'FLAGGED' : session.status,
+            },
+          });
+
+          recordedViolation = await this.prisma.proctoringViolation.create({
+            data: {
+              sessionId: session.id,
+              type: 'WINDOW_BLUR',
+              severity: currentStrikes >= 3 ? 'SEVERE' : currentStrikes === 2 ? 'HIGH' : 'MEDIUM',
+              confidence: 0.99,
+              details: `[COMPANION_APP_EXIT] Student unpinned or left phone companion app (Strike ${currentStrikes} of 2 allowed${currentStrikes >= 3 ? ' — AUTO-SUBMIT TRIGGERED' : ''})`,
+            },
+          });
+          this.logger.log(`🚨 Logged COMPANION_APP_EXIT directly to DB for session ${session.id} (Strike ${currentStrikes})`);
+        } else {
+          this.logger.warn(`Could not find ProctoringSession for subId: ${subId} (norm: ${norm})`);
+        }
+      } catch (err: any) {
+        this.logger.error(`Error saving direct companion violation: ${err?.message}`);
+      }
+    }
+
+    // Broadcast live event to student desktop view
+    const violationPayload = {
+      type: 'COMPANION_UNPINNED',
+      sessionId: norm,
+      strike: currentStrikes,
+      maxAllowed: 2,
+      autoSubmit: currentStrikes >= 3,
+      reason: reason || 'Companion app unpinned or backgrounded',
+      timestamp: Date.now(),
+    };
+
+    this.broadcastToSessionViewers(
+      norm,
+      violationPayload,
+      pairing?.submissionId ? this.normalizeSessionId(pairing.submissionId) : undefined,
+    );
+
+    return {
+      success: true,
+      strike: currentStrikes,
+      maxAllowed: 2,
+      autoSubmit: currentStrikes >= 3,
+      violation: recordedViolation,
+    };
   }
 
   private broadcastToSessionViewers(sessionId: string, payload: any, secondarySessionId?: string) {

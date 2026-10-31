@@ -238,8 +238,29 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
     }
     _lastViolationReported = now;
 
-    // Send security violation packet to server and faculty invigilation console
+    // 1. Send real-time security violation packet over WebSocket
     _syncEngine.sendLockdownViolation(reason);
+
+    // 2. Direct HTTP fallback to guarantee recording on faculty panel even if socket is reconnecting
+    try {
+      final isSecure = widget.wsUrl.startsWith('wss://');
+      final host = widget.wsUrl
+          .replaceAll('wss://', '')
+          .replaceAll('ws://', '')
+          .replaceAll('/companion', '');
+      final scheme = isSecure ? 'https' : 'http';
+      final url = Uri.parse('$scheme://$host/api/v1/companion/violation');
+      final client = HttpClient();
+      client.postUrl(url).then((req) {
+        req.headers.set('content-type', 'application/json');
+        req.write(jsonEncode({
+          'sessionId': widget.sessionId,
+          'reason': reason,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        }));
+        return req.close();
+      }).catchError((_) {});
+    } catch (_) {}
 
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -273,6 +294,13 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
         state == AppLifecycleState.hidden) {
       debugPrint('[SecurityAlert] App switching / backgrounding attempt detected!');
       _handleLockBreachViolation('COMPANION_UNPINNED');
+    } else if (state == AppLifecycleState.resumed) {
+      KioskService().checkLockState().then((isLocked) {
+        if (!isLocked) {
+          debugPrint('[SecurityAlert] Returned to app in unpinned state!');
+          _handleLockBreachViolation('COMPANION_UNPINNED');
+        }
+      });
     }
   }
 

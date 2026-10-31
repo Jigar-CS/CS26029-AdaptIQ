@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Search,
   RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
@@ -423,21 +424,35 @@ export default function FacultyInvigilationPage() {
                       <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-2">
                         {selectedSession.violations.map((v) => {
                           const snapshotMatch = v.details?.match(/\[SNAPSHOT:(data:image\/[a-zA-Z]+;base64,[^\]]+)\]/);
-                          const cleanDetails = v.details ? v.details.replace(/\[SNAPSHOT:.*?\]/g, '').trim() : '';
+                          const isCompanionExit = v.details?.includes('COMPANION') || v.type === 'COMPANION_UNPINNED';
+                          const cleanDetails = v.details
+                            ? v.details
+                                .replace(/\[SNAPSHOT:.*?\]/g, '')
+                                .replace(/\[COMPANION_APP_EXIT\]/g, '')
+                                .trim()
+                            : '';
                           const snapshotData = snapshotMatch ? snapshotMatch[1] : null;
                           const isCleared = selectedSession.status === 'COMPLETED';
 
                           return (
                             <div
                               key={v.id}
-                              className={`p-3.5 rounded-xl border space-y-2 ${isCleared
-                                  ? 'bg-emerald-50/40 dark:bg-slate-950/50 border-emerald-200 dark:border-emerald-500/20'
-                                  : 'bg-slate-50 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800'
+                              className={`p-3.5 rounded-xl border space-y-2 ${isCompanionExit
+                                  ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50'
+                                  : isCleared
+                                    ? 'bg-emerald-50/40 dark:bg-slate-950/50 border-emerald-200 dark:border-emerald-500/20'
+                                    : 'bg-slate-50 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800'
                                 }`}
                             >
                               <div className="flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-amber-700 dark:text-amber-400 font-mono">{v.type}</span>
+                                  {isCompanionExit ? (
+                                    <span className="font-bold text-rose-700 dark:text-rose-400 font-mono flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-500/20 border border-rose-300 dark:border-rose-500/30">
+                                      <Smartphone className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> COMPANION APP EXITED
+                                    </span>
+                                  ) : (
+                                    <span className="font-bold text-amber-700 dark:text-amber-400 font-mono">{v.type}</span>
+                                  )}
                                   {isCleared && (
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
                                       Cleared
@@ -445,7 +460,7 @@ export default function FacultyInvigilationPage() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isCompanionExit ? 'bg-rose-200 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
                                     {Math.round(v.confidence * 100)}% Confidence
                                   </span>
                                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
@@ -454,7 +469,9 @@ export default function FacultyInvigilationPage() {
                                 </div>
                               </div>
                               {cleanDetails && (
-                                <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-sans">{cleanDetails}</p>
+                                <p className={`text-xs leading-relaxed font-sans ${isCompanionExit ? 'text-rose-900 dark:text-rose-200 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
+                                  {cleanDetails}
+                                </p>
                               )}
                               {snapshotData && (
                                 <div className="pt-1.5">
