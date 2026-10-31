@@ -653,9 +653,9 @@ export default function TakeAssessmentPage() {
       if (typeof data.trustScore === 'number') {
         setTrustScore(data.trustScore);
       }
-      if (data.faceEnrollmentVerified) {
-        setFaceEnrolled(true);
-      }
+      // Require explicit live face capture & DB verification before starting
+      setFaceEnrolled(false);
+      setFaceEnrollmentFeedback(null);
       // Initialize default starter codes for any coding questions
       if (data.questions && data.questions.length > 0) {
         const initialCoding: Record<string, { sourceCode: string; language: string }> = {};
@@ -819,7 +819,24 @@ export default function TakeAssessmentPage() {
   // Helper to extract or parse DB biometric descriptors
   const loadDbBiometrics = async () => {
     if (dbFaceDescriptorsRef.current.length > 0) return dbFaceDescriptorsRef.current;
-    const bio = examData?.dbBiometrics;
+    let bio = examData?.dbBiometrics;
+    if (!bio || (!bio.faceFrontSnapshot && !bio.faceDescriptorFront)) {
+      try {
+        const me = await api.get('/auth/me');
+        const prof = me?.studentProfile || me?.userProfile;
+        if (prof?.faceFrontSnapshot || prof?.faceDescriptorFront) {
+          bio = {
+            enrolled: true,
+            faceFrontSnapshot: prof.faceFrontSnapshot,
+            faceLeftSnapshot: prof.faceLeftSnapshot,
+            faceRightSnapshot: prof.faceRightSnapshot,
+            faceDescriptorFront: prof.faceDescriptorFront,
+            faceDescriptorLeft: prof.faceDescriptorLeft,
+            faceDescriptorRight: prof.faceDescriptorRight,
+          };
+        }
+      } catch (_) {}
+    }
     if (!bio) return [];
 
     const list: { angle: string; descriptor: Float32Array }[] = [];
@@ -842,6 +859,7 @@ export default function TakeAssessmentPage() {
       if (f.snap) {
         try {
           const img = new Image();
+          img.crossOrigin = 'anonymous';
           img.src = f.snap;
           await new Promise((res) => {
             img.onload = res;
@@ -924,105 +942,118 @@ export default function TakeAssessmentPage() {
         baselineFaceProfileRef.current = profile;
       }
 
-      // High-Precision Biometric Face Verification & 128-d Vector Extraction
-      const faceapi = (window as any).faceapi;
-      if (faceapi && faceApiModelLoadedRef.current) {
-        const faces = await faceapi.detectAllFaces(
-          canvas,
-          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.28 })
-        );
-
-        if (faces.length === 0) {
-          // No face found in the captured camera frame
-          setFaceEnrollmentFeedback('NO_FACE_DETECTED');
-          setFaceEnrolled(false);
-          baselineFaceDescriptorRef.current = null;
-          return;
-        }
-
-        if (faces.length > 1) {
-          // Multiple faces found in frame
-          setFaceEnrollmentFeedback('MULTIPLE_FACES');
-          setFaceEnrolled(false);
-          baselineFaceDescriptorRef.current = null;
-          return;
-        }
-
-        // Exactly 1 face found: Extract 128-d deep biometric descriptor
-        const descriptor = await extractDescriptorFromSnapshot(canvas);
-        if (!descriptor) {
-          setFaceEnrollmentFeedback('LOW_CONFIDENCE');
-          setFaceEnrolled(false);
-          return;
-        }
-
-        // Match against institutional database biometric reference photos
-        const dbList = await loadDbBiometrics();
-        if (dbList.length > 0) {
-          let minDistance = 1.0;
-          let bestAngle = 'Front';
-          for (const item of dbList) {
-            const d = faceapi.euclideanDistance(descriptor, item.descriptor);
-            if (d < minDistance) {
-              minDistance = d;
-              bestAngle = item.angle;
-            }
-          }
-
-          const matched = minDistance < 0.58;
-          const confidence = Math.max(0, Math.min(100, Math.round((1 - minDistance) * 100)));
-
-          setDbBiometricsMatchInfo({
-            matched,
-            distance: minDistance,
-            confidence,
-            angle: bestAngle,
-          });
-
-          if (!matched) {
-            // Identity mismatch with DB!
-            setFaceEnrollmentFeedback('DB_MISMATCH');
-            setFaceEnrolled(false);
-            baselineFaceDescriptorRef.current = null;
-            baselineSnapshotRef.current = null;
-            setBaselineSnapshot(null);
-            return;
-          }
-        }
-
-        baselineFaceDescriptorRef.current = descriptor;
-        baselineSnapshotRef.current = snapshotUrl;
-        setBaselineSnapshot(snapshotUrl);
-        if (baselineFaceProfileRef.current) {
-          baselineFaceProfileRef.current.descriptor = Array.from(descriptor);
-        }
-        setFaceEnrollmentFeedback('SUCCESS_VERIFIED');
-        setFaceEnrolled(true);
-
-        // Dispatch face enrollment snapshot to backend immediately
-        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
-          snapshot: snapshotUrl,
-        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
-      } else {
-        // Models still loading: Mark enrolled with heuristic baseline and auto-upgrade once model completes
-        baselineSnapshotRef.current = snapshotUrl;
-        setBaselineSnapshot(snapshotUrl);
+      // Check if Face-API models are loaded. If not yet loaded, wait up to 5 seconds
+      if (!faceApiModelLoadedRef.current) {
         setFaceEnrollmentFeedback('MODEL_LOADING');
-        setFaceEnrolled(true);
-        api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
-          snapshot: snapshotUrl,
-        }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
+        let waited = 0;
+        while (!faceApiModelLoadedRef.current && waited < 5000) {
+          await new Promise((r) => setTimeout(r, 250));
+          waited += 250;
+        }
       }
 
-    } catch (err) {
-      console.error('Face capture completed with local baseline fallback', err);
+      const faceapi = (window as any).faceapi;
+      if (!faceapi || !faceApiModelLoadedRef.current) {
+        setFaceEnrollmentFeedback('MODEL_LOADING');
+        setFaceEnrolled(false);
+        alert('Biometric AI models are still initializing. Please wait 3 seconds and click "Capture Snapshot" again.');
+        return;
+      }
+
+      // High-Precision Biometric Face Verification & 128-d Vector Extraction
+      const faces = await faceapi.detectAllFaces(
+        canvas,
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.28 })
+      );
+
+      if (faces.length === 0) {
+        // No face found in the captured camera frame
+        setFaceEnrollmentFeedback('NO_FACE_DETECTED');
+        setFaceEnrolled(false);
+        baselineFaceDescriptorRef.current = null;
+        return;
+      }
+
+      if (faces.length > 1) {
+        // Multiple faces found in frame
+        setFaceEnrollmentFeedback('MULTIPLE_FACES');
+        setFaceEnrolled(false);
+        baselineFaceDescriptorRef.current = null;
+        return;
+      }
+
+      // Exactly 1 face found: Extract 128-d deep biometric descriptor
+      const descriptor = await extractDescriptorFromSnapshot(canvas);
+      if (!descriptor) {
+        setFaceEnrollmentFeedback('LOW_CONFIDENCE');
+        setFaceEnrolled(false);
+        baselineFaceDescriptorRef.current = null;
+        return;
+      }
+
+      // Match against institutional database biometric reference photos
+      const dbList = await loadDbBiometrics();
+      if (dbList.length > 0) {
+        let minDistance = 1.0;
+        let bestAngle = 'Front';
+        for (const item of dbList) {
+          const d = faceapi.euclideanDistance(descriptor, item.descriptor);
+          if (d < minDistance) {
+            minDistance = d;
+            bestAngle = item.angle;
+          }
+        }
+
+        const matched = minDistance < 0.58;
+        const confidence = Math.max(0, Math.min(100, Math.round((1 - minDistance) * 100)));
+
+        setDbBiometricsMatchInfo({
+          matched,
+          distance: minDistance,
+          confidence,
+          angle: bestAngle,
+        });
+
+        if (!matched) {
+          // Identity mismatch with DB!
+          setFaceEnrollmentFeedback('DB_MISMATCH');
+          setFaceEnrolled(false);
+          baselineFaceDescriptorRef.current = null;
+          baselineSnapshotRef.current = null;
+          setBaselineSnapshot(null);
+          return;
+        }
+      }
+
+      baselineFaceDescriptorRef.current = descriptor;
+      baselineSnapshotRef.current = snapshotUrl;
+      setBaselineSnapshot(snapshotUrl);
+      if (baselineFaceProfileRef.current) {
+        baselineFaceProfileRef.current.descriptor = Array.from(descriptor);
+      }
+      setFaceEnrollmentFeedback('SUCCESS_VERIFIED');
       setFaceEnrolled(true);
+
+      // Dispatch face enrollment snapshot to backend immediately
+      api.post(`/proctoring/sessions/${examData.submissionId}/enroll-face`, {
+        snapshot: snapshotUrl,
+      }).catch((err) => console.warn('Deferred enrollment sync notice:', err));
+
+    } catch (err) {
+      console.error('Face capture verification error:', err);
+      setFaceEnrolled(false);
+      setFaceEnrollmentFeedback('LOW_CONFIDENCE');
     } finally {
       setEnrollingFace(false);
     }
   };
 
   const handleConfirmAndEnterExam = async () => {
+    if (!faceEnrolled || faceEnrollmentFeedback !== 'SUCCESS_VERIFIED' || !baselineFaceDescriptorRef.current) {
+      alert('Strict Biometric Verification Required: You must capture and successfully match your face against your registered institutional database profile before entering the examination.');
+      return;
+    }
+
     if (isDescriptiveTest && !preflightMobileConnected) {
       alert('Phone companion must be paired and connected before starting this descriptive examination.');
       return;
@@ -1091,12 +1122,11 @@ export default function TakeAssessmentPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // Pre-load TensorFlow.js and COCO-SSD asynchronously only during active test
-  // Deferring this completely off PreFlight eliminates browser unresponsiveness & GPU freezes
+  // Pre-load Face-API & COCO-SSD immediately on mount for instant preflight verification
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let active = true;
-    if (typeof window === 'undefined' || showPreFlight) return;
+    if (typeof window === 'undefined') return;
 
     const loadScriptWithFallback = (urls: string[]): Promise<void> => {
       return new Promise((resolve, reject) => {
@@ -1135,38 +1165,7 @@ export default function TakeAssessmentPage() {
       try {
         if (typeof window === 'undefined') return;
 
-        if (!(window as any).tf) {
-          await loadScriptWithFallback([
-            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
-            'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
-            'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
-          ]);
-        }
-        if (!active) return;
-        await new Promise((r) => setTimeout(r, 200));
-
-        if (!(window as any).cocoSsd) {
-          await loadScriptWithFallback([
-            'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-            'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
-          ]);
-        }
-        if (!active) return;
-        await new Promise((r) => setTimeout(r, 200));
-
-        if (active && (window as any).cocoSsd && !visionModelRef.current) {
-          const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
-          if (active) {
-            visionModelRef.current = m;
-            console.log('AI Proctoring Vision Model (COCO-SSD) loaded successfully.');
-          }
-        }
-        if (!active) return;
-
-        // Yield execution to let browser render UI smoothly
-        await new Promise((r) => setTimeout(r, 250));
-
-        // Load Face-API for high-precision biometrics, 68 landmarks & liveness
+        // 1. High-Priority: Load Face-API immediately for instant preflight face verification
         if (!(window as any).faceapi) {
           await loadScriptWithFallback([
             'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js',
@@ -1178,15 +1177,10 @@ export default function TakeAssessmentPage() {
         const faceapi = (window as any).faceapi;
         if (active && faceapi && !faceApiModelLoadedRef.current) {
           const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
-          // Load lightweight detector and landmarks first
           await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
           if (!active) return;
-          await new Promise((r) => setTimeout(r, 200));
           await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
           if (!active) return;
-
-          // Yield execution before loading heavier recognition network
-          await new Promise((r) => setTimeout(r, 350));
           await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
           if (active) {
@@ -1194,33 +1188,39 @@ export default function TakeAssessmentPage() {
             setFaceModelStatus('ready');
             console.log('AI Face Biometric Models (TinyFace + Landmarks68 + ResNet Recognition) loaded successfully.');
 
-            // If baseline snapshot was captured while model was loading, extract descriptor in background
-            const snap = baselineSnapshotRef.current;
-            if (snap && !baselineFaceDescriptorRef.current) {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
-              img.src = snap;
-              img.onload = async () => {
-                try {
-                  const desc = await extractDescriptorFromSnapshot(img);
-                  if (desc) {
-                    baselineFaceDescriptorRef.current = desc;
-                    if (baselineFaceProfileRef.current) {
-                      baselineFaceProfileRef.current.descriptor = Array.from(desc);
-                    }
-                    setFaceEnrollmentFeedback('SUCCESS_VERIFIED');
-                    setFaceEnrolled(true);
-                    console.log('Baseline 128-d biometric descriptor extracted from snapshot post-model load.');
-                  }
-                } catch (e) {
-                  console.warn('Post-load baseline descriptor extraction failed:', e);
-                }
-              };
-            }
+            // Pre-warm DB biometric descriptors from snapshots if available
+            loadDbBiometrics().catch(() => {});
+          }
+        }
+        if (!active) return;
+
+        // 2. Load TensorFlow.js and COCO-SSD for handheld mobile phone detection
+        if (!(window as any).tf) {
+          await loadScriptWithFallback([
+            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+            'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js',
+          ]);
+        }
+        if (!active) return;
+
+        if (!(window as any).cocoSsd) {
+          await loadScriptWithFallback([
+            'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+            'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+          ]);
+        }
+        if (!active) return;
+
+        if (active && (window as any).cocoSsd && !visionModelRef.current) {
+          const m = await (window as any).cocoSsd.load({ base: 'lite_mobilenet_v2' });
+          if (active) {
+            visionModelRef.current = m;
+            console.log('AI Proctoring Vision Model (COCO-SSD) loaded successfully.');
           }
         }
       } catch (err) {
-        console.warn('Vision model initialization fallback active (local computer vision heuristic will operate):', err);
+        console.warn('Vision model initialization error:', err);
       }
     };
 
@@ -1228,7 +1228,7 @@ export default function TakeAssessmentPage() {
     return () => {
       active = false;
     };
-  }, [showPreFlight]);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Secure Browser Lockdown: Clipboard, Right-Click, and DevTools Protection
@@ -1676,13 +1676,13 @@ export default function TakeAssessmentPage() {
     const runTelemetryCycle = async () => {
       if (isDisposed) return;
       if (isDetectingRef.current || isAutoSubmittingRef.current || submitting || isSubmittingExamRef.current || result) {
-        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 5000);
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 2000);
         return;
       }
       const video = livePipVideoRef.current;
       const canvas = offscreenCanvasRef.current;
       if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) {
-        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 3000);
+        if (!isDisposed) timer = setTimeout(runTelemetryCycle, 1000);
         return;
       }
 
@@ -1708,9 +1708,9 @@ export default function TakeAssessmentPage() {
             // 1. Precise Mobile Phone Detection across ALL assessment modes
             const phone = predictions.find((p: any) => {
               const c = (p.class || '').toLowerCase();
-              if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone') return false;
-              // Reliable confidence threshold for webcam video
-              return p.score >= 0.45;
+              if (c !== 'cell phone' && c !== 'mobile phone' && c !== 'telephone' && c !== 'remote') return false;
+              // Sensitive confidence threshold for webcam video
+              return p.score >= 0.28;
             });
 
             if (phone) {
@@ -2020,7 +2020,7 @@ export default function TakeAssessmentPage() {
         // -------------------------------------------------------------
         // C. 2-Strike Mobile Phone Policy & Automatic Test Termination
         // -------------------------------------------------------------
-        if (isMobileDetected && !isDescriptiveTest) {
+        if (isMobileDetected) {
           const now = Date.now();
           if (now - lastMobileStrikeTimeRef.current >= 4500 && !isAutoSubmittingRef.current) {
             lastMobileStrikeTimeRef.current = now;
@@ -2094,8 +2094,8 @@ export default function TakeAssessmentPage() {
         // -------------------------------------------------------------
         if (!isPersonFound) {
           consecutiveFaceAbsentRef.current += 1;
-          // In descriptive exams, allow 4 cycles (~6s) grace for writing, but catch total absence reliably!
-          const absenceThreshold = isDescriptiveTest ? 4 : 2;
+          // Trigger absence alert within 1 cycle (2s) for standard exams, 2 cycles (4s) for descriptive
+          const absenceThreshold = isDescriptiveTest ? 2 : 1;
 
           if (consecutiveFaceAbsentRef.current >= absenceThreshold) {
             setFacePresent(false);
@@ -2132,13 +2132,13 @@ export default function TakeAssessmentPage() {
       } finally {
         isDetectingRef.current = false;
         if (!isDisposed) {
-          timer = setTimeout(runTelemetryCycle, 5000);
+          timer = setTimeout(runTelemetryCycle, 2000);
         }
       }
     };
 
-    // Stagger initial check 3.5s after starting exam to allow complete initial page render
-    timer = setTimeout(runTelemetryCycle, 3500);
+    // Stagger initial check 1.2s after starting exam for fast anomaly detection
+    timer = setTimeout(runTelemetryCycle, 1200);
 
     return () => {
       isDisposed = true;
@@ -2412,6 +2412,8 @@ export default function TakeAssessmentPage() {
       integrityPledge &&
       cameraPermission === 'granted' &&
       faceEnrolled &&
+      faceEnrollmentFeedback === 'SUCCESS_VERIFIED' &&
+      Boolean(baselineFaceDescriptorRef.current) &&
       (!isDescriptiveTest || preflightMobileConnected);
 
     return (
@@ -2949,7 +2951,15 @@ export default function TakeAssessmentPage() {
             ) : !faceEnrolled ? (
               <>
                 <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                <span>Capture Biometric Snapshot to Unlock</span>
+                <span>
+                  {faceEnrollmentFeedback === 'DB_MISMATCH'
+                    ? 'Biometric Mismatch with Database (Entry Blocked)'
+                    : faceEnrollmentFeedback === 'MULTIPLE_FACES'
+                    ? 'Multiple Faces Detected (Entry Blocked)'
+                    : faceEnrollmentFeedback === 'NO_FACE_DETECTED'
+                    ? 'No Face Detected in Camera (Retake Snapshot)'
+                    : 'Capture & Verify Face Biometrics to Unlock'}
+                </span>
               </>
             ) : !integrityPledge ? (
               <>
@@ -3763,50 +3773,48 @@ export default function TakeAssessmentPage() {
           </button>
         </div>
 
-        {!pipMinimized && (
-          <>
-            <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800">
-              <video
-                ref={attachLivePipVideo}
-                autoPlay
-                playsInline
-                muted
-                onLoadedMetadata={(e) => {
-                  e.currentTarget.play().catch(() => {});
-                }}
-                className="w-full h-full object-cover mirror"
-                style={{ transform: 'scaleX(-1)' }}
-              />
+        <div className={pipMinimized ? 'hidden' : 'space-y-2'}>
+          <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800">
+            <video
+              ref={attachLivePipVideo}
+              autoPlay
+              playsInline
+              muted
+              onLoadedMetadata={(e) => {
+                e.currentTarget.play().catch(() => {});
+              }}
+              className="w-full h-full object-cover mirror"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            {unauthorizedPerson ? (
+              <div className="absolute inset-0 bg-rose-950/85 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
+                {unauthorizedPerson === 'MULTIPLE_FACES' ? '⚠️ Multiple Faces' : '⚠️ Identity Mismatch'}
+              </div>
+            ) : !facePresent && (
+              <div className="absolute inset-0 bg-rose-950/80 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
+                ⚠️ Face Not In Frame
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between text-[9px] text-slate-400 px-1 pt-0.5">
+            <span className={`flex items-center gap-1 font-medium ${unauthorizedPerson ? 'text-rose-400 font-bold' : 'text-emerald-400'}`}>
               {unauthorizedPerson ? (
-                <div className="absolute inset-0 bg-rose-950/85 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
-                  {unauthorizedPerson === 'MULTIPLE_FACES' ? '⚠️ Multiple Faces' : '⚠️ Identity Mismatch'}
-                </div>
-              ) : !facePresent && (
-                <div className="absolute inset-0 bg-rose-950/80 flex items-center justify-center p-2 text-center text-[10px] text-rose-200 font-bold">
-                  ⚠️ Face Not In Frame
-                </div>
+                <>
+                  <ShieldAlert className="w-3 h-3 text-rose-400" />
+                  <span>Screen Blurred</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span>Candidate Verified</span>
+                </>
               )}
-            </div>
-            <div className="flex items-center justify-between text-[9px] text-slate-400 px-1 pt-0.5">
-              <span className={`flex items-center gap-1 font-medium ${unauthorizedPerson ? 'text-rose-400 font-bold' : 'text-emerald-400'}`}>
-                {unauthorizedPerson ? (
-                  <>
-                    <ShieldAlert className="w-3 h-3 text-rose-400" />
-                    <span>Screen Blurred</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    <span>Candidate Verified</span>
-                  </>
-                )}
-              </span>
-              <span className="text-cyan-400 font-mono text-[8px] uppercase tracking-wider font-bold">
-                📱 Device Scan: ON
-              </span>
-            </div>
-          </>
-        )}
+            </span>
+            <span className="text-cyan-400 font-mono text-[8px] uppercase tracking-wider font-bold">
+              📱 Device Scan: ON
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Sticky Header */}

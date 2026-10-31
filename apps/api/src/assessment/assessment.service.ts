@@ -1077,22 +1077,48 @@ export class AssessmentService {
     let descLeft = student?.faceDescriptorLeft || null;
     let descRight = student?.faceDescriptorRight || null;
 
-    if (!front && (student?.userId || userId)) {
+    const candidateIds = [
+      userId,
+      student?.userId,
+      student?.id,
+    ].filter((id): id is string => Boolean(id && typeof id === 'string'));
+
+    for (const cid of candidateIds) {
+      if (front && descFront) break;
+      // 1. Query user_profiles
       try {
-        const uId = student?.userId || userId;
         const rows: any[] = await this.prisma.$queryRawUnsafe(
           'SELECT faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentLocked FROM user_profiles WHERE userId = ? LIMIT 1',
-          uId,
+          cid,
         );
         if (rows && rows.length > 0) {
-          front = rows[0].faceFrontSnapshot || null;
-          left = rows[0].faceLeftSnapshot || null;
-          right = rows[0].faceRightSnapshot || null;
-          descFront = rows[0].faceDescriptorFront || null;
-          descLeft = rows[0].faceDescriptorLeft || null;
-          descRight = rows[0].faceDescriptorRight || null;
+          if (!front && rows[0].faceFrontSnapshot) front = rows[0].faceFrontSnapshot;
+          if (!left && rows[0].faceLeftSnapshot) left = rows[0].faceLeftSnapshot;
+          if (!right && rows[0].faceRightSnapshot) right = rows[0].faceRightSnapshot;
+          if (!descFront && rows[0].faceDescriptorFront) descFront = rows[0].faceDescriptorFront;
+          if (!descLeft && rows[0].faceDescriptorLeft) descLeft = rows[0].faceDescriptorLeft;
+          if (!descRight && rows[0].faceDescriptorRight) descRight = rows[0].faceDescriptorRight;
         }
       } catch (_) {}
+
+      // 2. Query student_profiles
+      if (!front || !descFront) {
+        try {
+          const spRows: any[] = await this.prisma.$queryRawUnsafe(
+            'SELECT faceFrontSnapshot, faceLeftSnapshot, faceRightSnapshot, faceDescriptorFront, faceDescriptorLeft, faceDescriptorRight, faceEnrollmentLocked FROM student_profiles WHERE userId = ? OR id = ? LIMIT 1',
+            cid,
+            cid,
+          );
+          if (spRows && spRows.length > 0) {
+            if (!front && spRows[0].faceFrontSnapshot) front = spRows[0].faceFrontSnapshot;
+            if (!left && spRows[0].faceLeftSnapshot) left = spRows[0].faceLeftSnapshot;
+            if (!right && spRows[0].faceRightSnapshot) right = spRows[0].faceRightSnapshot;
+            if (!descFront && spRows[0].faceDescriptorFront) descFront = spRows[0].faceDescriptorFront;
+            if (!descLeft && spRows[0].faceDescriptorLeft) descLeft = spRows[0].faceDescriptorLeft;
+            if (!descRight && spRows[0].faceDescriptorRight) descRight = spRows[0].faceDescriptorRight;
+          }
+        } catch (_) {}
+      }
     }
 
     return {
@@ -1297,7 +1323,7 @@ export class AssessmentService {
       proctoringSessionId: proctoring?.id || null,
       trustScore: proctoring?.trustScore ?? 100,
       faceEnrollmentVerified: proctoring?.faceEnrollmentVerified ?? false,
-      dbBiometrics: await this.getStudentBiometrics(student, submission?.student?.userId),
+      dbBiometrics: await this.getStudentBiometrics(student, submission?.student?.userId || submission?.studentId),
       questions,
     };
   }
