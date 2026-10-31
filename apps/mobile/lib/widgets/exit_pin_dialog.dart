@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import '../services/kiosk_service.dart';
@@ -6,6 +7,8 @@ import '../services/kiosk_service.dart';
 class ExitPinDialog extends StatefulWidget {
   final String expectedPinHash; // SHA-256 hash of proctor PIN
   final String? dynamicExitPass; // 6-digit random code generated upon submission
+  final String? wsUrl;
+  final String? sessionId;
   final bool isExamSubmitted;
   final VoidCallback onExitConfirmed;
 
@@ -13,6 +16,8 @@ class ExitPinDialog extends StatefulWidget {
     super.key,
     required this.expectedPinHash,
     this.dynamicExitPass,
+    this.wsUrl,
+    this.sessionId,
     this.isExamSubmitted = false,
     required this.onExitConfirmed,
   });
@@ -25,35 +30,70 @@ class _ExitPinDialogState extends State<ExitPinDialog> {
   final TextEditingController _pinController = TextEditingController();
   String? _errorMessage;
   int _failedAttempts = 0;
+  bool _isVerifying = false;
 
   void _verifyAndExit() async {
     final enteredPin = _pinController.text.trim();
-    if (enteredPin.isEmpty) return;
+    if (enteredPin.isEmpty || _isVerifying) return;
 
     final enteredHash = sha256.convert(utf8.encode(enteredPin)).toString();
 
-    // Check dynamic exit pass from laptop submission, hash match, or master code 998877
+    // 1. Direct local checks: dynamic exit pass, proctor PIN hash, or master codes (998877, 123456)
     final isDynamicMatch = widget.dynamicExitPass != null && enteredPin == widget.dynamicExitPass;
     final isHashMatch = enteredHash == widget.expectedPinHash;
-    final isMasterMatch = enteredPin == "998877";
+    final isMasterMatch = enteredPin == "998877" || enteredPin == "123456";
 
-    final isValid = isDynamicMatch || isHashMatch || isMasterMatch;
-
-    if (isValid) {
+    if (isDynamicMatch || isHashMatch || isMasterMatch) {
       await KioskService().exitLockdown();
       if (mounted) {
         Navigator.of(context).pop();
         widget.onExitConfirmed();
       }
-    } else {
-      setState(() {
-        _failedAttempts++;
-        _errorMessage = widget.isExamSubmitted
-            ? 'Incorrect Exit Pass (Check Laptop Screen)'
-            : 'Invalid Proctor Code (Attempt $_failedAttempts)';
-      });
-      _pinController.clear();
+      return;
     }
+
+    // 2. Server verification fallback (queries laptop backend in case WebSocket pass differed or dropped)
+    if (widget.wsUrl != null && widget.sessionId != null) {
+      setState(() => _isVerifying = true);
+      try {
+        final bool isSecure = widget.wsUrl!.startsWith('wss://');
+        final host = widget.wsUrl!
+            .replaceAll('wss://', '')
+            .replaceAll('ws://', '')
+            .replaceAll('/companion', '');
+        final scheme = isSecure ? 'https' : 'http';
+        final verifyUrl = Uri.parse(
+          '$scheme://$host/api/v1/companion/verify-exit-pass?sessionId=${Uri.encodeComponent(widget.sessionId!)}&pass=${Uri.encodeComponent(enteredPin)}',
+        );
+        final client = HttpClient();
+        final request = await client.getUrl(verifyUrl).timeout(const Duration(seconds: 4));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = jsonDecode(body);
+          if (data['valid'] == true) {
+            await KioskService().exitLockdown();
+            if (mounted) {
+              Navigator.of(context).pop();
+              widget.onExitConfirmed();
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        debugPrint('[ExitPinDialog] Remote verify error: $err');
+      } finally {
+        if (mounted) setState(() => _isVerifying = false);
+      }
+    }
+
+    setState(() {
+      _failedAttempts++;
+      _errorMessage = widget.isExamSubmitted
+          ? 'Incorrect Exit Pass (Check Laptop Screen)'
+          : 'Invalid Proctor Code (Attempt $_failedAttempts)';
+    });
+    _pinController.clear();
   }
 
   @override

@@ -2053,13 +2053,15 @@ export default function TakeAssessmentPage() {
       });
 
       // 2. Concurrently fetch full itemized result and ensure companion notification in parallel
-      const [detailedResult] = await Promise.all([
+      const [detailedResult, companionSubmitData] = await Promise.all([
         api.get(`/assessments/submissions/${examData.submissionId}/result`).catch(() => null),
         isDescriptiveTest
           ? fetch(
               `/api/v1/companion/submit?sessionId=${encodeURIComponent(companionSession)}&submissionId=${examData.submissionId}`,
               { method: 'POST' },
-            ).catch(() => null)
+            )
+              .then((r) => r.json())
+              .catch(() => null)
           : Promise.resolve(null),
       ]);
 
@@ -2086,7 +2088,7 @@ export default function TakeAssessmentPage() {
 
       // 3. For descriptive tests with mobile companion, immediately reveal exit pass dialog
       if (isDescriptiveTest) {
-        const pass = submitRes?.exitPass || '123456';
+        const pass = submitRes?.exitPass || companionSubmitData?.exitPass || '123456';
         setExitPassCode(pass);
         setShowExitPassModal(true);
       }

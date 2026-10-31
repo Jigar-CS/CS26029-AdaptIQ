@@ -281,6 +281,8 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
       builder: (dialogCtx) => ExitPinDialog(
         expectedPinHash: widget.proctorPinHash,
         dynamicExitPass: _syncEngine.remoteExitPass,
+        wsUrl: widget.wsUrl,
+        sessionId: widget.sessionId,
         onExitConfirmed: () async {
           Navigator.of(dialogCtx).pop();
           await _handleSessionReset();
@@ -298,7 +300,9 @@ class _ExamSheetScreenState extends State<ExamSheetScreen>
       barrierDismissible: false,
       builder: (dialogCtx) => ExitPinDialog(
         expectedPinHash: widget.proctorPinHash,
-        dynamicExitPass: exitPass,
+        dynamicExitPass: exitPass.isNotEmpty ? exitPass : _syncEngine.remoteExitPass,
+        wsUrl: widget.wsUrl,
+        sessionId: widget.sessionId,
         isExamSubmitted: true,
         onExitConfirmed: () async {
           Navigator.of(dialogCtx).pop();
