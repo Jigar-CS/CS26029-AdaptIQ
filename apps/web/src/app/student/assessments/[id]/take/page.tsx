@@ -279,6 +279,28 @@ export default function TakeAssessmentPage() {
     examData?.questions?.some((q: any) => q.type === 'SHORT_ANSWER' || q.type === 'DESCRIPTIVE')
   );
 
+  const isCodeBasedExam = Boolean(
+    examData?.assessment?.examMode === 'CODING' ||
+    examData?.assessment?.examMode === 'HYBRID' ||
+    isCodingTest
+  );
+
+  const isDescriptiveExam = Boolean(
+    !isCodeBasedExam && (
+      examData?.assessment?.examMode === 'DESCRIPTIVE' ||
+      isDescriptiveTest
+    )
+  );
+
+  const isMcqExam = !isCodeBasedExam && !isDescriptiveExam;
+
+  // Fullscreen exit policy quotas:
+  // - MCQ type: 3 times allowed
+  // - Descriptive: 1 time allowed
+  // - Code based: 0 times allowed
+  const maxFullscreenExits = isCodeBasedExam ? 0 : isDescriptiveExam ? 1 : 3;
+  const examTypeFullscreenLabel = isCodeBasedExam ? 'Code-based' : isDescriptiveExam ? 'Descriptive' : 'MCQ';
+
   const companionSession =
     examData?.companionPairingPinRaw ||
     examData?.companionSessionToken ||
@@ -415,6 +437,18 @@ export default function TakeAssessmentPage() {
   const [violationCount, setViolationCount] = useState<number>(0);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
+  const [fullscreenTerminated, setFullscreenTerminated] = useState(false);
+  const [fullscreenStrikeCount, setFullscreenStrikeCount] = useState<number>(0);
+  const fullscreenStrikeCountRef = useRef<number>(0);
+  const lastFullscreenExitTimeRef = useRef<number>(0);
+  const [fullscreenAlertModal, setFullscreenAlertModal] = useState<{
+    show: boolean;
+    strike: number;
+    maxAllowed: number;
+    isTerminated: boolean;
+    examTypeLabel: string;
+    reason: string;
+  } | null>(null);
   const [facePresent, setFacePresent] = useState(true);
 
   // ---------------------------------------------------------------------------
@@ -1268,16 +1302,108 @@ export default function TakeAssessmentPage() {
       setIsWindowBlurred(false);
     };
 
-    // 3. Fullscreen Exit Enforcement
+    // 3. Fullscreen Exit Enforcement with Strict Exam-Mode Quotas:
+    // - MCQ: 3 exits allowed; 4th exit terminates assessment
+    // - Descriptive: 1 exit allowed; 2nd exit terminates assessment
+    // - Code based: 0 exits allowed; 1st exit terminates assessment
     const handleFullscreenChange = () => {
-      if (submitting || isSubmittingExamRef.current || result) return;
+      if (submitting || isSubmittingExamRef.current || result || isAutoSubmittingRef.current || showPreFlight) return;
       if (Date.now() - examEnterTimeRef.current < 4000) return;
+
       if (!document.fullscreenElement) {
+        // Debounce browser event duplicates
+        const now = Date.now();
+        if (now - lastFullscreenExitTimeRef.current < 1500) return;
+        lastFullscreenExitTimeRef.current = now;
+
+        fullscreenStrikeCountRef.current += 1;
+        const currentStrike = fullscreenStrikeCountRef.current;
+        setFullscreenStrikeCount(currentStrike);
         setIsFullscreenExited(true);
-        reportViolation('FULLSCREEN_EXIT', 'LOW', 'Student exited mandatory fullscreen examination mode.');
+
+        const isCodeBased = Boolean(
+          examData?.assessment?.examMode === 'CODING' ||
+          examData?.assessment?.examMode === 'HYBRID' ||
+          isCodingTest
+        );
+        const isDescriptive = Boolean(
+          !isCodeBased && (
+            examData?.assessment?.examMode === 'DESCRIPTIVE' ||
+            isDescriptiveTest
+          )
+        );
+
+        const maxAllowed = isCodeBased ? 0 : isDescriptive ? 1 : 3;
+        const typeLabel = isCodeBased ? 'Code-based' : isDescriptive ? 'Descriptive' : 'MCQ';
+
+        if (currentStrike > maxAllowed) {
+          // EXCEEDED ALLOWED LIMIT -> TERMINATE AND AUTO-SUBMIT EXAM
+          isAutoSubmittingRef.current = true;
+          setFullscreenTerminated(true);
+
+          const terminationReason = maxAllowed === 0
+            ? 'Code-based assessments strictly permit 0 fullscreen exits. Exiting mandatory fullscreen has resulted in the immediate termination and submission of your assessment.'
+            : `You exited mandatory fullscreen ${currentStrike} times. ${typeLabel} assessments permit a maximum of ${maxAllowed} exit${maxAllowed === 1 ? '' : 's'}. In accordance with examination regulations, your assessment has been automatically terminated and submitted.`;
+
+          setFullscreenAlertModal({
+            show: true,
+            strike: currentStrike,
+            maxAllowed,
+            isTerminated: true,
+            examTypeLabel: typeLabel,
+            reason: terminationReason,
+          });
+
+          reportViolation(
+            'FULLSCREEN_EXIT',
+            'SEVERE',
+            `Fullscreen Exit Limit Exceeded (${currentStrike} exits > allowed ${maxAllowed} for ${typeLabel} exam). Assessment automatically terminated and submitted.`
+          );
+
+          submitExam();
+        } else {
+          // WITHIN ALLOWED LIMIT -> RECORD STRIKE AND ISSUE WARNING
+          const isFinal = currentStrike === maxAllowed;
+          const remaining = maxAllowed - currentStrike;
+
+          const warningReason = isFinal
+            ? `You exited mandatory fullscreen mode (${currentStrike} of ${maxAllowed} allowed for ${typeLabel} assessment). THIS IS YOUR FINAL WARNING! If you exit fullscreen again, your assessment will be terminated immediately!`
+            : `You exited mandatory fullscreen mode (Exit ${currentStrike} of ${maxAllowed} allowed for ${typeLabel} assessment). You have ${remaining} exit warning${remaining === 1 ? '' : 's'} remaining. On any subsequent violation exceeding this limit, your test will be terminated automatically.`;
+
+          setFullscreenAlertModal({
+            show: true,
+            strike: currentStrike,
+            maxAllowed,
+            isTerminated: false,
+            examTypeLabel: typeLabel,
+            reason: warningReason,
+          });
+
+          reportViolation(
+            'FULLSCREEN_EXIT',
+            isFinal ? 'SEVERE' : currentStrike >= 2 ? 'HIGH' : 'MEDIUM',
+            `Fullscreen Exit Strike ${currentStrike}/${maxAllowed} (${typeLabel} exam).`
+          );
+        }
       } else {
-        setIsFullscreenExited(false);
+        if (!fullscreenTerminated && !isAutoSubmittingRef.current) {
+          setIsFullscreenExited(false);
+          setFullscreenAlertModal(null);
+        }
       }
+    };
+
+    const handleDismissFullscreenModal = async () => {
+      if (fullscreenAlertModal?.isTerminated || fullscreenTerminated || isAutoSubmittingRef.current) return;
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (e) {
+        console.warn('Could not re-enter fullscreen:', e);
+      }
+      setIsFullscreenExited(false);
+      setFullscreenAlertModal(null);
     };
 
     // 4. Strict Copy / Paste & Clipboard Blocking
@@ -2357,7 +2483,7 @@ export default function TakeAssessmentPage() {
                     <span>Secure Kiosk</span>
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300 text-[11px] font-mono font-bold">
-                    ENFORCED
+                    {isCodeBasedExam ? '0 EXITS ALLOWED' : isDescriptiveExam ? '1 EXIT ALLOWED' : '3 EXITS ALLOWED'}
                   </span>
                 </div>
 
@@ -2632,7 +2758,7 @@ export default function TakeAssessmentPage() {
               className="mt-0.5 rounded border-slate-400 dark:border-slate-600 text-cyan-600 dark:text-cyan-500 focus:ring-cyan-500 w-4 h-4 accent-cyan-600 dark:accent-cyan-500 shrink-0 cursor-pointer"
             />
             <span className="leading-relaxed">
-              I solemnly pledge to uphold academic integrity. I understand that tab switches, unauthorized keyboard combinations, exiting fullscreen, and multi-face anomalies are recorded directly to the{' '}
+              I solemnly pledge to uphold academic integrity. I understand that tab switches, unauthorized keyboard combinations, exiting fullscreen (strictly limited to {isCodeBasedExam ? '0 exits for coding assessments' : isDescriptiveExam ? '1 exit for descriptive assessments' : '3 exits for MCQ assessments'}), and multi-face anomalies are recorded directly to the{' '}
               <strong className="font-bold text-slate-950 dark:text-white underline decoration-cyan-500 decoration-1">
                 Faculty Proctoring Audit Console
               </strong>.
@@ -3321,38 +3447,123 @@ export default function TakeAssessmentPage() {
         </div>
       )}
 
-      {/* Fullscreen Exit Blocking Overlay */}
-      {isFullscreenExited && (
+      {/* Fullscreen Exit Blocking & Policy Enforcement Overlay */}
+      {(isFullscreenExited || fullscreenAlertModal?.show) && (
         <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="max-w-md w-full bg-slate-900 border border-rose-500/50 rounded-3xl p-8 text-center space-y-5 shadow-2xl shadow-rose-950/50">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="text-xl font-extrabold text-white">Fullscreen Lock Triggered</h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                You exited mandatory fullscreen examination mode. An integrity anomaly has been logged to your evaluation record.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  if (document.documentElement.requestFullscreen) {
-                    await document.documentElement.requestFullscreen();
-                  }
-                } catch (e) {
-                  console.warn(e);
-                }
-                setIsFullscreenExited(false);
-              }}
-              className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2"
+          <div
+            className={`max-w-lg w-full bg-slate-900 rounded-3xl p-8 text-center space-y-6 shadow-2xl border-2 ${
+              fullscreenAlertModal?.isTerminated || fullscreenTerminated
+                ? 'border-rose-600 shadow-rose-950/80 ring-4 ring-rose-600/30'
+                : fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                ? 'border-rose-500 shadow-rose-950/80 ring-4 ring-rose-500/30 animate-pulse'
+                : 'border-amber-500/70 shadow-amber-950/50'
+            }`}
+          >
+            <div
+              className={`w-20 h-20 rounded-3xl mx-auto flex items-center justify-center ${
+                fullscreenAlertModal?.isTerminated || fullscreenTerminated || (fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed)
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+              }`}
             >
-              <Maximize2 className="w-4 h-4" />
-              <span>Re-Enter Fullscreen to Resume</span>
-            </button>
+              {fullscreenAlertModal?.isTerminated || fullscreenTerminated ? (
+                <XCircle className="w-10 h-10" />
+              ) : fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed ? (
+                <ShieldAlert className="w-10 h-10" />
+              ) : (
+                <AlertTriangle className="w-10 h-10" />
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <span
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-full border uppercase tracking-wider inline-block ${
+                  fullscreenAlertModal?.isTerminated || fullscreenTerminated
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                    ? 'bg-rose-500/30 text-rose-200 border-rose-500/50 animate-pulse'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {fullscreenAlertModal?.isTerminated || fullscreenTerminated
+                  ? 'EXAM AUTOMATICALLY TERMINATED'
+                  : fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                  ? `FINAL WARNING: ${fullscreenAlertModal.strike} of ${fullscreenAlertModal.maxAllowed} Allowed`
+                  : `Warning: Fullscreen Exit ${fullscreenAlertModal?.strike || 1} of ${fullscreenAlertModal?.maxAllowed || 3}`}
+              </span>
+
+              <h2 className="text-2xl font-black text-white">
+                {fullscreenAlertModal?.isTerminated || fullscreenTerminated
+                  ? 'Assessment Terminated: Fullscreen Violation'
+                  : fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                  ? 'Final Warning: Stay in Fullscreen Mode!'
+                  : 'Fullscreen Mode Exited'}
+              </h2>
+
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {fullscreenAlertModal?.reason ||
+                  'You exited mandatory fullscreen examination mode. An integrity anomaly has been logged to your evaluation record.'}
+              </p>
+
+              {/* Policy summary box */}
+              <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-left flex items-center justify-between text-xs">
+                <span className="font-mono text-slate-400">
+                  Assessment Policy: <strong className="text-slate-200">{fullscreenAlertModal?.examTypeLabel || examTypeFullscreenLabel} Mode</strong>
+                </span>
+                <span className="font-mono font-bold text-amber-400">
+                  {fullscreenAlertModal ? `${fullscreenAlertModal.maxAllowed} Exit${fullscreenAlertModal.maxAllowed === 1 ? '' : 's'} Allowed` : `${maxFullscreenExits} Exits Allowed`}
+                </span>
+              </div>
+            </div>
+
+            {fullscreenAlertModal?.isTerminated || fullscreenTerminated ? (
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <span>Auto-submission Status:</span>
+                  <span className="text-rose-400 font-bold flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting to Evaluation Server...
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Your submitted responses and proctoring audit telemetry have been transmitted to the Faculty Audit Console. Fullscreen proctoring has concluded.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (fullscreenAlertModal?.isTerminated || fullscreenTerminated || isAutoSubmittingRef.current) return;
+                    try {
+                      if (document.documentElement.requestFullscreen) {
+                        await document.documentElement.requestFullscreen();
+                      }
+                    } catch (e) {
+                      console.warn('Could not re-enter fullscreen:', e);
+                    }
+                    setIsFullscreenExited(false);
+                    setFullscreenAlertModal(null);
+                  }}
+                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm text-white shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                      ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30 ring-2 ring-rose-400/50'
+                      : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
+                  }`}
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  <span>
+                    {fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                      ? 'I Acknowledge Final Warning — Re-Enter Fullscreen'
+                      : `Re-Enter Fullscreen to Resume (${fullscreenAlertModal?.strike || 1}/${fullscreenAlertModal?.maxAllowed || 3})`}
+                  </span>
+                </button>
+                <p className="text-[11px] text-slate-400">
+                  {fullscreenAlertModal && fullscreenAlertModal.strike === fullscreenAlertModal.maxAllowed
+                    ? '⚠️ Any subsequent attempt to exit fullscreen will automatically terminate and submit your assessment.'
+                    : `You have ${Math.max(0, (fullscreenAlertModal?.maxAllowed || 3) - (fullscreenAlertModal?.strike || 1))} warning(s) remaining before automated termination.`}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
