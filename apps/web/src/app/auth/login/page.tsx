@@ -32,11 +32,21 @@ export default function LoginPage() {
 
   // Warm-up and prefetch destination dashboard bundles on mount for instant zero-lag entry
   React.useEffect(() => {
+    // Force reset any browser autofill on initial mount
+    setEmail('');
+    setPassword('');
+    const t = setTimeout(() => {
+      setEmail('');
+      setPassword('');
+    }, 100);
+
     router.prefetch('/faculty/dashboard');
     router.prefetch('/student/dashboard');
     router.prefetch('/faculty/counselling');
     router.prefetch('/hod/dashboard');
     router.prefetch('/admin/dashboard');
+
+    return () => clearTimeout(t);
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -108,6 +118,24 @@ export default function LoginPage() {
         <div className="bg-[#faf7f2] dark:bg-[#121b30] py-7 px-6 border border-[rgba(74,111,165,0.28)] dark:border-[rgba(106,144,197,0.2)] shadow-xl sm:px-9" style={{ borderRadius: 0 }}>
 
           <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
+            {/* Hidden dummy fields to neutralize browser credential autofill heuristics */}
+            <input
+              type="text"
+              name="prevent_autofill_username"
+              tabIndex={-1}
+              aria-hidden="true"
+              autoComplete="off"
+              className="sr-only opacity-0 w-0 h-0 absolute -z-50 pointer-events-none"
+            />
+            <input
+              type="password"
+              name="prevent_autofill_password"
+              tabIndex={-1}
+              aria-hidden="true"
+              autoComplete="new-password"
+              className="sr-only opacity-0 w-0 h-0 absolute -z-50 pointer-events-none"
+            />
+
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-mono flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -117,20 +145,24 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 font-mono uppercase tracking-wider text-[11px]">
-                University Email Address
+                University Email Address or Student ID
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
+                  name="charusat_identifier"
+                  id="charusat_identifier"
                   required
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     setError(null);
                   }}
-                  autoComplete="username"
-                  placeholder={`name@${process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN || 'charusat.edu.in'}`}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  placeholder="name@charusat.edu.in or Student ID (e.g. 24CS090)"
                   className="w-full pl-10 pr-4 py-2.5 text-[11px] font-mono bg-[rgba(74,111,165,0.06)] dark:bg-[rgba(106,144,197,0.06)] border border-[rgba(74,111,165,0.28)] dark:border-[rgba(106,144,197,0.2)] text-[#1a2540] dark:text-[#e8edf5] focus:outline-none focus:border-[#e05033] focus:bg-[#faf7f2] dark:focus:bg-[#121b30] transition tracking-wider placeholder:normal-case placeholder:tracking-normal"
                   style={{ borderRadius: 0 }}
                 />
@@ -155,13 +187,17 @@ export default function LoginPage() {
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="charusat_access_token"
+                  id="charusat_access_token"
                   required
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   placeholder="••••••••"
                   className="w-full pl-10 pr-10 py-2.5 text-[11px] font-mono bg-[rgba(74,111,165,0.06)] dark:bg-[rgba(106,144,197,0.06)] border border-[rgba(74,111,165,0.28)] dark:border-[rgba(106,144,197,0.2)] text-[#1a2540] dark:text-[#e8edf5] focus:outline-none focus:border-[#e05033] focus:bg-[#faf7f2] dark:focus:bg-[#121b30] transition"
                   style={{ borderRadius: 0 }}
