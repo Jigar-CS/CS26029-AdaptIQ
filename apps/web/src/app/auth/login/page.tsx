@@ -44,10 +44,10 @@ const ROLE_PRESETS: RolePreset[] = [
   {
     id: 'STUDENT',
     label: 'Student',
-    email: 'student@charusat.edu.in',
-    password: 'rahul@2006',
+    email: '24cs001@charusat.edu.in',
+    password: '',
     roleBadge: 'STUDENT',
-    description: 'Rahul Patel (Batch 24 CSE)',
+    description: 'Enrolled Student (Activate account to set password)',
     accentColor: 'border-red-500 text-red-700 dark:text-red-300 bg-red-50/80 dark:bg-red-950/40',
   },
   {

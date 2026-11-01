@@ -86,59 +86,40 @@ export class AuthService {
     // Strict domain validation: for non-students, domain MUST be charusat.ac.in!
     this.validateEmailDomain(email, role);
 
-    // 1. Check if user already exists
+    // 1. Check if active user already exists (for staff and faculty)
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
-    if (existingUser) {
+    if (existingUser && role !== UserRole.STUDENT) {
       throw new BadRequestException('An active account already exists for this email. Please log in.');
     }
 
     let recipientName = '';
 
     if (role === UserRole.STUDENT) {
-      let authorized = await this.prisma.authorizedStudent.findUnique({
-        where: { email },
+      const prefix = email.split('@')[0];
+      const enrollmentNumber = prefix.toUpperCase();
+
+      // Verify student ID exists in university authorized records
+      const authorized = await this.prisma.authorizedStudent.findFirst({
+        where: {
+          OR: [
+            { enrollmentNumber },
+            { email },
+          ],
+        },
       });
 
       if (!authorized) {
-        const prefix = email.split('@')[0];
-        const enrollmentNumber = prefix.toUpperCase();
-
-        authorized = await this.prisma.authorizedStudent.findUnique({
-          where: { enrollmentNumber },
-        });
-
-        if (authorized) {
-          authorized = await this.prisma.authorizedStudent.update({
-            where: { id: authorized.id },
-            data: { email },
-          });
-        } else {
-          const name = prefix.includes('.')
-            ? prefix
-                .split('.')
-                .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-                .join(' ')
-            : `Student ${enrollmentNumber}`;
-
-          authorized = await this.prisma.authorizedStudent.create({
-            data: {
-              enrollmentNumber,
-              name,
-              email,
-              institute: 'CSPIT',
-              department: 'Computer Science & Engineering',
-              programName: 'B.Tech Computer Science & Engineering',
-              semester: 4,
-              division: 'DIV 1',
-              graduationYear: 2026,
-              activated: false,
-            },
-          });
-        }
+        throw new BadRequestException(
+          `Student ID / Enrollment Number '${enrollmentNumber}' was not found in the university database. Please verify your ID or contact your department.`
+        );
       }
-      recipientName = authorized.name;
+
+      recipientName =
+        authorized.name && !authorized.name.startsWith('Student ')
+          ? authorized.name
+          : `Student ${authorized.enrollmentNumber}`;
     } else {
       // For Faculty / Institutional Staff: format recipient name from email
       const prefix = email.split('@')[0];
@@ -218,21 +199,20 @@ export class AuthService {
     const role = dto.role || record.role || fallbackRole;
 
     if (role === UserRole.STUDENT) {
-      // Fetch authorized student details to display to student
-      let authorized = await this.prisma.authorizedStudent.findUnique({
-        where: { email },
+      const prefix = email.split('@')[0];
+      const enrollmentNumber = prefix.toUpperCase();
+
+      const authorized = await this.prisma.authorizedStudent.findFirst({
+        where: {
+          OR: [
+            { enrollmentNumber },
+            { email },
+          ],
+        },
       });
 
       if (!authorized) {
-        const prefix = email.split('@')[0];
-        const enrollmentNumber = prefix.toUpperCase();
-        authorized = await this.prisma.authorizedStudent.findUnique({
-          where: { enrollmentNumber },
-        });
-      }
-
-      if (!authorized) {
-        throw new NotFoundException('University student record not found.');
+        throw new NotFoundException(`University student record '${enrollmentNumber}' was not found.`);
       }
 
       return {
@@ -283,26 +263,20 @@ export class AuthService {
       const passwordHash = await bcrypt.hash(dto.password, 10);
 
       if (role === UserRole.STUDENT) {
-        let authorized = await this.prisma.authorizedStudent.findUnique({
-          where: { email },
+        const prefix = email.split('@')[0];
+        const enrollmentNumber = prefix.toUpperCase();
+
+        const authorized = await this.prisma.authorizedStudent.findFirst({
+          where: {
+            OR: [
+              { enrollmentNumber },
+              { email },
+            ],
+          },
         });
 
         if (!authorized) {
-          const prefix = email.split('@')[0];
-          const enrollmentNumber = prefix.toUpperCase();
-          authorized = await this.prisma.authorizedStudent.findUnique({
-            where: { enrollmentNumber },
-          });
-          if (authorized) {
-            authorized = await this.prisma.authorizedStudent.update({
-              where: { id: authorized.id },
-              data: { email },
-            });
-          }
-        }
-
-        if (!authorized) {
-          throw new NotFoundException('Authorized student record missing.');
+          throw new NotFoundException(`Authorized student record for '${enrollmentNumber}' was not found.`);
         }
 
         // Prefer user-entered full name if provided, else fallback to clean default
@@ -684,41 +658,7 @@ export class AuthService {
       });
     }
 
-    if (!user && (email === '24cs093@charusat.edu.in' || email === 'student@charusat.ac.in')) {
-      user = await this.prisma.user.findUnique({
-        where: { email: 'student@charusat.edu.in' },
-        include: {
-          studentProfile: {
-            include: {
-              authorizedStudent: true,
-            },
-          },
-          facultyProfile: {
-            include: {
-              course: true,
-            },
-          },
-        },
-      });
-    }
 
-    if (!user && email === 'student@charusat.edu.in') {
-      user = await this.prisma.user.findUnique({
-        where: { email: '24cs093@charusat.edu.in' },
-        include: {
-          studentProfile: {
-            include: {
-              authorizedStudent: true,
-            },
-          },
-          facultyProfile: {
-            include: {
-              course: true,
-            },
-          },
-        },
-      });
-    }
 
     if (!user) {
       // Allow searching by enrollment number if input was not email or not found
@@ -774,23 +714,7 @@ export class AuthService {
       }
     }
 
-    if (!isMatch && (user.studentProfile?.authorizedStudent || user.role === UserRole.STUDENT)) {
-      const studentName = user.studentProfile?.authorizedStudent?.name || '';
-      const firstName = studentName.split(' ')[0] || '';
-      const expectedVariants = [
-        `${firstName.toLowerCase()}@2006`,
-        `${firstName}@2006`,
-        `${studentName.replace(/\s+/g, '').toLowerCase()}@2006`,
-        `${studentName.toLowerCase()}@2006`,
-        `${studentName}@2006`,
-        'clias123',
-        'student123',
-        'rahul@2006',
-      ];
-      if (expectedVariants.includes(passClean) || expectedVariants.includes(passClean.toLowerCase())) {
-        isMatch = true;
-      }
-    }
+
 
     if (!isMatch) {
       isMatch = await bcrypt.compare(passClean, user.passwordHash);
