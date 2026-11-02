@@ -91,19 +91,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace(target);
       return;
     }
-
-    if (isAuthRoute && user) {
-      const target = getAuthorizedDashboard(user);
-      router.replace(target);
-      return;
-    }
-  }, [mounted, loading, isLoggingOut, user, pathname, isProtectedRoute, isAuthRoute, router]);
+  }, [mounted, loading, isLoggingOut, user, pathname, isProtectedRoute, router]);
 
   // Determine whether to display the round loader overlay over the blurred page
   const showLoader =
     isLoggingOut ||
-    (isProtectedRoute && (!mounted || loading || !user || !isUserAuthorizedForPath(user, pathname))) ||
-    (isAuthRoute && mounted && !loading && Boolean(user));
+    (isProtectedRoute && (!mounted || loading || !user || !isUserAuthorizedForPath(user, pathname)));
 
   return (
     <>

@@ -26,7 +26,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login } = useAuth();
+  const { user, login, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
 
@@ -116,6 +116,50 @@ export default function LoginPage() {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-[#faf7f2] dark:bg-[#121b30] py-7 px-6 border border-[rgba(74,111,165,0.28)] dark:border-[rgba(106,144,197,0.2)] shadow-xl sm:px-9" style={{ borderRadius: 0 }}>
+
+          {user && (
+            <div className="mb-5 p-3.5 bg-blue-500/10 border border-blue-500/30 text-xs font-mono space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 tracking-wider">
+                  Active Session Detected
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-600/15 text-blue-700 dark:text-blue-300">
+                  {user.role}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-700 dark:text-slate-300 truncate">
+                Signed in as <strong className="text-slate-900 dark:text-white">{user.name || user.email}</strong>
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <Link
+                  href={
+                    user.role === UserRole.SUPER_ADMIN
+                      ? '/admin/dashboard'
+                      : user.role === UserRole.HOD
+                      ? '/hod/dashboard'
+                      : user.role === UserRole.FACULTY
+                      ? '/faculty/dashboard'
+                      : '/student/dashboard'
+                  }
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-[#e05033] hover:bg-[#c8432b] transition shadow-xs"
+                  style={{ borderRadius: 0 }}
+                >
+                  Go to {user.role === UserRole.FACULTY ? 'Faculty' : user.role === UserRole.STUDENT ? 'Student' : 'Admin'} Dashboard &rarr;
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition cursor-pointer"
+                  style={{ borderRadius: 0 }}
+                >
+                  Sign Out
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-1.5 border-t border-blue-500/20">
+                Or enter credentials below to switch accounts:
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
             {/* Hidden dummy fields to neutralize browser credential autofill heuristics */}
