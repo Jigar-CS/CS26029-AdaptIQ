@@ -185,6 +185,54 @@ function getDepartmentBatchConfig(course?: any): DepartmentBatchMeta {
   };
 }
 
+const DEFAULT_DBMS_DESCRIPTIVE_QUESTIONS = [
+  {
+    id: '1',
+    title: 'Question 1: Explain ACID Properties in DBMS',
+    prompt:
+      'Explain the four ACID (Atomicity, Consistency, Isolation, Durability) properties in Database Management Systems (DBMS). Provide a comprehensive real-world banking transaction example illustrating how transaction rollback prevents data inconsistencies.',
+    rubric: 'Atomicity (2.5M) • Consistency (2.5M) • Isolation (2.5M) • Durability (2.5M)',
+    points: 10,
+    topic: 'Transactions & Concurrency',
+  },
+  {
+    id: '2',
+    title: 'Question 2: Database Normalization (1NF to BCNF)',
+    prompt:
+      'Explain Database Normalization and anomalies (Insert, Update, Delete) in unnormalized relations. Illustrate progressive decomposition from 1NF, 2NF, 3NF, up to Boyce-Codd Normal Form (BCNF) using an Employee-Project schema.',
+    rubric: 'Anomalies Explanation (2M) • 1NF & 2NF (3M) • 3NF & BCNF (3M) • Lossless Decomposition (2M)',
+    points: 10,
+    topic: 'Relational Design & Normalization',
+  },
+  {
+    id: '3',
+    title: 'Question 3: SQL vs NoSQL & CAP Theorem',
+    prompt:
+      'Compare Relational Databases (RDBMS) with NoSQL architectures (Document, Key-Value, Columnar, Graph). State the CAP Theorem (Consistency, Availability, Partition Tolerance) and discuss system design trade-offs in distributed clusters.',
+    rubric: 'SQL vs NoSQL Comparison (3M) • 4 NoSQL Types (3M) • CAP Theorem Proof & Trade-offs (4M)',
+    points: 10,
+    topic: 'Distributed Systems & Architecture',
+  },
+  {
+    id: '4',
+    title: 'Question 4: Database Indexing & B+ Trees',
+    prompt:
+      'Explain how indexing improves query retrieval performance. Compare Clustered vs Non-Clustered Indexes, and describe the internal tree node structure of a B+ Tree index with an insertion and split example.',
+    rubric: 'Clustered vs Non-Clustered (3M) • B+ Tree Architecture (4M) • Performance Impact & Overhead (3M)',
+    points: 10,
+    topic: 'Indexing & Physical Storage',
+  },
+  {
+    id: '5',
+    title: 'Question 5: Concurrency Control & Two-Phase Locking',
+    prompt:
+      'Describe Concurrency Control in multi-user DBMS environments. Explain Strict Two-Phase Locking (Strict 2PL), Deadlock Detection vs Deadlock Prevention, and contrast 2PL with Timestamp-based Ordering protocols.',
+    rubric: 'Serializability & Concurrency (2M) • Strict 2PL Protocol (4M) • Deadlock Handling (2M) • Timestamp Ordering (2M)',
+    points: 10,
+    topic: 'Concurrency Control & Recovery',
+  },
+];
+
 export default function FacultyAssessmentsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -211,49 +259,41 @@ export default function FacultyAssessmentsPage() {
 
   // Authored Descriptive Questions State
   const [authoredDescriptiveQuestions, setAuthoredDescriptiveQuestions] = useState<
-    Array<{ id: string; title: string; prompt: string; rubric: string; points: number }>
-  >([
-    {
-      id: '1',
-      title: 'Question 1: Explain ACID Properties in DBMS',
-      prompt:
-        'Explain the four ACID (Atomicity, Consistency, Isolation, Durability) properties in Database Management Systems (DBMS). Provide a comprehensive real-world banking transaction example illustrating how transaction rollback prevents data inconsistencies.',
-      rubric: 'Atomicity (2.5M) • Consistency (2.5M) • Isolation (2.5M) • Durability (2.5M)',
-      points: 10,
-    },
-    {
-      id: '2',
-      title: 'Question 2: Database Normalization (1NF to BCNF)',
-      prompt:
-        'Explain Database Normalization and anomalies (Insert, Update, Delete) in unnormalized relations. Illustrate progressive decomposition from 1NF, 2NF, 3NF, up to Boyce-Codd Normal Form (BCNF) using an Employee-Project schema.',
-      rubric: 'Anomalies Explanation (2M) • 1NF & 2NF (3M) • 3NF & BCNF (3M) • Lossless Decomposition (2M)',
-      points: 10,
-    },
-    {
-      id: '3',
-      title: 'Question 3: SQL vs NoSQL & CAP Theorem',
-      prompt:
-        'Compare Relational Databases (RDBMS) with NoSQL architectures (Document, Key-Value, Columnar, Graph). State the CAP Theorem (Consistency, Availability, Partition Tolerance) and discuss system design trade-offs in distributed clusters.',
-      rubric: 'SQL vs NoSQL Comparison (3M) • 4 NoSQL Types (3M) • CAP Theorem Proof & Trade-offs (4M)',
-      points: 10,
-    },
-    {
-      id: '4',
-      title: 'Question 4: Database Indexing & B+ Trees',
-      prompt:
-        'Explain how indexing improves query retrieval performance. Compare Clustered vs Non-Clustered Indexes, and describe the internal tree node structure of a B+ Tree index with an insertion and split example.',
-      rubric: 'Clustered vs Non-Clustered (3M) • B+ Tree Architecture (4M) • Performance Impact & Overhead (3M)',
-      points: 10,
-    },
-    {
-      id: '5',
-      title: 'Question 5: Concurrency Control & Two-Phase Locking',
-      prompt:
-        'Describe Concurrency Control in multi-user DBMS environments. Explain Strict Two-Phase Locking (Strict 2PL), Deadlock Detection vs Deadlock Prevention, and contrast 2PL with Timestamp-based Ordering protocols.',
-      rubric: 'Serializability & Concurrency (2M) • Strict 2PL Protocol (4M) • Deadlock Handling (2M) • Timestamp Ordering (2M)',
-      points: 10,
-    },
+    Array<{ id: string; title: string; prompt: string; rubric: string; points: number; topic?: string }>
+  >(DEFAULT_DBMS_DESCRIPTIVE_QUESTIONS);
+
+  // Descriptive RAG / AI Document Upload State
+  const [descRagFile, setDescRagFile] = useState<File | null>(null);
+  const [descRagExtracting, setDescRagExtracting] = useState<boolean>(false);
+  const [descRagExtractError, setDescRagExtractError] = useState<string | null>(null);
+  const [descRagExtractProgress, setDescRagExtractProgress] = useState<string | null>(null);
+  const [descriptiveWorkflowTab, setDescriptiveWorkflowTab] = useState<'UPLOAD' | 'AUTHOR'>('UPLOAD');
+
+  // Descriptive Edit Modal State
+  const [editingDescriptiveIdx, setEditingDescriptiveIdx] = useState<number | null>(null);
+  const [isDescriptiveEditModalOpen, setIsDescriptiveEditModalOpen] = useState<boolean>(false);
+  const [editDescTitle, setEditDescTitle] = useState<string>('');
+  const [editDescPrompt, setEditDescPrompt] = useState<string>('');
+  const [editDescRubric, setEditDescRubric] = useState<string>('');
+  const [editDescPoints, setEditDescPoints] = useState<number>(10);
+  const [editDescTopic, setEditDescTopic] = useState<string>('');
+
+  // MCQ Edit Modal State (Works for both candidate questions and drafted questions)
+  const [isMcqEditModalOpen, setIsMcqEditModalOpen] = useState<boolean>(false);
+  const [mcqEditTarget, setMcqEditTarget] = useState<'CANDIDATE' | 'DRAFT'>('CANDIDATE');
+  const [editingCandidateIdx, setEditingCandidateIdx] = useState<number | null>(null);
+  const [editingDraftQId, setEditingDraftQId] = useState<string | null>(null);
+  const [editMcqText, setEditMcqText] = useState<string>('');
+  const [editMcqOptions, setEditMcqOptions] = useState<Array<{ text: string; isCorrect: boolean; misconception?: string }>>([
+    { text: '', isCorrect: true },
+    { text: '', isCorrect: false },
+    { text: '', isCorrect: false },
+    { text: '', isCorrect: false },
   ]);
+  const [editMcqExplanation, setEditMcqExplanation] = useState<string>('');
+  const [editMcqTopic, setEditMcqTopic] = useState<string>('');
+  const [editMcqDifficulty, setEditMcqDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('MEDIUM');
+  const [editMcqBloomLevel, setEditMcqBloomLevel] = useState<string>('APPLY');
 
   // Active Coding Problem Authoring Form Fields
   const [cpTitle, setCpTitle] = useState('');
@@ -1209,6 +1249,203 @@ export default function FacultyAssessmentsPage() {
     setSelectedCandidateIndices((prev) =>
       prev.includes(candidateIdx) ? prev.filter((i) => i !== candidateIdx) : [...prev, candidateIdx],
     );
+  };
+
+  const handleSelectDescRagFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      setDescRagExtractError(
+        `File exceeds maximum size limit of 25 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB). Please upload a smaller document.`,
+      );
+      setDescRagFile(null);
+      return;
+    }
+
+    const allowed = ['.pdf', '.txt', '.doc', '.docx'];
+    const nameLower = file.name.toLowerCase();
+    if (!allowed.some((ext) => nameLower.endsWith(ext))) {
+      setDescRagExtractError('Unsupported file format. Please upload a PDF, TXT, or DOCX document.');
+      setDescRagFile(null);
+      return;
+    }
+
+    setDescRagFile(file);
+    setDescRagExtractError(null);
+    setDescRagExtractProgress(null);
+  };
+
+  const handleExtractDescriptiveFromDocument = async () => {
+    if (!descRagFile) return;
+
+    setDescRagExtracting(true);
+    setDescRagExtractError(null);
+    setDescRagExtractProgress(`Reading ${descRagFile.name} (${(descRagFile.size / 1024).toFixed(1)} KB)...`);
+
+    try {
+      let fileBase64 = '';
+      let textContent = '';
+
+      if (descRagFile.type === 'text/plain' || descRagFile.name.endsWith('.txt')) {
+        textContent = await descRagFile.text();
+      } else {
+        setDescRagExtractProgress(`Encoding ${descRagFile.name} for AI Analysis...`);
+        fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(descRagFile);
+        });
+      }
+
+      setDescRagExtractProgress('AI Extraction Pipeline: synthesizing descriptive questions and marking rubrics from document content...');
+
+      const response: any = await api.post(
+        '/rag/extract-questions',
+        {
+          fileBase64,
+          text: textContent,
+          fileName: descRagFile.name,
+          courseId: user?.courseId || selectedCourseId || undefined,
+          mode: 'DESCRIPTIVE',
+        },
+        { timeout: 90000 } as any,
+      );
+
+      if (Array.isArray(response) && response.length > 0) {
+        setAuthoredDescriptiveQuestions(response);
+        setDescriptiveWorkflowTab('AUTHOR');
+        setDescRagExtractProgress(`Successfully extracted ${response.length} descriptive questions from ${descRagFile.name}!`);
+
+        if (!newTitle.trim() || newTitle.includes('Database Systems Descriptive')) {
+          setNewTitle(`Descriptive Examination on ${descRagFile.name.replace(/\.[^/.]+$/, '')}`);
+        }
+      } else {
+        setDescRagExtractError('No valid descriptive questions could be generated from this document.');
+      }
+    } catch (err: any) {
+      console.error('Error extracting descriptive questions:', err);
+      const errMsg =
+        typeof err?.message === 'string'
+          ? err.message
+          : Array.isArray(err?.message)
+          ? err.message.join('; ')
+          : 'Failed to extract descriptive questions from uploaded document.';
+      setDescRagExtractError(errMsg);
+      setDescRagExtractProgress(null);
+    } finally {
+      setDescRagExtracting(false);
+    }
+  };
+
+  const openEditDescriptiveModal = (idx: number) => {
+    const q = authoredDescriptiveQuestions[idx];
+    if (!q) return;
+    setEditingDescriptiveIdx(idx);
+    setEditDescTitle(q.title || '');
+    setEditDescPrompt(q.prompt || '');
+    setEditDescRubric(q.rubric || '');
+    setEditDescPoints(Number(q.points) || 10);
+    setEditDescTopic(q.topic || '');
+    setIsDescriptiveEditModalOpen(true);
+  };
+
+  const handleSaveDescriptiveEdit = () => {
+    if (editingDescriptiveIdx === null) return;
+    setAuthoredDescriptiveQuestions((prev) =>
+      prev.map((item, i) =>
+        i === editingDescriptiveIdx
+          ? {
+              ...item,
+              title: editDescTitle,
+              prompt: editDescPrompt,
+              rubric: editDescRubric,
+              points: Number(editDescPoints) || 10,
+              topic: editDescTopic,
+            }
+          : item,
+      ),
+    );
+    setIsDescriptiveEditModalOpen(false);
+    setEditingDescriptiveIdx(null);
+  };
+
+  const openEditCandidateModal = (candidateIdx: number) => {
+    const q = candidateQuestions[candidateIdx];
+    if (!q) return;
+    setMcqEditTarget('CANDIDATE');
+    setEditingCandidateIdx(candidateIdx);
+    setEditMcqText(q.questionText || '');
+    setEditMcqOptions(
+      (q.options || []).map((o: any) => ({
+        text: o.text || o.optionText || '',
+        isCorrect: !!o.isCorrect,
+        misconception: o.misconception || '',
+      })),
+    );
+    setEditMcqExplanation(q.explanation || '');
+    setEditMcqTopic(q.topic || '');
+    setEditMcqDifficulty(q.difficulty || 'MEDIUM');
+    setEditMcqBloomLevel(q.bloomLevel || 'APPLY');
+    setIsMcqEditModalOpen(true);
+  };
+
+  const openEditDraftQuestionModal = (qId: string) => {
+    const q = availableQuestions.find((item) => item.id === qId);
+    if (!q) return;
+    setMcqEditTarget('DRAFT');
+    setEditingDraftQId(qId);
+    setEditMcqText(q.questionText || '');
+    setEditMcqOptions(
+      (q.options || []).map((o: any) => ({
+        text: o.text || o.optionText || '',
+        isCorrect: !!o.isCorrect,
+        misconception: o.misconception || '',
+      })),
+    );
+    setEditMcqExplanation(q.explanation || '');
+    setEditMcqTopic(q.topic?.name || q.topic || '');
+    setEditMcqDifficulty(q.difficulty || 'MEDIUM');
+    setEditMcqBloomLevel(q.bloomLevel || 'APPLY');
+    setIsMcqEditModalOpen(true);
+  };
+
+  const handleSaveMcqEdit = () => {
+    if (mcqEditTarget === 'CANDIDATE' && editingCandidateIdx !== null) {
+      setCandidateQuestions((prev) => {
+        const copy = [...prev];
+        const targetQ = { ...copy[editingCandidateIdx] };
+        targetQ.questionText = editMcqText;
+        targetQ.options = editMcqOptions;
+        targetQ.explanation = editMcqExplanation;
+        targetQ.topic = editMcqTopic;
+        targetQ.difficulty = editMcqDifficulty;
+        targetQ.bloomLevel = editMcqBloomLevel as any;
+        copy[editingCandidateIdx] = targetQ;
+        return copy;
+      });
+    } else if (mcqEditTarget === 'DRAFT' && editingDraftQId) {
+      setAvailableQuestions((prev) =>
+        prev.map((item) =>
+          item.id === editingDraftQId
+            ? {
+                ...item,
+                questionText: editMcqText,
+                options: editMcqOptions.map((o, idx) => ({
+                  ...o,
+                  id: (item.options && item.options[idx]?.id) || `opt-${idx}`,
+                })),
+                explanation: editMcqExplanation,
+                topic: { name: editMcqTopic || 'General' },
+                difficulty: editMcqDifficulty,
+                bloomLevel: editMcqBloomLevel,
+              }
+            : item,
+        ),
+      );
+    }
+    setIsMcqEditModalOpen(false);
   };
 
   const handleImportCandidatesToAssessment = async () => {
@@ -2649,151 +2886,340 @@ export default function FacultyAssessmentsPage() {
                 </div>
               )}
 
-              {/* SECTION: Descriptive Questions Authoring & Rubric (For DESCRIPTIVE mode) */}
+              {/* SECTION: Descriptive Questions Authoring & Document AI (For DESCRIPTIVE mode) */}
               {examMode === 'DESCRIPTIVE' && (
                 <div className="space-y-4 pt-4 border-t border-[var(--border)]">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-muted)] p-4 border border-[var(--border)]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Edit3 className="w-5 h-5 text-emerald-500" />
-                        <h4 className="font-display text-sm uppercase text-slate-900 dark:text-white">Descriptive Examination Questions & Evaluation Rubrics</h4>
-                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
-                          {authoredDescriptiveQuestions.length} Questions • {authoredDescriptiveQuestions.reduce((acc, q) => acc + (q.points || 0), 0)} Total Marks
-                        </span>
+                  {/* Workflow Mode Selector Header */}
+                  <div className="panel bg-[var(--surface)] border border-[var(--border)] p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Edit3 className="w-5 h-5 text-emerald-500" />
+                          <h4 className="font-display text-sm uppercase text-slate-900 dark:text-white">
+                            Descriptive Examination Composition Engine
+                          </h4>
+                          <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                            {authoredDescriptiveQuestions.length} Questions • {authoredDescriptiveQuestions.reduce((acc, q) => acc + (Number(q.points) || 0), 0)} Total Marks
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 font-sans mt-0.5">
+                          Upload syllabus notes or question documents to extract AI-grounded descriptive problems, or author custom questions and rubrics manually.
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 font-sans mt-1">
-                        Students write descriptive answers on mobile companion canvas in real-time. Submissions require manual faculty grading.
-                      </p>
+
+                      {/* Source Toggle Pills */}
+                      <div className="flex items-center p-0.5 bg-[var(--surface-muted)] border border-[var(--border)] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setDescriptiveWorkflowTab('UPLOAD')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition ${
+                            descriptiveWorkflowTab === 'UPLOAD'
+                              ? 'bg-[#1a2540] dark:bg-emerald-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Material (RAG)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDescriptiveWorkflowTab('AUTHOR')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition ${
+                            descriptiveWorkflowTab === 'AUTHOR'
+                              ? 'bg-[#1a2540] dark:bg-emerald-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Questions List ({authoredDescriptiveQuestions.length})</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newQNum = authoredDescriptiveQuestions.length + 1;
-                        setAuthoredDescriptiveQuestions([
-                          ...authoredDescriptiveQuestions,
-                          {
-                            id: String(newQNum),
-                            title: `Question ${newQNum}: Custom Descriptive Problem`,
-                            prompt: 'Describe the core concept, provide system diagrams, and analyze constraints.',
-                            rubric: 'Conceptual Definition (3M) • Architecture Diagram (4M) • Practical Application (3M)',
-                            points: 10,
-                          },
-                        ]);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add Question</span>
-                    </button>
-                  </div>
-
-                  {/* List of Descriptive Questions */}
-                  <div className="space-y-3">
-                    {authoredDescriptiveQuestions.map((q, idx) => (
-                      <div key={idx} className="p-4 border border-[var(--border)] bg-[var(--surface)] space-y-3">
+                    {/* WORKFLOW VIEW 1: Upload Material for Descriptive AI Extraction */}
+                    {descriptiveWorkflowTab === 'UPLOAD' && (
+                      <div className="space-y-3 pt-2 border-t border-[var(--border)]">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <span className="font-display text-xs font-bold uppercase text-slate-900 dark:text-white">
-                              Question #{idx + 1}
-                            </span>
+                          <label className="block font-display text-xs uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <Upload className="w-4 h-4 text-emerald-500" />
+                            <span>Course Material / Question Bank Document</span>
+                          </label>
+                          {descRagFile && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDescRagFile(null);
+                                setDescRagExtractError(null);
+                                setDescRagExtractProgress(null);
+                              }}
+                              className="text-[11px] font-mono text-slate-600 dark:text-slate-400 hover:text-rose-500 flex items-center gap-1 transition"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Clear File</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {!descRagFile ? (
+                          <div className="relative border-2 border-dashed border-[var(--border)] hover:border-emerald-500 p-6 text-center bg-[var(--surface)] transition group cursor-pointer">
+                            <input
+                              type="file"
+                              accept=".pdf,.txt,.doc,.docx,application/pdf,text/plain"
+                              onChange={handleSelectDescRagFile}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            />
+                            <FileUp className="w-9 h-9 text-emerald-500 group-hover:scale-105 mx-auto mb-2 transition" />
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">
+                              Click or drag and drop your course syllabus, topic notes, or question paper
+                            </p>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-sans">
+                              Supports <strong className="text-emerald-600 dark:text-emerald-400">PDF, TXT, DOCX</strong> up to <strong className="text-emerald-600 dark:text-emerald-400">25 MB</strong>. Generates structured descriptive problems with rubrics.
+                            </p>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <label className="font-mono text-[10px] text-slate-500 font-bold uppercase">Marks:</label>
-                              <input
-                                type="number"
-                                min={1}
-                                max={50}
-                                value={q.points}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setAuthoredDescriptiveQuestions((prev) =>
-                                    prev.map((item, i) => (i === idx ? { ...item, points: val } : item))
-                                  );
-                                }}
-                                className="w-16 p-1 text-xs font-mono font-bold text-center bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                              />
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--surface)] border border-[var(--border)]">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{descRagFile.name}</p>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                                  {descRagFile.size > 1024 * 1024
+                                    ? `${(descRagFile.size / (1024 * 1024)).toFixed(2)} MB`
+                                    : `${(descRagFile.size / 1024).toFixed(1)} KB`} • {descRagFile.type || 'Document'}
+                                </p>
+                              </div>
                             </div>
-                            {authoredDescriptiveQuestions.length > 1 && (
+
+                            <div className="flex items-center gap-2 shrink-0">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setAuthoredDescriptiveQuestions((prev) => prev.filter((_, i) => i !== idx));
-                                }}
-                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 rounded transition"
-                                title="Remove question"
+                                onClick={handleExtractDescriptiveFromDocument}
+                                disabled={descRagExtracting}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold uppercase tracking-wider transition disabled:opacity-50 flex items-center gap-1.5"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {descRagExtracting ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Generating Questions...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>Extract Descriptive Questions</span>
+                                  </>
+                                )}
                               </button>
-                            )}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        {/* Title input */}
-                        <div>
-                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
-                            Question Title
-                          </label>
-                          <input
-                            type="text"
-                            value={q.title}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setAuthoredDescriptiveQuestions((prev) =>
-                                prev.map((item, i) => (i === idx ? { ...item, title: val } : item))
-                              );
-                            }}
-                            className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
-                            placeholder="e.g. Question 1: Explain ACID Properties in DBMS"
-                          />
-                        </div>
+                        {descRagExtractError && (
+                          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2 font-mono">
+                            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                            <span>{descRagExtractError}</span>
+                          </div>
+                        )}
 
-                        {/* Prompt textarea */}
-                        <div>
-                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
-                            Question Prompt (Displayed to Student)
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={q.prompt}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setAuthoredDescriptiveQuestions((prev) =>
-                                prev.map((item, i) => (i === idx ? { ...item, prompt: val } : item))
-                              );
-                            }}
-                            className="w-full p-2.5 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-sans leading-relaxed"
-                            placeholder="Type the comprehensive theoretical prompt or problem statement..."
-                          />
-                        </div>
-
-                        {/* Rubric input */}
-                        <div>
-                          <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                              <Sparkles className="w-3 h-3" />
-                              Evaluation Rubric / Marks Breakdown (Displayed during Manual Grading)
-                            </span>
-                          </label>
-                          <input
-                            type="text"
-                            value={q.rubric}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setAuthoredDescriptiveQuestions((prev) =>
-                                prev.map((item, i) => (i === idx ? { ...item, rubric: val } : item))
-                              );
-                            }}
-                            className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-amber-500"
-                            placeholder="e.g. Concept (3M) • Architecture diagram (3M) • Proof & Analysis (4M)"
-                          />
-                        </div>
+                        {descRagExtractProgress && (
+                          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2 font-mono">
+                            {descRagExtracting ? (
+                              <Loader2 className="w-4 h-4 shrink-0 animate-spin text-emerald-500" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                            )}
+                            <span>{descRagExtractProgress}</span>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                    )}
+                  </div>
+
+                  {/* Questions List & Authoring Panel */}
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--surface-muted)] p-3 border border-[var(--border)]">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-display text-xs uppercase font-bold text-slate-900 dark:text-white">
+                          Current Questions ({authoredDescriptiveQuestions.length})
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-500">
+                          Total Marks: <strong>{authoredDescriptiveQuestions.reduce((acc, q) => acc + (Number(q.points) || 0), 0)}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newQNum = authoredDescriptiveQuestions.length + 1;
+                            setAuthoredDescriptiveQuestions([
+                              ...authoredDescriptiveQuestions,
+                              {
+                                id: String(newQNum),
+                                title: `Question ${newQNum}: Custom Descriptive Problem`,
+                                prompt: 'Describe the core concept, provide system diagrams, and analyze constraints.',
+                                rubric: 'Conceptual Definition (3M) • Architecture Diagram (4M) • Practical Application (3M)',
+                                points: 10,
+                              },
+                            ]);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition shrink-0"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add Question</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAuthoredDescriptiveQuestions(DEFAULT_DBMS_DESCRIPTIVE_QUESTIONS)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)] text-slate-800 dark:text-slate-200 text-xs font-mono font-bold uppercase tracking-wider transition shrink-0"
+                          title="Load standard 5-question DBMS template"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Load Sample Template</span>
+                        </button>
+                        {authoredDescriptiveQuestions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setAuthoredDescriptiveQuestions([])}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-rose-500 hover:bg-rose-500/10 text-xs font-mono font-bold uppercase transition"
+                            title="Clear all questions"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Clear</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {authoredDescriptiveQuestions.length === 0 ? (
+                      <div className="p-8 border border-dashed border-[var(--border)] text-center space-y-2 bg-[var(--surface)]">
+                        <FileText className="w-8 h-8 text-slate-400 mx-auto" />
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No descriptive questions added yet</p>
+                        <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                          Upload syllabus notes above to automatically generate questions, load our sample template, or click "+ Add Question" to compose custom problems.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {authoredDescriptiveQuestions.map((q, idx) => (
+                          <div key={idx} className="p-4 border border-[var(--border)] bg-[var(--surface)] space-y-3 hover:border-emerald-500/50 transition">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-display text-xs font-bold uppercase text-slate-900 dark:text-white">
+                                  Question #{idx + 1}
+                                </span>
+                                {q.topic && (
+                                  <span className="font-mono text-[9px] px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                    {q.topic}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <label className="font-mono text-[10px] text-slate-500 font-bold uppercase">Marks:</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={50}
+                                    value={q.points}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setAuthoredDescriptiveQuestions((prev) =>
+                                        prev.map((item, i) => (i === idx ? { ...item, points: val } : item))
+                                      );
+                                    }}
+                                    className="w-16 p-1 text-xs font-mono font-bold text-center bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditDescriptiveModal(idx)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-bold uppercase text-[#4a6fa5] hover:bg-[#4a6fa5]/10 border border-[#4a6fa5]/30 transition"
+                                  title="Edit Question Details"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAuthoredDescriptiveQuestions((prev) => prev.filter((_, i) => i !== idx));
+                                  }}
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-500/10 rounded transition"
+                                  title="Remove question"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Title input */}
+                            <div>
+                              <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                                Question Title
+                              </label>
+                              <input
+                                type="text"
+                                value={q.title}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAuthoredDescriptiveQuestions((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, title: val } : item))
+                                  );
+                                }}
+                                className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
+                                placeholder="e.g. Question 1: Explain ACID Properties in DBMS"
+                              />
+                            </div>
+
+                            {/* Prompt textarea */}
+                            <div>
+                              <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                                Question Prompt (Displayed to Student)
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={q.prompt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAuthoredDescriptiveQuestions((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, prompt: val } : item))
+                                  );
+                                }}
+                                className="w-full p-2.5 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-sans leading-relaxed"
+                                placeholder="Type the comprehensive theoretical prompt or problem statement..."
+                              />
+                            </div>
+
+                            {/* Rubric input */}
+                            <div>
+                              <label className="block font-mono text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  Evaluation Rubric / Marks Breakdown (Displayed during Manual Grading)
+                                </span>
+                              </label>
+                              <input
+                                type="text"
+                                value={q.rubric}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAuthoredDescriptiveQuestions((prev) =>
+                                    prev.map((item, i) => (i === idx ? { ...item, rubric: val } : item))
+                                  );
+                                }}
+                                className="w-full p-2 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-medium focus:outline-none focus:border-amber-500"
+                                placeholder="e.g. Concept (3M) • Architecture diagram (3M) • Proof & Analysis (4M)"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -3087,6 +3513,15 @@ export default function FacultyAssessmentsPage() {
                                           <span className="font-mono text-[9px] font-bold px-2 py-0.5 uppercase bg-purple-500/10 text-purple-800 dark:text-purple-300 border border-purple-500/30">
                                             {q.bloomLevel || 'APPLY'}
                                           </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => openEditCandidateModal(candidateIdx)}
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold text-[#4a6fa5] hover:bg-[#4a6fa5]/10 border border-[#4a6fa5]/30 transition"
+                                            title="Edit Question Text & Options"
+                                          >
+                                            <Edit3 className="w-3 h-3" />
+                                            <span>Edit Question</span>
+                                          </button>
                                         </div>
 
                                         <p className="text-xs font-semibold text-slate-900 dark:text-white leading-relaxed font-sans">
@@ -3307,6 +3742,17 @@ export default function FacultyAssessmentsPage() {
                                   </div>
 
                                   <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEditDraftQuestionModal(q.id);
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-[#4a6fa5] transition"
+                                      title="Edit question text and options"
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </button>
                                     <div
                                       className={`w-5 h-5 flex items-center justify-center border-2 transition ${
                                         isSelected
@@ -3373,14 +3819,24 @@ export default function FacultyAssessmentsPage() {
                                   <span className="text-slate-900 dark:text-white truncate font-medium font-sans">{foundQ.questionText}</span>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => toggleQuestionSelection(qId)}
-                                  className="text-slate-500 hover:text-rose-500 p-1 transition shrink-0"
-                                  title="Remove from draft"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditDraftQuestionModal(qId)}
+                                    className="text-slate-500 hover:text-[#4a6fa5] p-1 transition shrink-0"
+                                    title="Edit drafted question"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleQuestionSelection(qId)}
+                                    className="text-slate-500 hover:text-rose-500 p-1 transition shrink-0"
+                                    title="Remove from draft"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}
@@ -3901,6 +4357,306 @@ export default function FacultyAssessmentsPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Descriptive Question */}
+      {isDescriptiveEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.3)] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" style={{ borderRadius: 0 }}>
+            {/* Header */}
+            <div className="p-4 bg-[var(--surface-muted)] border-b border-[var(--border)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-emerald-500" />
+                <h3 className="font-display text-sm uppercase font-bold text-slate-900 dark:text-white">
+                  Edit Descriptive Question {editingDescriptiveIdx !== null ? `#${editingDescriptiveIdx + 1}` : ''}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDescriptiveEditModalOpen(false)}
+                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 overflow-y-auto font-mono text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    Question Title
+                  </label>
+                  <input
+                    type="text"
+                    value={editDescTitle}
+                    onChange={(e) => setEditDescTitle(e.target.value)}
+                    className="w-full p-2.5 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-sans"
+                    placeholder="e.g. Question 1: Explain ACID Properties in DBMS"
+                    style={{ borderRadius: 0 }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    Marks / Points
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={editDescPoints}
+                    onChange={(e) => setEditDescPoints(Number(e.target.value))}
+                    className="w-full p-2.5 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 text-center font-bold"
+                    style={{ borderRadius: 0 }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Topic / Conceptual Area
+                </label>
+                <input
+                  type="text"
+                  value={editDescTopic}
+                  onChange={(e) => setEditDescTopic(e.target.value)}
+                  className="w-full p-2.5 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                  placeholder="e.g. Transactions & Concurrency"
+                  style={{ borderRadius: 0 }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Question Prompt (Displayed to Student)
+                </label>
+                <textarea
+                  rows={5}
+                  value={editDescPrompt}
+                  onChange={(e) => setEditDescPrompt(e.target.value)}
+                  className="w-full p-3 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-sans leading-relaxed text-xs"
+                  placeholder="Provide comprehensive problem statement, diagram requirements, and constraints..."
+                  style={{ borderRadius: 0 }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Evaluation Rubric / Marks Breakdown (Displayed During Grading)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescRubric}
+                  onChange={(e) => setEditDescRubric(e.target.value)}
+                  className="w-full p-2.5 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 font-sans text-xs leading-relaxed"
+                  placeholder="e.g. Atomicity (2.5M) • Consistency (2.5M) • Isolation (2.5M) • Durability (2.5M)"
+                  style={{ borderRadius: 0 }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-[var(--surface-muted)] border-t border-[var(--border)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDescriptiveEditModalOpen(false)}
+                className="px-4 py-2 border border-[var(--border)] text-slate-700 dark:text-slate-300 font-mono text-xs font-bold uppercase hover:bg-black/5 dark:hover:bg-white/5 transition"
+                style={{ borderRadius: 0 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDescriptiveEdit}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
+                style={{ borderRadius: 0 }}
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Save Question Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit MCQ Question */}
+      {isMcqEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.3)] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" style={{ borderRadius: 0 }}>
+            {/* Header */}
+            <div className="p-4 bg-[var(--surface-muted)] border-b border-[var(--border)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#4a6fa5]" />
+                <h3 className="font-display text-sm uppercase font-bold text-slate-900 dark:text-white">
+                  Edit MCQ Question {mcqEditTarget === 'CANDIDATE' ? `(Candidate #${(editingCandidateIdx ?? 0) + 1})` : '(Draft Question)'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMcqEditModalOpen(false)}
+                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 overflow-y-auto font-mono text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    Difficulty
+                  </label>
+                  <select
+                    value={editMcqDifficulty}
+                    onChange={(e: any) => setEditMcqDifficulty(e.target.value)}
+                    className="w-full p-2 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white font-bold"
+                    style={{ borderRadius: 0 }}
+                  >
+                    <option value="EASY">EASY</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HARD">HARD</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    Bloom Level
+                  </label>
+                  <select
+                    value={editMcqBloomLevel}
+                    onChange={(e) => setEditMcqBloomLevel(e.target.value)}
+                    className="w-full p-2 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white font-bold"
+                    style={{ borderRadius: 0 }}
+                  >
+                    <option value="REMEMBER">REMEMBER</option>
+                    <option value="UNDERSTAND">UNDERSTAND</option>
+                    <option value="APPLY">APPLY</option>
+                    <option value="ANALYZE">ANALYZE</option>
+                    <option value="EVALUATE">EVALUATE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                    Topic
+                  </label>
+                  <input
+                    type="text"
+                    value={editMcqTopic}
+                    onChange={(e) => setEditMcqTopic(e.target.value)}
+                    className="w-full p-2 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white"
+                    placeholder="e.g. Arrays, Trees, DBMS"
+                    style={{ borderRadius: 0 }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Question Text
+                </label>
+                <textarea
+                  rows={3}
+                  value={editMcqText}
+                  onChange={(e) => setEditMcqText(e.target.value)}
+                  className="w-full p-2.5 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-[#4a6fa5] font-sans text-xs leading-relaxed"
+                  placeholder="Enter the problem statement..."
+                  style={{ borderRadius: 0 }}
+                />
+              </div>
+
+              {/* 4 Options */}
+              <div className="space-y-2">
+                <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400">
+                  Multiple Choice Options (Select the radio of the correct answer)
+                </label>
+                {editMcqOptions.map((opt, optIdx) => {
+                  const letter = String.fromCharCode(65 + optIdx);
+                  return (
+                    <div
+                      key={optIdx}
+                      className={`p-2.5 border flex items-center gap-2.5 transition ${
+                        opt.isCorrect
+                          ? 'bg-emerald-500/10 border-emerald-500'
+                          : 'bg-[var(--surface)] border-[var(--border)]'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="edit_mcq_correct"
+                        checked={opt.isCorrect}
+                        onChange={() => {
+                          setEditMcqOptions((prev) =>
+                            prev.map((o, i) => ({ ...o, isCorrect: i === optIdx })),
+                          );
+                        }}
+                        className="w-4 h-4 text-emerald-600 cursor-pointer shrink-0"
+                      />
+                      <span className={`w-5 h-5 text-[11px] font-bold flex items-center justify-center shrink-0 ${
+                        opt.isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {letter}
+                      </span>
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditMcqOptions((prev) =>
+                            prev.map((o, i) => (i === optIdx ? { ...o, text: val } : o)),
+                          );
+                        }}
+                        className="flex-1 p-1.5 text-xs bg-[var(--surface-muted)] border border-[var(--border)] text-slate-900 dark:text-white font-sans"
+                        placeholder={`Option ${letter} text`}
+                        style={{ borderRadius: 0 }}
+                      />
+                      {opt.isCorrect && (
+                        <span className="text-[10px] text-emerald-600 font-bold uppercase shrink-0">
+                          ✓ Correct
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Explanation / Solution Walkthrough
+                </label>
+                <textarea
+                  rows={2}
+                  value={editMcqExplanation}
+                  onChange={(e) => setEditMcqExplanation(e.target.value)}
+                  className="w-full p-2 bg-[var(--surface)] border border-[var(--border)] text-slate-900 dark:text-white focus:outline-none focus:border-[#4a6fa5] font-sans text-xs"
+                  placeholder="Explain why the selected option is correct..."
+                  style={{ borderRadius: 0 }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-[var(--surface-muted)] border-t border-[var(--border)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsMcqEditModalOpen(false)}
+                className="px-4 py-2 border border-[var(--border)] text-slate-700 dark:text-slate-300 font-mono text-xs font-bold uppercase hover:bg-black/5 dark:hover:bg-white/5 transition"
+                style={{ borderRadius: 0 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMcqEdit}
+                className="px-5 py-2 bg-[#4a6fa5] hover:bg-[#3b5d8f] text-white font-mono text-xs font-bold uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
+                style={{ borderRadius: 0 }}
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Save Question</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
