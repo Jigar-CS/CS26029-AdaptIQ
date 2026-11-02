@@ -19,6 +19,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 
@@ -29,6 +30,33 @@ interface ViolationItem {
   confidence: number;
   timestamp: string;
   details?: string;
+}
+
+function getAppExitViolations(violations: ViolationItem[]) {
+  if (!violations || violations.length === 0) {
+    return { companionExits: 0, tabSwitches: 0, totalExits: 0 };
+  }
+  const companionExits = violations.filter(
+    (v) =>
+      v.type === 'COMPANION_UNPINNED' ||
+      v.type === 'COMPANION_SECURITY_VIOLATION' ||
+      v.details?.includes('COMPANION') ||
+      v.details?.toLowerCase().includes('unpinned')
+  ).length;
+
+  const tabSwitches = violations.filter(
+    (v) =>
+      v.type === 'TAB_SWITCH' ||
+      v.type === 'FULLSCREEN_EXIT' ||
+      v.type === 'APP_EXIT' ||
+      (v.type === 'WINDOW_BLUR' && v.details?.toLowerCase().includes('switch'))
+  ).length;
+
+  return {
+    companionExits,
+    tabSwitches,
+    totalExits: companionExits + tabSwitches,
+  };
 }
 
 interface ProctoringSessionItem {
@@ -53,13 +81,16 @@ export default function FacultyInvigilationPage() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedSession, setSelectedSession] = useState<ProctoringSessionItem | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'FLAGGED' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'APP_EXITS' | 'FLAGGED' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [reviewNotes, setReviewNotes] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewFeedback, setReviewFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  const seenViolationIdsRef = React.useRef<Set<string>>(new Set());
+  const isInitialLoadRef = React.useRef(true);
 
   useEffect(() => {
     fetchSessions(true);
@@ -102,6 +133,67 @@ export default function FacultyInvigilationPage() {
           invigilatorNotes: s.invigilatorNotes,
           violations: s.violations || [],
         }));
+
+        // Real-time toast alerts for newly detected app-leaving violations
+        if (isInitialLoadRef.current) {
+          mapped.forEach((s: any) => {
+            s.violations?.forEach((v: any) => seenViolationIdsRef.current.add(v.id));
+          });
+          isInitialLoadRef.current = false;
+        } else {
+          mapped.forEach((s: any) => {
+            s.violations?.forEach((v: any) => {
+              if (!seenViolationIdsRef.current.has(v.id)) {
+                seenViolationIdsRef.current.add(v.id);
+
+                const isCompanionExit =
+                  v.type === 'COMPANION_UNPINNED' ||
+                  v.type === 'COMPANION_SECURITY_VIOLATION' ||
+                  v.details?.includes('COMPANION') ||
+                  v.details?.toLowerCase().includes('unpinned');
+
+                const isTabSwitch =
+                  v.type === 'TAB_SWITCH' ||
+                  v.type === 'FULLSCREEN_EXIT' ||
+                  v.type === 'APP_EXIT';
+
+                if (isCompanionExit) {
+                  const exitCount = s.violations.filter(
+                    (x: any) =>
+                      x.type === 'COMPANION_UNPINNED' ||
+                      x.type === 'COMPANION_SECURITY_VIOLATION' ||
+                      x.details?.includes('COMPANION') ||
+                      x.details?.toLowerCase().includes('unpinned')
+                  ).length;
+
+                  if (exitCount >= 2) {
+                    toast.error(
+                      `🚨 CRITICAL: ${s.studentName} (${s.enrollmentNumber}) unpinned/exited companion app (Attempt ${exitCount}/2)! Exam breach limit reached.`,
+                      'Companion App Breach'
+                    );
+                  } else {
+                    toast.warning(
+                      `⚠️ ${s.studentName} (${s.enrollmentNumber}) unpinned or left the digital companion app (Attempt 1 of 2 allowed).`,
+                      'Companion App Unpinned'
+                    );
+                  }
+                } else if (isTabSwitch) {
+                  const tabCount = s.violations.filter(
+                    (x: any) =>
+                      x.type === 'TAB_SWITCH' ||
+                      x.type === 'FULLSCREEN_EXIT' ||
+                      x.type === 'APP_EXIT'
+                  ).length;
+                  toast.warning(
+                    `⚠️ ${s.studentName} (${s.enrollmentNumber}) navigated away from the exam window (Alt+Tab / Tab Switch #${tabCount}).`,
+                    'Browser Focus Lost'
+                  );
+                }
+              }
+            });
+          });
+        }
+
         setSessions(mapped);
         setSelectedSession((current) => {
           if (!current && mapped.length > 0) return mapped[0];
@@ -204,6 +296,9 @@ export default function FacultyInvigilationPage() {
 
   const filteredSessions = sessions.filter((s) => {
     if (statusFilter === 'ALL') return true;
+    if (statusFilter === 'APP_EXITS') {
+      return getAppExitViolations(s.violations).totalExits > 0;
+    }
     return s.status === statusFilter;
   });
 
@@ -253,9 +348,11 @@ export default function FacultyInvigilationPage() {
               <div className="metric-label mono">TRUST &ge; 80%</div>
             </div>
             <div className="metric">
-              <div className="metric-top mono"><span>03</span><span className="coral">FLAGGED</span></div>
-              <div className="metric-value">{sessions.filter((s) => s.status === 'FLAGGED').length}</div>
-              <div className="metric-label mono">INTEGRITY FLAGS</div>
+              <div className="metric-top mono"><span>03</span><span className="coral">APP EXITS</span></div>
+              <div className="metric-value text-rose-600">
+                {sessions.filter((s) => getAppExitViolations(s.violations).totalExits > 0).length}
+              </div>
+              <div className="metric-label mono">UNPINNED / LEFT APP</div>
             </div>
             <div className="metric">
               <div className="metric-top mono"><span>04</span><span>AUDIT</span></div>
@@ -291,19 +388,39 @@ export default function FacultyInvigilationPage() {
                   Exam Submissions ({filteredSessions.length})
                 </h2>
 
-                <div className="flex bg-slate-100 dark:bg-slate-900/90 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px]">
-                  {(['ALL', 'FLAGGED', 'IN_PROGRESS', 'COMPLETED'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setStatusFilter(st)}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${statusFilter === st
-                          ? 'bg-amber-600 text-white shadow-xs font-semibold'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                <div className="flex bg-slate-100 dark:bg-slate-900/90 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] flex-wrap gap-1">
+                  {(['ALL', 'APP_EXITS', 'FLAGGED', 'IN_PROGRESS', 'COMPLETED'] as const).map((st) => {
+                    const isAppExitTab = st === 'APP_EXITS';
+                    const appExitCount = sessions.filter((s) => getAppExitViolations(s.violations).totalExits > 0).length;
+                    return (
+                      <button
+                        key={st}
+                        onClick={() => setStatusFilter(st)}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                          statusFilter === st
+                            ? isAppExitTab
+                              ? 'bg-rose-600 text-white shadow-xs font-bold'
+                              : 'bg-amber-600 text-white shadow-xs font-semibold'
+                            : isAppExitTab && appExitCount > 0
+                              ? 'text-rose-600 dark:text-rose-400 font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         }`}
-                    >
-                      {st.replace('_', ' ')}
-                    </button>
-                  ))}
+                      >
+                        <span>{st === 'APP_EXITS' ? 'App Exits' : st.replace('_', ' ')}</span>
+                        {isAppExitTab && appExitCount > 0 && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              statusFilter === st
+                                ? 'bg-white/20 text-white'
+                                : 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
+                            }`}
+                          >
+                            {appExitCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -321,45 +438,105 @@ export default function FacultyInvigilationPage() {
                     </div>
                   </div>
                 ) : (
-                  filteredSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      onClick={() => setSelectedSession(session)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer shadow-xs ${selectedSession?.id === session.id
-                          ? 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
-                          : 'bg-white dark:bg-slate-900/70 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  filteredSessions.map((session) => {
+                    const exitInfo = getAppExitViolations(session.violations);
+
+                    return (
+                      <div
+                        key={session.id}
+                        onClick={() => setSelectedSession(session)}
+                        className={`p-4 rounded-xl border transition-all cursor-pointer shadow-xs ${
+                          selectedSession?.id === session.id
+                            ? 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                            : exitInfo.companionExits >= 2 || exitInfo.tabSwitches >= 3
+                              ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/50 hover:border-rose-400'
+                              : exitInfo.totalExits > 0
+                                ? 'bg-amber-50/30 dark:bg-amber-950/20 border-amber-300/80 dark:border-amber-800/40 hover:border-amber-400'
+                                : 'bg-white dark:bg-slate-900/70 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div>
-                          <span className="font-bold text-slate-900 dark:text-white text-sm block">{session.studentName}</span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{session.enrollmentNumber}</span>
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-white text-sm block">{session.studentName}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">{session.enrollmentNumber}</span>
+                          </div>
+                          <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${getScoreColor(session.trustScore)}`}>
+                            {session.trustScore}% Trust
+                          </div>
                         </div>
-                        <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${getScoreColor(session.trustScore)}`}>
-                          {session.trustScore}% Trust
+
+                        <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-1 mb-2 font-medium">
+                          {session.assessmentTitle}
+                        </div>
+
+                        {/* Real-time Explicit App Exit & Unpin Badges */}
+                        {exitInfo.totalExits > 0 && (
+                          <div className="mb-2 space-y-1.5">
+                            {exitInfo.companionExits > 0 && (
+                              <div
+                                className={`flex items-center justify-between px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                                  exitInfo.companionExits >= 2
+                                    ? 'bg-rose-600 text-white shadow-xs animate-pulse'
+                                    : 'bg-rose-100 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                                  <span>{exitInfo.companionExits >= 2 ? '🚨 COMPANION BREACH' : '⚠️ Companion Unpinned'}</span>
+                                </span>
+                                <span
+                                  className={`font-mono text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                    exitInfo.companionExits >= 2
+                                      ? 'bg-black/30 text-white'
+                                      : 'bg-rose-200/80 dark:bg-rose-900/60 text-rose-900 dark:text-rose-100'
+                                  }`}
+                                >
+                                  {exitInfo.companionExits >= 2
+                                    ? `${exitInfo.companionExits}/2 Exits (Terminated)`
+                                    : `${exitInfo.companionExits}/2 Warnings`}
+                                </span>
+                              </div>
+                            )}
+
+                            {exitInfo.tabSwitches > 0 && (
+                              <div
+                                className={`flex items-center justify-between px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+                                  exitInfo.tabSwitches >= 3
+                                    ? 'bg-rose-100 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+                                    : 'bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <ExternalLink className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                  <span>Tab / Window Switched</span>
+                                </span>
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-black/30 font-bold">
+                                  {exitInfo.tabSwitches >= 3
+                                    ? `${exitInfo.tabSwitches}/3 (Final Strike)`
+                                    : `${exitInfo.tabSwitches}/3 Strikes`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                          <span className="flex items-center gap-1 font-medium">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                            {session.violationsCount} Anomaly Flags
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${session.status === 'FLAGGED'
+                              ? 'bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
+                              : session.status === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}>
+                            {session.status}
+                          </span>
                         </div>
                       </div>
-
-                      <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-1 mb-2 font-medium">
-                        {session.assessmentTitle}
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                        <span className="flex items-center gap-1 font-medium">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                          {session.violationsCount} Anomaly Flags
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${session.status === 'FLAGGED'
-                            ? 'bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
-                            : session.status === 'COMPLETED'
-                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                          }`}>
-                          {session.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -449,6 +626,10 @@ export default function FacultyInvigilationPage() {
                                   {isCompanionExit ? (
                                     <span className="font-bold text-rose-700 dark:text-rose-400 font-mono flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-500/20 border border-rose-300 dark:border-rose-500/30">
                                       <Smartphone className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> COMPANION APP EXITED
+                                    </span>
+                                  ) : v.type === 'TAB_SWITCH' ? (
+                                    <span className="font-bold text-amber-700 dark:text-amber-400 font-mono flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30">
+                                      <ExternalLink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> BROWSER TAB SWITCH
                                     </span>
                                   ) : (
                                     <span className="font-bold text-amber-700 dark:text-amber-400 font-mono">{v.type}</span>
