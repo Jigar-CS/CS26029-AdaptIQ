@@ -21,7 +21,7 @@ AuthorDate: 2026-10-22 16:01:41 +0530
 Commit:     24CS093-param <24cs093@charusat.edu.in>
 CommitDate: 2026-10-22 16:01:41 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-CLIAS
 
 commit ba242073d3479093bd01635cac2eb8d9d42ea060
 Author:     Jigar-CS <jigarsakhia2020@gmail.com>
@@ -54,7 +54,7 @@ AuthorDate: 2026-10-22 09:24:34 +0530
 Commit:     24CS093-param <24cs093@charusat.edu.in>
 CommitDate: 2026-10-22 09:24:34 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-CLIAS
 
 commit 89d1bd1be9f901f65ba471b367ae5e9c7cee7e3d
 Author:     24CS093-param <24cs093@charusat.edu.in>
@@ -399,7 +399,7 @@ AuthorDate: 2026-10-16 20:44:57 +0530
 Commit:     24CS093-param <24cs093@charusat.edu.in>
 CommitDate: 2026-10-16 20:44:57 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CS26029-CLIAS
 
 commit cb4e38a871f015e95ba343e91efe646242ed1820
 Author:     24CS093-param <24cs093@charusat.edu.in>
@@ -1240,7 +1240,7 @@ AuthorDate: 2026-08-18 20:48:57 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-18 20:48:57 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit cdc54cb4b1e7529a8923e21019f70529933cbab7
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1257,7 +1257,7 @@ AuthorDate: 2026-08-18 20:28:57 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-18 20:28:57 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit 04b1d478989930359f300ee321dc0a853b34d9f5
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1274,7 +1274,7 @@ AuthorDate: 2026-08-18 11:59:53 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-18 11:59:53 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit 743bf71eaa8f4409441edb8a1e830a5a843dd8e0
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1291,7 +1291,7 @@ AuthorDate: 2026-08-18 09:32:32 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-18 09:32:32 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit f72e306d3649d6b984515e0acfa32e301a09475f
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1308,7 +1308,7 @@ AuthorDate: 2026-08-17 21:25:50 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-17 21:25:50 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit c6da9c741f75f1aea6464210bdfbc023453b208e
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1325,7 +1325,7 @@ AuthorDate: 2026-08-16 18:39:47 +0530
 Commit:     Jigar-CS <jigarsakhia2020@gmail.com>
 CommitDate: 2026-08-16 18:39:47 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit 08c3828d77b209488d35c52e3231e1b187c81bcd
 Author:     Varotariya Himanshu Karshan <24cs106@charusat.edu.in>
@@ -1446,7 +1446,7 @@ AuthorDate: 2026-07-19 14:17:17 +0530
 Commit:     24CS093-param <24cs093@charusat.edu.in>
 CommitDate: 2026-07-19 14:17:17 +0530
 
-    Merge branch 'main' of https://github.com/Jigar-CS/AdaptIQ
+    Merge branch 'main' of https://github.com/Jigar-CS/CLIAS
 
 commit acca6f8de1c924734ed8027311c4d2baf66ce550
 Author:     24CS093-param <24cs093@charusat.edu.in>

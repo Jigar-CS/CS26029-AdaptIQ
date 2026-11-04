@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     'CLIAS Admin Dashboard',
     'CHARUSAT System Management',
     'Multi-Tenant Academic Architecture',
-    'AdaptIQ Master Settings',
+    'CLIAS Master Settings',
   ],
   authors: [
     { name: 'Jigar Sakhia', url: 'https://github.com/Jigar-CS' },

@@ -17,7 +17,7 @@ html_portrait = f'''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLIAS (AdaptIQ) - Academic Presentation Poster</title>
+  <title>CLIAS - Academic Presentation Poster</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&family=Cabinet+Grotesk:wght@800;900&display=swap" rel="stylesheet">
@@ -660,7 +660,7 @@ html_portrait = f'''<!DOCTYPE html>
     <!-- 3. HERO TITLE & TEAM METADATA -->
     <div class="hero-header">
       <div class="hero-title-area">
-        <h1>CLIAS <span class="badge-engine">AdaptIQ Engine</span></h1>
+        <h1>CLIAS <span class="badge-engine">CLIAS Engine</span></h1>
         <h2>CHARUSAT Learning Intelligence & Assessment System</h2>
         <p>Longitudinal Knowledge Tracing, Adaptive Practice, In-Browser Coding Sandbox & AI-Proctored Exam Integrity</p>
       </div>
@@ -721,7 +721,7 @@ html_portrait = f'''<!DOCTYPE html>
               Exams lack live focus tracking, and mapping student work to NBA/NAAC Course Outcomes (CO-PO) is manual.
             </div>
             <div class="solution-box">
-              <strong>The Solution: AdaptIQ Core Engine</strong>
+              <strong>The Solution: CLIAS Core Engine</strong>
               Continuous probabilistic knowledge tracing, real-time code sandboxing, Socratic guidance, and automated accreditation.
             </div>
           </div>

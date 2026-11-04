@@ -133,7 +133,7 @@ class _PairingScreenState extends State<PairingScreen> {
                   const SizedBox(height: 16),
 
                   const Text(
-                    'AdaptIQ Answer Companion',
+                    'CLIAS Answer Companion',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 22,

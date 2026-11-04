@@ -15,7 +15,7 @@ html_content = f'''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLIAS (AdaptIQ) - Academic Project Presentation Poster</title>
+  <title>CLIAS - Academic Project Presentation Poster</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -106,7 +106,7 @@ html_content = f'''<!DOCTYPE html>
       line-height: 1;
       text-shadow: 0 2px 12px rgba(0,0,0,0.5);
     }}
-    .project-acronym-row .badge-adaptiq {{
+    .project-acronym-row .badge-clias {{
       font-size: 13.5px;
       font-weight: 800;
       background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.15) 100%);
@@ -650,7 +650,7 @@ html_content = f'''<!DOCTYPE html>
       <div class="title-left">
         <div class="project-acronym-row">
           <h1>CLIAS</h1>
-          <span class="badge-adaptiq">AdaptIQ Core Engine</span>
+          <span class="badge-clias">CLIAS Core Engine</span>
         </div>
         <div class="project-subtitle">
           CHARUSAT Learning Intelligence &amp; Assessment System
@@ -728,7 +728,7 @@ html_content = f'''<!DOCTYPE html>
           </div>
         </div>
         <div class="sol-card">
-          <div class="sol-hdr">💡 OUR SOLUTION: CLIAS / ADAPTIQ</div>
+          <div class="sol-hdr">💡 OUR SOLUTION: CLIAS</div>
           <div class="sol-body">
             <ul>
               <li>Continuous mastery modeling via difficulty-weighted EWMA and Bayesian Knowledge Tracing.</li>

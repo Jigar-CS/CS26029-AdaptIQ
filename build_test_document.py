@@ -268,7 +268,7 @@ for section in doc.sections:
     header = section.header
     hp = header.paragraphs[0]
     hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    hrun = hp.add_run("CLIAS / AdaptIQ — Comprehensive Manual Testing Guide & Feature Verification")
+    hrun = hp.add_run("CLIAS — Comprehensive Manual Testing Guide & Feature Verification")
     hrun.font.name = "Segoe UI"
     hrun.font.size = Pt(8)
     hrun.font.color.rgb = RGBColor(0x94, 0xA3, 0xB8)
@@ -287,7 +287,7 @@ for section in doc.sections:
 title_p = doc.add_paragraph()
 title_p.paragraph_format.space_before = Pt(12)
 title_p.paragraph_format.space_after = Pt(2)
-t_run = title_p.add_run("CLIAS / AdaptIQ")
+t_run = title_p.add_run("CLIAS")
 t_run.bold = True
 t_run.font.name = "Segoe UI"
 t_run.font.size = Pt(24)
@@ -322,7 +322,7 @@ doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
 add_callout(
     doc,
-    "This document provides the exhaustive manual test plan for the entire CLIAS / AdaptIQ ecosystem. Every feature across all 6 administrative and academic user roles is cataloged with exact navigation paths, test inputs, step-by-step procedures, edge condition validations, and expected outcomes. Execute each test case sequentially or by module, and record results directly in the sign-off tracking tables.",
+    "This document provides the exhaustive manual test plan for the entire CLIAS ecosystem. Every feature across all 6 administrative and academic user roles is cataloged with exact navigation paths, test inputs, step-by-step procedures, edge condition validations, and expected outcomes. Execute each test case sequentially or by module, and record results directly in the sign-off tracking tables.",
     title="DOCUMENT PURPOSE & QA GUIDELINES",
     fill_hex="F0FDF4",
     border_color="16A34A",
@@ -1215,6 +1215,6 @@ add_bullet_p(doc, "What the system should have done per specification", bold_pre
 add_bullet_p(doc, "What the system actually did (including error codes)", bold_prefix="Actual Result: ")
 add_bullet_p(doc, "API server logs, browser DevTools console output, screenshot", bold_prefix="Evidence / Logs: ")
 
-output_path = r"c:\CLIAS_TEMP\CS26029-AdaptIQ\CLIAS_Manual_Testing_Guide_And_Flow.docx"
+output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "CLIAS_Manual_Testing_Guide_And_Flow.docx")
 doc.save(output_path)
 print(f"Document successfully created and saved at: {output_path}")

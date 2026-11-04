@@ -1,9 +1,9 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Student Dashboard & Real-Time Mastery',
   description:
-    'Track cognitive topic mastery, learning curve velocity, active streaks, and recommended practice drills on CLIAS (AdaptIQ) by Jigar Sakhia & Jigar.',
+    'Track cognitive topic mastery, learning curve velocity, active streaks, and recommended practice drills on CLIAS by Jigar Sakhia & Jigar.',
   keywords: [
     'Jigar Sakhia',
     'Jigar',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Student Dashboard & Real-Time Mastery | CLIAS — CHARUSAT',
     description:
-      'Track cognitive topic mastery, learning curve velocity, active streaks, and recommended practice drills on CLIAS (AdaptIQ) by Jigar Sakhia & Param Shah.',
+      'Track cognitive topic mastery, learning curve velocity, active streaks, and recommended practice drills on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/student/dashboard',
   },
 };

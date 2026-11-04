@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -85,7 +85,7 @@ export default function StudentLearningPath() {
     setSelectedNode(null);
     setError(null);
     try {
-      localStorage.setItem('adaptiq_selected_course_code', newCode);
+      localStorage.setItem('clias_selected_course_code', newCode);
     } catch {}
   };
 
@@ -108,7 +108,7 @@ export default function StudentLearningPath() {
             const queryId = params?.get('courseId');
             let savedCode: string | null = null;
             try {
-              savedCode = localStorage.getItem('adaptiq_selected_course_code');
+              savedCode = localStorage.getItem('clias_selected_course_code');
             } catch {}
 
             const matched =

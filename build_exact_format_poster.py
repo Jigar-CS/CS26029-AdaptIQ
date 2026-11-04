@@ -16,7 +16,7 @@ html_content = f'''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLIAS (AdaptIQ Core Engine) - Project Presentation Poster</title>
+  <title>CLIAS Core Engine - Project Presentation Poster</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
@@ -417,7 +417,7 @@ html_content = f'''<!DOCTYPE html>
     <div class="title-banner">
       <div class="course-sub-top">PROJECT-I (CEUP 301)</div>
       <div class="title-row">
-        <h1>CLIAS (AdaptIQ Core Engine)</h1>
+        <h1>CLIAS Core Engine</h1>
         <div class="group-id-badge">Group Id- CS26029</div>
       </div>
     </div>

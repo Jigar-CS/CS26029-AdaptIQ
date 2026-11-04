@@ -243,7 +243,7 @@ export default function FacultyQuestionBankPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-slate-900">
-                  AdaptIQ Academic Assessment Repository
+                  CLIAS Academic Assessment Repository
                 </h1>
                 <p className="text-sm font-semibold text-slate-700">
                   Course: {currentCourse?.code} - {currentCourse?.name}

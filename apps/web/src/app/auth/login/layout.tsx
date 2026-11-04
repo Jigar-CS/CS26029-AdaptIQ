@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Secure Account Sign In',
   description:
-    'Sign in to CLIAS (AdaptIQ) CHARUSAT Learning Intelligence and Assessment System. Access student practice drills, exams, and analytics engineered by Jigar Sakhia & Jigar.',
+    'Sign in to CLIAS CHARUSAT Learning Intelligence and Assessment System. Access student practice drills, exams, and analytics engineered by Jigar Sakhia & Jigar.',
   keywords: [
     'Jigar Sakhia',
     'Jigar',
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     'CLIAS Login',
     'CHARUSAT Student Login',
     'CHARUSAT Faculty Login',
-    'AdaptIQ Login',
+    'CLIAS Portal Login',
   ],
   alternates: {
     canonical: '/auth/login',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Secure Account Sign In | CLIAS — CHARUSAT',
     description:
-      'Sign in to CLIAS (AdaptIQ) CHARUSAT Learning Intelligence and Assessment System. Access student practice drills, exams, and analytics engineered by Jigar Sakhia & Param Shah.',
+      'Sign in to CLIAS CHARUSAT Learning Intelligence and Assessment System. Access student practice drills, exams, and analytics engineered by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/auth/login',
   },
 };

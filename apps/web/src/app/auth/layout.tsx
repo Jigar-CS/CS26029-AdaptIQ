@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Authentication & Single Sign-On Portal',
   description:
-    'Secure unified authentication and role-based access control for CHARUSAT University students, faculty, counsellors, and administrators on CLIAS (AdaptIQ) by Jigar Sakhia & Jigar.',
+    'Secure unified authentication and role-based access control for CHARUSAT University students, faculty, counsellors, and administrators on CLIAS by Jigar Sakhia & Jigar.',
   keywords: [
     'Jigar Sakhia',
     'Jigar',
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     'Param',
     'CLIAS Login',
     'CHARUSAT Single Sign On',
-    'AdaptIQ Auth',
+    'CLIAS Auth',
     'Student Portal Login',
     'Faculty Portal Login',
     'CHARUSAT University',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Authentication & Single Sign-On Portal | CLIAS — CHARUSAT',
     description:
-      'Secure unified authentication and role-based access control for CHARUSAT University students, faculty, counsellors, and administrators on CLIAS (AdaptIQ) by Jigar Sakhia & Param Shah.',
+      'Secure unified authentication and role-based access control for CHARUSAT University students, faculty, counsellors, and administrators on CLIAS by Jigar Sakhia & Param Shah.',
     url: 'https://clias.vercel.app/auth/login',
   },
 };

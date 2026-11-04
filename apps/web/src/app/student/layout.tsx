@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Student Learning Intelligence & Practice Hub',
@@ -10,12 +10,12 @@ export const metadata: Metadata = {
     'Param Shah',
     'Param',
     'Jigar Sakhia CHARUSAT',
-    'Jigar Sakhia AdaptIQ',
+    'Jigar Sakhia CLIAS',
     'Student Learning Intelligence',
     'Smart Adaptive Practice',
     'CLIAS Student Dashboard',
     'CHARUSAT Student Portal',
-    'AdaptIQ Practice Drills',
+    'CLIAS Practice Drills',
     'Bloom Taxonomy Learning',
   ],
   authors: [

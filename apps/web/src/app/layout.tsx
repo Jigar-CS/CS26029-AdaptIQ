@@ -10,18 +10,17 @@ import { ToastProvider } from '@/lib/toast';
 export const metadata: Metadata = {
   metadataBase: new URL('https://clias.vercel.app'),
   title: {
-    default: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ by Jigar Sakhia & Param Shah',
+    default: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System by Jigar Sakhia & Param Shah',
     template: '%s | CLIAS — CHARUSAT Learning Intelligence & Assessment System',
   },
   description:
-    'CLIAS (AdaptIQ) is CHARUSAT University’s premier AI-powered smart adaptive practice, assessment, and student learning intelligence platform engineered by Jigar Sakhia, Jigar, Param Shah, and the AdaptIQ Team. Built for CSPIT and DEPSTAR Computer Science students, CLIAS combines Bloom’s taxonomy cognitive modeling, biometric 1:1 facial identity matching and real-time proctoring surveillance, automated digital ink handwriting answer sheet evaluation, multi-language coding compilation, Socratic AI tutoring, and real-time curriculum outcome (CO-PO) attainment analytics.',
+    'CLIAS is CHARUSAT University’s premier AI-powered smart adaptive practice, assessment, and student learning intelligence platform engineered by Jigar Sakhia, Jigar, Param Shah, and the CLIAS Engineering Team. Built for CSPIT and DEPSTAR Computer Science students, CLIAS combines Bloom’s taxonomy cognitive modeling, biometric 1:1 facial identity matching and real-time proctoring surveillance, automated digital ink handwriting answer sheet evaluation, multi-language coding compilation, Socratic AI tutoring, and real-time curriculum outcome (CO-PO) attainment analytics.',
   keywords: [
     // Creator Names & Aliases
     'Jigar Sakhia',
     'Jigar',
     'Jigar Sakhia CHARUSAT',
     'Jigar Sakhia CLIAS',
-    'Jigar Sakhia AdaptIQ',
     'Jigar Sakhia Developer',
     'Jigar Sakhia Software Engineer',
     'Jigar Sakhia Full Stack Engineer',
@@ -32,13 +31,13 @@ export const metadata: Metadata = {
     'Param Shah',
     'Param',
     'Param Shah CHARUSAT',
-    'AdaptIQ Team',
+    'CLIAS Team',
     'CLIAS Engineering Team',
     // Institution & University Ecosystem
     'CLIAS',
     'CLIAS CHARUSAT',
-    'AdaptIQ',
-    'AdaptIQ CLIAS',
+    'CLIAS Platform',
+    'CLIAS System',
     'CHARUSAT',
     'Charusat University',
     'Charotar University of Science and Technology',
@@ -54,7 +53,7 @@ export const metadata: Metadata = {
     'CLIAS Examination System',
     'CHARUSAT Learning Management System',
     'CS26029',
-    'CS26029 AdaptIQ',
+    'CS26029 CLIAS',
     // Natural Language Search Sentences
     'CHARUSAT AI powered adaptive learning platform',
     'Intelligent assessment system with biometric identity verification',
@@ -106,7 +105,7 @@ export const metadata: Metadata = {
     { name: 'Param' },
     { name: 'CHARUSAT University', url: 'https://www.charusat.ac.in' },
   ],
-  creator: 'Jigar Sakhia (Jigar), Param Shah & The AdaptIQ Team',
+  creator: 'Jigar Sakhia (Jigar), Param Shah & The CLIAS Team',
   publisher: 'CHARUSAT (Charotar University of Science and Technology)',
   applicationName: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System',
   generator: 'Next.js',
@@ -130,7 +129,7 @@ export const metadata: Metadata = {
     canonical: 'https://clias.vercel.app',
   },
   openGraph: {
-    title: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System | AdaptIQ by Jigar Sakhia & Param Shah',
+    title: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System by Jigar Sakhia & Param Shah',
     description:
       'AI-Powered Smart Adaptive Practice, Assessment, Biometric Identity Verification & Knowledge Modeling Platform developed for CHARUSAT by Jigar Sakhia, Jigar, and Param Shah.',
     url: 'https://clias.vercel.app',
@@ -204,16 +203,16 @@ export default function RootLayout({
                   '@id': 'https://clias.vercel.app/#webapp',
                   name: 'CLIAS — CHARUSAT Learning Intelligence & Assessment System',
                   alternateName: [
-                    'AdaptIQ',
+                    'CLIAS',
                     'CLIAS CHARUSAT',
                     'CHARUSAT Adaptive Practice',
-                    'AdaptIQ by Jigar Sakhia & Param Shah',
+                    'CLIAS by Jigar Sakhia & Param Shah',
                   ],
                   url: 'https://clias.vercel.app',
                   applicationCategory: 'EducationalApplication',
                   operatingSystem: 'All modern web browsers (Chrome, Edge, Firefox, Safari)',
                   description:
-                    'AI-Powered Student Learning Intelligence, Smart Adaptive Practice, Automated Assessment, Biometric Identity Verification, Digital Ink Handwriting Grading, and Knowledge Modeling Platform for CHARUSAT University engineered by Jigar Sakhia, Jigar, Param Shah, and the AdaptIQ Team.',
+                    'AI-Powered Student Learning Intelligence, Smart Adaptive Practice, Automated Assessment, Biometric Identity Verification, Digital Ink Handwriting Grading, and Knowledge Modeling Platform for CHARUSAT University engineered by Jigar Sakhia, Jigar, Param Shah, and the CLIAS Team.',
                   featureList: [
                     'Smart Adaptive Practice Drills',
                     'Biometric 1:1 Face Verification Exam Surveillance',
@@ -260,7 +259,7 @@ export default function RootLayout({
                     priceCurrency: 'INR',
                   },
                   keywords:
-                    'Jigar Sakhia, Jigar, CLIAS, CHARUSAT, AdaptIQ, Param, Param Shah, Smart Adaptive Practice, AI Assessment, Socratic Tutoring, Charusat University, CSPIT, DEPSTAR, Biometric Proctoring, Digital Ink Assessment',
+                    'Jigar Sakhia, Jigar, CLIAS, CHARUSAT, Param, Param Shah, Smart Adaptive Practice, AI Assessment, Socratic Tutoring, Charusat University, CSPIT, DEPSTAR, Biometric Proctoring, Digital Ink Assessment',
                 },
                 {
                   '@type': 'WebSite',

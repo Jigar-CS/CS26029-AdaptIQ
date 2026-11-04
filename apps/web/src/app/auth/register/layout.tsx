@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     'Param',
     'CLIAS Register',
     'CHARUSAT Student Registration',
-    'AdaptIQ Registration',
+    'CLIAS Registration',
   ],
   alternates: {
     canonical: '/auth/register',

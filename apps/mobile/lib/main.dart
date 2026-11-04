@@ -22,7 +22,7 @@ class CliasCompanionApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AdaptIQ Answer Companion',
+      title: 'CLIAS Answer Companion',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

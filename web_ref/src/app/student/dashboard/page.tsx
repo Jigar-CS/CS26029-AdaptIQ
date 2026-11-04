@@ -59,8 +59,8 @@ export default function StudentDashboard() {
   // Restore saved filter selection from localStorage across refreshes
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedSource = localStorage.getItem('adaptiq_kc_source');
-      const savedTopic = localStorage.getItem('adaptiq_kc_topic');
+      const savedSource = localStorage.getItem('clias_kc_source');
+      const savedTopic = localStorage.getItem('clias_kc_topic');
       if (savedSource && ['ALL', 'PRACTICE', 'ASSESSMENT'].includes(savedSource)) {
         setKcSource(savedSource);
       }
@@ -103,7 +103,7 @@ export default function StudentDashboard() {
   const handleSourceChange = (newSource: string) => {
     setKcSource(newSource);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('adaptiq_kc_source', newSource);
+      localStorage.setItem('clias_kc_source', newSource);
     }
     fetchFilteredCurve(newSource, kcTopic);
   };
@@ -111,7 +111,7 @@ export default function StudentDashboard() {
   const handleTopicChange = (newTopic: string) => {
     setKcTopic(newTopic);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('adaptiq_kc_topic', newTopic);
+      localStorage.setItem('clias_kc_topic', newTopic);
     }
     fetchFilteredCurve(kcSource, newTopic);
   };
@@ -197,8 +197,8 @@ export default function StudentDashboard() {
         });
 
         // Initialize curve with default or saved filter
-        const savedSource = typeof window !== 'undefined' ? localStorage.getItem('adaptiq_kc_source') : null;
-        const savedTopic = typeof window !== 'undefined' ? localStorage.getItem('adaptiq_kc_topic') : null;
+        const savedSource = typeof window !== 'undefined' ? localStorage.getItem('clias_kc_source') : null;
+        const savedTopic = typeof window !== 'undefined' ? localStorage.getItem('clias_kc_topic') : null;
         if ((!savedSource || savedSource === 'ALL') && (!savedTopic || savedTopic === 'ALL')) {
           setKcCurveData(curveArray);
         } else {

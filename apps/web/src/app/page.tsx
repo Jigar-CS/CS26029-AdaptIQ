@@ -997,7 +997,7 @@ export default function CLIASHomePage() {
             CLIAS &copy; 2026 {universityName} &bull; CHARUSAT Learning Intelligence System
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Engineered &amp; Architected by <span className="font-semibold text-[#1a2540] dark:text-white">Jigar Sakhia</span> (Jigar), Param &amp; AdaptIQ Team
+            Engineered &amp; Architected by <span className="font-semibold text-[#1a2540] dark:text-white">Jigar Sakhia</span> (Jigar), Param &amp; CLIAS Team
           </p>
         </div>
         <div className="flex items-center gap-4 text-[10px] uppercase tracking-wider">

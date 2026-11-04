@@ -142,7 +142,7 @@ export class NodemailerEmailService implements EmailService {
 
                     <!-- Platform Title -->
                     <h1 style="color: #ffffff; font-size: 26px; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.5px;">
-                      CLIAS <span style="color: #818cf8; font-weight: 400;">|</span> AdaptIQ
+                      CLIAS <span style="color: #818cf8; font-weight: 400;">|</span> Learning Intelligence
                     </h1>
                     <p style="color: #c7d2fe; font-size: 13px; margin: 0; font-weight: 500; letter-spacing: 0.3px;">
                       Intelligent Learning & Adaptive Assessment System
@@ -161,7 +161,7 @@ export class NodemailerEmailService implements EmailService {
               </p>
               
               <p style="margin: 0 0 24px 0; color: #475569; font-size: 14px; line-height: 1.65;">
-                Thank you for registering with <strong>CLIAS AdaptIQ</strong>. To verify your institutional email address and finalize your account setup, please use the one-time verification code below:
+                Thank you for registering with <strong>CLIAS</strong>. To verify your institutional email address and finalize your account setup, please use the one-time verification code below:
               </p>
 
               <!-- OTP Hero Container -->
@@ -274,7 +274,7 @@ export class NodemailerEmailService implements EmailService {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Welcome to CLIAS AdaptIQ — ${this.universityName}</title>
+  <title>Welcome to CLIAS — ${this.universityName}</title>
   <!--[if mso]>
   <style type="text/css">
     body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
@@ -285,7 +285,7 @@ export class NodemailerEmailService implements EmailService {
   
   <!-- Preheader preview text in inbox -->
   <div style="display: none; max-height: 0px; overflow: hidden; font-size: 1px; line-height: 1px; color: #fff; opacity: 0;">
-    Your account is officially active! Welcome to CLIAS AdaptIQ at CHARUSAT.
+    Your account is officially active! Welcome to CLIAS at CHARUSAT.
   </div>
 
   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="min-width: 100%; background-color: #f1f5f9; padding: 32px 12px;">
@@ -314,7 +314,7 @@ export class NodemailerEmailService implements EmailService {
 
                     <!-- Celebration Header -->
                     <h1 style="color: #ffffff; font-size: 26px; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.5px;">
-                      Welcome to AdaptIQ! 🎉
+                      Welcome to CLIAS! 🎉
                     </h1>
                     <p style="color: #a7f3d0; font-size: 13px; margin: 0; font-weight: 500;">
                       Charotar University of Science and Technology (${this.universityName})
@@ -468,7 +468,7 @@ export class NodemailerEmailService implements EmailService {
       this.logger.log(`📤 Sending OTP verification email to: ${toEmail} (${studentName})`);
 
       const html = this.generateOtpHtml(studentName, otp);
-      const text = `Hello ${studentName},\n\nYour ${this.universityName} CLIAS verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\nCharotar University of Science and Technology (CHARUSAT) — CLIAS AdaptIQ`;
+      const text = `Hello ${studentName},\n\nYour ${this.universityName} CLIAS verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\nCharotar University of Science and Technology (CHARUSAT) — CLIAS`;
 
       const info = await this.transporter.sendMail({
         from: this.fromAddress,
@@ -495,12 +495,12 @@ export class NodemailerEmailService implements EmailService {
     try {
       const html = this.generateWelcomeHtml(studentName, toEmail);
       const portalUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-      const text = `Welcome to AdaptIQ, ${studentName}!\n\nYour institutional account at ${this.universityName} has been verified and activated.\n\nYou can log in now at: ${portalUrl}/auth/login\n\nCHARUSAT • CLIAS Learning Intelligence System`;
+      const text = `Welcome to CLIAS, ${studentName}!\n\nYour institutional account at ${this.universityName} has been verified and activated.\n\nYou can log in now at: ${portalUrl}/auth/login\n\nCHARUSAT • CLIAS Learning Intelligence System`;
 
       await this.transporter.sendMail({
         from: this.fromAddress,
         to: toEmail,
-        subject: `Welcome to CLIAS AdaptIQ, ${studentName}! 🎓`,
+        subject: `Welcome to CLIAS, ${studentName}! 🎓`,
         text,
         html,
       });
@@ -554,7 +554,7 @@ export class BrevoEmailService implements EmailService {
     <tr>
       <td style="padding:32px 36px;">
         <div style="font-size:11px;font-weight:700;color:#4f46e5;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">
-          🏛️ ${this.universityName} • CLIAS ADAPTIQ
+          🏛️ ${this.universityName} • CLIAS
         </div>
         <h1 style="margin:0 0 16px 0;color:#0f172a;font-size:22px;font-weight:800;letter-spacing:-0.3px;">
           Your Verification Code
@@ -622,8 +622,8 @@ export class BrevoEmailService implements EmailService {
   async sendWelcome(toEmail: string, studentName: string): Promise<boolean> {
     try {
       const portalUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-      const textContent = `Welcome to AdaptIQ, ${studentName}!\n\nYour institutional account at ${this.universityName} has been verified and activated.\n\nYou can log in now at: ${portalUrl}/auth/login`;
-      const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f8fafc;font-family:sans-serif;"><div style="max-width:540px;margin:auto;background:#ffffff;border-radius:14px;padding:32px;border:1px solid #e2e8f0;"><h2 style="color:#0f172a;margin:0 0 16px 0;">Welcome to CLIAS AdaptIQ! 🎓</h2><p style="color:#475569;font-size:15px;line-height:1.6;">Hello <strong>${studentName}</strong>,<br/>Your account at ${this.universityName} has been verified and activated.</p><p style="margin:24px 0;"><a href="${portalUrl}/auth/login" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Sign In to Portal &rarr;</a></p></div></body></html>`;
+      const textContent = `Welcome to CLIAS, ${studentName}!\n\nYour institutional account at ${this.universityName} has been verified and activated.\n\nYou can log in now at: ${portalUrl}/auth/login`;
+      const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f8fafc;font-family:sans-serif;"><div style="max-width:540px;margin:auto;background:#ffffff;border-radius:14px;padding:32px;border:1px solid #e2e8f0;"><h2 style="color:#0f172a;margin:0 0 16px 0;">Welcome to CLIAS! 🎓</h2><p style="color:#475569;font-size:15px;line-height:1.6;">Hello <strong>${studentName}</strong>,<br/>Your account at ${this.universityName} has been verified and activated.</p><p style="margin:24px 0;"><a href="${portalUrl}/auth/login" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Sign In to Portal &rarr;</a></p></div></body></html>`;
 
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -636,7 +636,7 @@ export class BrevoEmailService implements EmailService {
           sender: { name: this.senderName, email: this.senderEmail },
           to: [{ email: toEmail, name: studentName }],
           replyTo: { name: `${this.universityName} Support`, email: this.senderEmail },
-          subject: `Welcome to CLIAS AdaptIQ, ${studentName}! 🎓`,
+          subject: `Welcome to CLIAS, ${studentName}! 🎓`,
           htmlContent,
           textContent,
           tags: ['welcome-email'],
