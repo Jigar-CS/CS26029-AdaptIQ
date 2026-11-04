@@ -25,10 +25,26 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
 
   const { user, login, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+
+  // Cooldown countdown timer for rate limiting
+  React.useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          setError(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSeconds]);
 
   // Warm-up and prefetch destination dashboard bundles on mount for instant zero-lag entry
   React.useEffect(() => {
@@ -74,9 +90,17 @@ export default function LoginPage() {
         router.push('/student/dashboard');
       }
     } catch (err: any) {
-      const errMsg = err.message || 'Invalid email or password. Please verify your credentials.';
-      setError(errMsg);
-      toast.error(errMsg, 'Authentication Failed');
+      if (err.status === 429) {
+        const retry = err.data?.retryAfter || 45;
+        setCooldownSeconds(retry);
+        const rateMsg = `Too many attempts. For security, please wait ${retry} seconds before trying again.`;
+        setError(rateMsg);
+        toast.warning(rateMsg, 'Rate Limit Exceeded');
+      } else {
+        const errMsg = err.message || 'Invalid email or password. Please verify your credentials.';
+        setError(errMsg);
+        toast.error(errMsg, 'Authentication Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -251,12 +275,18 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 text-[10px] font-mono font-bold uppercase tracking-widest text-white bg-[#e05033] hover:bg-[#c8432b] transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+              disabled={loading || cooldownSeconds > 0}
+              className="w-full py-3 px-4 text-[10px] font-mono font-bold uppercase tracking-widest text-white bg-[#e05033] hover:bg-[#c8432b] transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2 disabled:cursor-not-allowed"
               style={{ borderRadius: 0 }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
+              <span>
+                {loading
+                  ? 'Authenticating...'
+                  : cooldownSeconds > 0
+                  ? `Cooldown Active (${cooldownSeconds}s)`
+                  : 'Sign In'}
+              </span>
             </button>
           </form>
 

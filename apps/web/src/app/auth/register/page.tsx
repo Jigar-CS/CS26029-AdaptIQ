@@ -67,9 +67,25 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState<number>(0);
+  const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
 
   const router = useRouter();
   const universityName = process.env.NEXT_PUBLIC_UNIVERSITY_NAME || 'CHARUSAT';
+
+  // Cooldown countdown timer for rate limiting
+  useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCooldown((c) => {
+        if (c <= 1) {
+          setError(null);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCooldown]);
 
   // Load available subjects on mount
   useEffect(() => {
@@ -291,9 +307,17 @@ export default function RegisterPage() {
       setStep(2);
       setResendCountdown(30);
     } catch (err: any) {
-      const errMsg = err.message || 'Failed to request verification code.';
-      setError(errMsg);
-      toast.error(errMsg, 'Request Failed');
+      if (err.status === 429) {
+        const retry = err.data?.retryAfter || 45;
+        setRateLimitCooldown(retry);
+        const rateMsg = `Too many OTP requests. For security, please wait ${retry} seconds before trying again.`;
+        setError(rateMsg);
+        toast.warning(rateMsg, 'Rate Limit Exceeded');
+      } else {
+        const errMsg = err.message || 'Failed to request verification code.';
+        setError(errMsg);
+        toast.error(errMsg, 'Request Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -301,7 +325,7 @@ export default function RegisterPage() {
 
   // Step 2: Resend OTP handler
   const handleResendOtp = async () => {
-    if (resendCountdown > 0 || loading) return;
+    if (resendCountdown > 0 || loading || rateLimitCooldown > 0) return;
     setLoading(true);
     setError(null);
 
@@ -315,9 +339,17 @@ export default function RegisterPage() {
       toast.info(msg, 'Code Resent');
       setResendCountdown(30);
     } catch (err: any) {
-      const errMsg = err.message || 'Failed to resend verification code.';
-      setError(errMsg);
-      toast.error(errMsg, 'Resend Failed');
+      if (err.status === 429) {
+        const retry = err.data?.retryAfter || 45;
+        setRateLimitCooldown(retry);
+        const rateMsg = `Too many OTP requests. For security, please wait ${retry} seconds before requesting a new code.`;
+        setError(rateMsg);
+        toast.warning(rateMsg, 'Rate Limit Exceeded');
+      } else {
+        const errMsg = err.message || 'Failed to resend verification code.';
+        setError(errMsg);
+        toast.error(errMsg, 'Resend Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -355,9 +387,17 @@ export default function RegisterPage() {
       toast.success('Identity verified successfully!', 'Verified');
       setStep(3);
     } catch (err: any) {
-      const errMsg = err.message || 'Invalid or expired verification code.';
-      setError(errMsg);
-      toast.error(errMsg, 'Verification Failed');
+      if (err.status === 429) {
+        const retry = err.data?.retryAfter || 45;
+        setRateLimitCooldown(retry);
+        const rateMsg = `Too many verification attempts. Please wait ${retry} seconds before trying again.`;
+        setError(rateMsg);
+        toast.warning(rateMsg, 'Rate Limit Exceeded');
+      } else {
+        const errMsg = err.message || 'Invalid or expired verification code.';
+        setError(errMsg);
+        toast.error(errMsg, 'Verification Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -416,9 +456,17 @@ export default function RegisterPage() {
       toast.success('Account successfully registered! Please sign in with your credentials.', 'Registration Complete');
       router.push('/auth/login');
     } catch (err: any) {
-      const errMsg = err.message || 'Registration failed.';
-      setError(errMsg);
-      toast.error(errMsg, 'Registration Failed');
+      if (err.status === 429) {
+        const retry = err.data?.retryAfter || 45;
+        setRateLimitCooldown(retry);
+        const rateMsg = `Too many registration attempts. Please wait ${retry} seconds before trying again.`;
+        setError(rateMsg);
+        toast.warning(rateMsg, 'Rate Limit Exceeded');
+      } else {
+        const errMsg = err.message || 'Registration failed.';
+        setError(errMsg);
+        toast.error(errMsg, 'Registration Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -607,11 +655,17 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                disabled={loading || !cleanIdentifier}
-                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={loading || !cleanIdentifier || rateLimitCooldown > 0}
+                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                <span>{loading ? 'Sending verification code...' : 'Send Verification OTP'}</span>
+                <span>
+                  {loading
+                    ? 'Sending verification code...'
+                    : rateLimitCooldown > 0
+                    ? `Rate Limited (${rateLimitCooldown}s)`
+                    : 'Send Verification OTP'}
+                </span>
               </button>
             </form>
           )}
@@ -682,11 +736,17 @@ export default function RegisterPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || otp.length < 6}
-                  className="w-2/3 py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={loading || otp.length < 6 || rateLimitCooldown > 0}
+                  className="w-2/3 py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  <span>Verify OTP</span>
+                  <span>
+                    {loading
+                      ? 'Verifying...'
+                      : rateLimitCooldown > 0
+                      ? `Cooldown (${rateLimitCooldown}s)`
+                      : 'Verify OTP'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -1197,11 +1257,17 @@ export default function RegisterPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || password.length < 6}
-                  className="w-2/3 py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={loading || password.length < 6 || rateLimitCooldown > 0}
+                  className="w-2/3 py-2.5 px-4 text-xs font-semibold text-white bg-[#dc2626] hover:bg-[#b91c1c] rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  <span>Activate Account & Proceed</span>
+                  <span>
+                    {loading
+                      ? 'Activating...'
+                      : rateLimitCooldown > 0
+                      ? `Cooldown (${rateLimitCooldown}s)`
+                      : 'Activate Account & Proceed'}
+                  </span>
                 </button>
               </div>
             </form>

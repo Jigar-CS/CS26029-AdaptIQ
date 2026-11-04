@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
 import { AuthModule } from './auth/auth.module';
@@ -25,6 +26,7 @@ import { DisputesModule } from './disputes/disputes.module';
       isGlobal: true,
       envFilePath: ['../../.env', '.env'],
     }),
+    RateLimitModule,
     PrismaModule,
     EmailModule,
     AuthModule,
