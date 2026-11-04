@@ -15,3 +15,4 @@ export interface RateLimitOptions {
  * @RateLimit({ limit: 5, ttl: 60, keyPrefix: 'auth:login' })
  */
 export const RateLimit = (options: RateLimitOptions) => SetMetadata(RATE_LIMIT_KEY, options);
+

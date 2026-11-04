@@ -657,7 +657,8 @@ export default function CLIASHomePage() {
                   </span>
                 </div>
 
-                <div className="mt-3 overflow-x-auto">
+                {/* Desktop Tabular View (hidden on mobile) */}
+                <div className="mt-3 overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-[rgba(74,111,165,0.2)] font-mono text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -690,6 +691,53 @@ export default function CLIASHomePage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Responsive Card Grid (visible on < md screens) */}
+                <div className="mt-3 space-y-2.5 md:hidden">
+                  {knowledgeGapMatrix.map((row) => (
+                    <div
+                      key={row.topic}
+                      className="p-3 bg-[#faf7f2] dark:bg-[#121b30] border border-[rgba(74,111,165,0.22)] shadow-2xs space-y-2.5"
+                      style={{ borderRadius: 0 }}
+                    >
+                      <div className="flex items-center justify-between gap-2 border-b border-[rgba(74,111,165,0.15)] pb-1.5">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {row.topic}
+                        </span>
+                        <span className="font-mono text-[9px] uppercase font-bold text-[#e05033] bg-[rgba(224,80,51,0.08)] px-2 py-0.5 border border-[rgba(224,80,51,0.25)] shrink-0">
+                          Diagnostic
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">
+                            Concept
+                          </span>
+                          <span className={`py-1 border font-bold ${getHeatmapColor(row.concept)}`} style={{ borderRadius: 0 }}>
+                            {row.concept}%
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">
+                            Application
+                          </span>
+                          <span className={`py-1 border font-bold ${getHeatmapColor(row.application)}`} style={{ borderRadius: 0 }}>
+                            {row.application}%
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">
+                            Problem
+                          </span>
+                          <span className={`py-1 border font-bold ${getHeatmapColor(row.problemSolving)}`} style={{ borderRadius: 0 }}>
+                            {row.problemSolving}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

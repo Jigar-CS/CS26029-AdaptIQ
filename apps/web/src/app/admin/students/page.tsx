@@ -286,7 +286,8 @@ export default function AdminStudentsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop Tabular View (hidden on mobile) */}
+            <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
@@ -345,6 +346,64 @@ export default function AdminStudentsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Responsive Student Cards (visible on < md screens) */}
+            <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/80">
+              {filteredStudents.length > 0 ? (
+                filteredStudents.map((s) => (
+                  <div key={s.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {s.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5 font-mono text-[11px]">
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                            {s.enrollmentNumber}
+                          </span>
+                          <span className="text-slate-400 truncate">
+                            {s.email}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase shrink-0 border ${
+                          s.activated
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                            : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                        }`}
+                      >
+                        {s.activated ? 'Activated' : 'Pending'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Department</span>
+                        <strong className="text-slate-800 dark:text-slate-200 text-xs block truncate mt-0.5">
+                          {s.institute} • {s.department}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Cohort & Class</span>
+                        <strong className="text-slate-800 dark:text-slate-200 text-xs block truncate mt-0.5">
+                          Sem {s.semester} • Div {s.division}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                      <span className="truncate">{s.programName}</span>
+                      <span className="font-mono font-semibold shrink-0">Class of {s.graduationYear}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No matching student records found.
+                </div>
+              )}
             </div>
           </div>
         </main>

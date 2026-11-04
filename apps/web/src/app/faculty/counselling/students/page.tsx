@@ -438,7 +438,8 @@ export default function CounsellorAssignedStudentsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop Tabular View (hidden on mobile) */}
+            <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
@@ -548,7 +549,7 @@ export default function CounsellorAssignedStudentsPage() {
                                 setDetailStudent(student);
                                 setDetailTab('practice');
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition inline-flex items-center gap-1.5"
+                              className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer"
                             >
                               <Activity className="w-3.5 h-3.5" />
                               <span>View Telemetry</span>
@@ -558,7 +559,7 @@ export default function CounsellorAssignedStudentsPage() {
                                 setSelectedStudentForAdvisory(student);
                                 setShowAdvisoryModal(true);
                               }}
-                              className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition"
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer"
                               title="Record Advisory"
                             >
                               <Calendar className="w-3.5 h-3.5" />
@@ -576,6 +577,134 @@ export default function CounsellorAssignedStudentsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Responsive Mentee Cards (visible on < md screens) */}
+            <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/80">
+              {loading ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  Loading authorized mentee roster...
+                </div>
+              ) : filteredStudents.length > 0 ? (
+                filteredStudents.map((student) => (
+                  <div key={student.id} className="p-4 space-y-3.5">
+                    {/* Header: Avatar, Name, Enrollment, Mentorship Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                          {student.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 dark:text-white text-xs truncate">{student.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                              {student.enrollmentNumber}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Sem {student.semester} • {student.division}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase shrink-0 border ${getStatusBadge(
+                          student.status,
+                        )}`}
+                      >
+                        {student.status.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    {/* Progress: Overall Mastery Bar */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                          Overall Mastery Score
+                        </span>
+                        <strong className="font-mono text-slate-900 dark:text-white text-xs">
+                          {student.masteryScore}% BKT
+                        </strong>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            student.masteryScore >= 75
+                              ? 'bg-emerald-500'
+                              : student.masteryScore >= 60
+                              ? 'bg-blue-500'
+                              : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${student.masteryScore}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stats Grid: Practice Activity & Trust Score */}
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 space-y-0.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Practice</span>
+                        <strong className="text-slate-900 dark:text-white text-xs block truncate">
+                          {student.practice.totalSessions} sessions ({student.practice.questionsAttempted} Qs)
+                        </strong>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                          {student.practice.accuracy}% accuracy
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 space-y-0.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Proctoring</span>
+                        <span
+                          className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${
+                            student.violations.latestTrustScore >= 80
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                              : student.violations.latestTrustScore >= 60
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                          }`}
+                        >
+                          {student.violations.latestTrustScore}% Trust
+                        </span>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                          {student.violations.totalViolations > 0 ? (
+                            <span className="text-rose-500 font-bold">{student.violations.totalViolations} flags recorded</span>
+                          ) : (
+                            <span className="text-emerald-500 font-bold">Clean record</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Footer: Touch-Optimized 44px Buttons */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailStudent(student);
+                          setDetailTab('practice');
+                        }}
+                        className="min-h-[44px] px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Activity className="w-4 h-4" />
+                        <span>Telemetry</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedStudentForAdvisory(student);
+                          setShowAdvisoryModal(true);
+                        }}
+                        className="min-h-[44px] px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Calendar className="w-4 h-4" />
+                        <span>Advisory</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No students match the current filters.
+                </div>
+              )}
             </div>
           </div>
 
